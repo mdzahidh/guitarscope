@@ -17,7 +17,8 @@ const modFile = path.join(os.tmpdir(), "guitarscope_dsp_under_test.js");
 fs.writeFileSync(modFile, dspSrc + `
 module.exports = { welch, powerToDb, smoothOct, bandPower, spectralCentroid,
   spectralTilt, detectPeaks, makeLogGrid, resampleToGrid, noteInfo, midiToFreq,
-  TUNINGS, tuningMidi, autocorrF0, sniffAudioInfo, dynamicsMetrics, attackTimes };
+  TUNINGS, tuningMidi, autocorrF0, sniffAudioInfo, dynamicsMetrics, attackTimes,
+  spectrogramLog, decimateEnvelope, magmaColor, MAGMA };
 `);
 const D = require(modFile);
 
@@ -304,6 +305,103 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
     ok(a2 != null && a2 > 0.004 && a2 < 0.014,
       "clean attack from silence ≈ 8 ms 10–90% rise",
       a2 != null ? (a2 * 1000).toFixed(1) + " ms" : "null");
+  }
+
+  // ---- spectrogramLog: same 0 dB FS sine reference as the LTAS ----
+  {
+    const rate = 44100, win = 2048, df = rate / win;
+    const f = 46 * df; // exactly on bin 46 ≈ 990.5 Hz
+    const n = rate * 2;
+    const x = new Float64Array(n);
+    for (let i = 0; i < n; i++) x[i] = Math.sin(2 * Math.PI * f * i / rate);
+    const sg = await D.spectrogramLog(x, rate);
+    ok(sg.gridN === sg.grid.length && sg.nFrames * sg.gridN === sg.frames.length,
+      "spectrogram dimensions consistent", `${sg.nFrames} × ${sg.gridN}`);
+    // grid cell whose center is nearest the sine
+    let ci = 0;
+    for (let i = 1; i < sg.gridN; i++)
+      if (Math.abs(Math.log(sg.grid[i] / f)) < Math.abs(Math.log(sg.grid[ci] / f))) ci = i;
+    const mid = (sg.nFrames >> 1) * sg.gridN;
+    const peakDb = D.powerToDb(sg.frames[mid + ci]);
+    ok(approx(peakDb, 0, 0.5), "full-scale on-bin sine ≈ 0 dB in its cell",
+      peakDb.toFixed(3) + " dB");
+    // a cell an octave away holds only leakage, far below the tone
+    let oi = 0;
+    for (let i = 1; i < sg.gridN; i++)
+      if (Math.abs(Math.log(sg.grid[i] / (2 * f))) < Math.abs(Math.log(sg.grid[oi] / (2 * f)))) oi = i;
+    ok(D.powerToDb(sg.frames[mid + oi]) < -60, "an octave away is leakage only",
+      D.powerToDb(sg.frames[mid + oi]).toFixed(1) + " dB");
+  }
+
+  // ---- spectrogramLog: temporal localization of a burst ----
+  {
+    const rate = 44100, win = 2048, df = rate / win, f = 46 * df;
+    const n = rate * 2;
+    const x = new Float64Array(n);
+    for (let i = Math.round(1.0 * rate); i < Math.round(1.1 * rate); i++)
+      x[i] = Math.sin(2 * Math.PI * f * i / rate);
+    const sg = await D.spectrogramLog(x, rate);
+    let ci = 0;
+    for (let i = 1; i < sg.gridN; i++)
+      if (Math.abs(Math.log(sg.grid[i] / f)) < Math.abs(Math.log(sg.grid[ci] / f))) ci = i;
+    const fAt = t => sg.frames[Math.round(t * sg.frameRate) * sg.gridN + ci];
+    ok(D.powerToDb(fAt(1.05)) > -3, "burst present at t=1.05 s",
+      D.powerToDb(fAt(1.05)).toFixed(1) + " dB");
+    ok(D.powerToDb(fAt(0.5)) < -100, "silence before the burst",
+      D.powerToDb(fAt(0.5)).toFixed(1) + " dB");
+  }
+
+  // ---- spectrogramLog: cells above the file's Nyquist are NaN ----
+  {
+    const rate = 32000; // Nyquist 16 kHz < the 20 kHz grid top
+    const x = new Float64Array(rate);
+    for (let i = 0; i < x.length; i++) x[i] = 0.5 * Math.sin(2 * Math.PI * 440 * i / rate);
+    const sg = await D.spectrogramLog(x, rate);
+    let nan = 0, lastMeasured = -1;
+    for (let i = 0; i < sg.gridN; i++) {
+      if (Number.isNaN(sg.frames[i])) nan++;
+      else lastMeasured = i;
+    }
+    ok(nan > 0 && Number.isNaN(sg.frames[sg.gridN - 1]),
+      "grid above 16 kHz Nyquist is NaN (unmeasured, not faked)", nan + " cells");
+    ok(lastMeasured >= 0 && sg.grid[lastMeasured] < 16000 && !Number.isNaN(sg.frames[0]),
+      "cells below Nyquist stay measured", sg.grid[lastMeasured].toFixed(0) + " Hz");
+  }
+
+  // ---- decimateEnvelope: max-pooling keeps the attack peak ----
+  {
+    const env = new Float64Array(100000).fill(0.1);
+    env[54321] = 0.97; // a single-sample attack peak
+    const d = D.decimateEnvelope(env, 4096);
+    ok(d.env.length <= 4096, "decimated length within target", d.env.length);
+    ok(d.factor === Math.ceil(100000 / 4096), "integer pooling factor", d.factor);
+    let mx = 0; for (let i = 0; i < d.env.length; i++) if (d.env[i] > mx) mx = d.env[i];
+    ok(mx === 0.97, "peak survives decimation exactly", mx);
+    const short = D.decimateEnvelope(new Float64Array(100), 4096);
+    ok(short.env.length === 100 && short.factor === 1, "short envelope passes through");
+  }
+
+  // ---- magma colormap: endpoints + perceptual monotonicity ----
+  {
+    const lo = D.magmaColor(0), hi = D.magmaColor(1);
+    ok(lo[0] === 0x00 && lo[1] === 0x00 && lo[2] === 0x04, "magma starts near-black #000004",
+      lo.join(","));
+    ok(hi[0] === 0xfc && hi[1] === 0xfd && hi[2] === 0xbf, "magma ends pale yellow #fcfdbf",
+      hi.join(","));
+    ok(D.MAGMA.length === 768, "256 RGB entries");
+    // Perceptually-uniform ⇒ luminance rises monotonically ("never rainbow"
+    // as a testable property). 8-bit quantization allows ≤0.5-unit wiggle
+    // between neighbours; over any 8-entry stride the rise must be strict.
+    const lum = [];
+    for (let i = 0; i < 256; i++)
+      lum.push(0.2126 * D.MAGMA[i*3] + 0.7152 * D.MAGMA[i*3+1] + 0.0722 * D.MAGMA[i*3+2]);
+    let okAdj = true, okStride = true;
+    for (let i = 1; i < 256; i++) if (lum[i] < lum[i-1] - 0.5) okAdj = false;
+    for (let i = 8; i < 256; i++) if (lum[i] <= lum[i-8]) okStride = false;
+    ok(okAdj && okStride, "luminance rises monotonically across the map",
+      `range ${lum[0].toFixed(1)} → ${lum[255].toFixed(1)}`);
+    const clamped = D.magmaColor(-3), clamped2 = D.magmaColor(7);
+    ok(clamped[2] === 4 && clamped2[0] === 0xfc, "magmaColor clamps out-of-range t");
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

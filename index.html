@@ -210,8 +210,8 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 /* ---------- plots ---------- */
 .plotwrap{ position:relative; }
 .plotwrap canvas{ display:block; width:100%; }
-#specCanvas{ height:440px; }
-#diffCanvas{ height:216px; }
+#specCanvas{ height:456px; }
+#diffCanvas{ height:232px; }
 #sgramCanvasA, #sgramCanvasB, #sgramCanvasD{ height:230px; }
 #envCanvas{ height:280px; }
 .sgramstack{ display:flex; flex-direction:column; gap:14px; }
@@ -434,7 +434,7 @@ kbd{
   .page{ padding:18px 16px 32px; }
   .filerow{ grid-template-columns:1fr; }
   .tonerow{ grid-template-columns:150px 90px 1fr 90px; gap:8px; }
-  #specCanvas{ height:340px; }
+  #specCanvas{ height:356px; }
 }
 @media (prefers-reduced-motion:reduce){
   *{ transition-duration:1ms !important; animation-duration:1ms !important; }
@@ -1878,6 +1878,43 @@ const GLOSSARY=[
     measure:"Share of total energy: ∫P(f)df over 5–12 kHz ÷ total 60 Hz–20 kHz.",
     values(state){ return _bandVals(state, 5000, 12000); } },
 
+  // ------------ EQ regions (colloquial lane above the spectrum — annotation only) ------------
+  { key:"eq-low-end", name:"Low end", cat:"EQ regions", hook:"EQ-speak: ≈60–250 Hz",
+    musician:"What moves when you turn an amp's bass knob: thump, weight, the part of the sound you feel more than hear. Cut it to tighten, boost it for heft.",
+    science:"Fundamentals of the guitar's lower strings and their first harmonics, up to roughly 250 Hz.",
+    measure:"Annotation only — the lane marks where the word points on the frequency axis; region boundaries are colloquial (± half an octave by speaker) and no GuitarScope metric integrates over exactly this range. The share below is measured live over 60–250 Hz for reference.",
+    values(state){ return _bandVals(state, 60, 250); } },
+
+  { key:"eq-low-mids", name:"Low mids", cat:"EQ regions", hook:"EQ-speak: ≈250–800 Hz",
+    musician:"Warmth and body — or mud and box when there's too much. The classic first cut when a mix feels congested.",
+    science:"Note bodies and low-order harmonics, roughly 250–800 Hz; overlaps the app's Warmth/Mud and lower Body bands.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 250–800 Hz for reference.",
+    values(state){ return _bandVals(state, 250, 800); } },
+
+  { key:"eq-mids", name:"Mids", cat:"EQ regions", hook:"EQ-speak: ≈800 Hz–2.5 kHz",
+    musician:"The honk, crunch and core character of a guitar in a mix — what a “scooped-mids” metal tone scoops and what lets a lead cut without volume.",
+    science:"Mid-order harmonics of most fretted notes, roughly 800 Hz–2.5 kHz, where the ear starts to get sensitive.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 800 Hz–2.5 kHz for reference.",
+    values(state){ return _bandVals(state, 800, 2500); } },
+
+  { key:"eq-upper-mids", name:"Upper mids", cat:"EQ regions", hook:"EQ-speak: ≈2.5–5 kHz",
+    musician:"Presence, bite, pick attack — the region that makes a guitar articulate and, pushed too far, harsh.",
+    science:"Roughly 2.5–5 kHz, near the ear's peak sensitivity; pick transients carry most of their information here. Matches the app's Presence band closely.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 2.5–5 kHz for reference.",
+    values(state){ return _bandVals(state, 2500, 5000); } },
+
+  { key:"eq-highs", name:"Highs", cat:"EQ regions", hook:"EQ-speak: ≈5–10 kHz",
+    musician:"Sparkle, string zing and pick detail — or fizz and brittleness on a bad day. What a “treble” or “presence” control on hi-fi gear mostly touches.",
+    science:"Roughly 5–10 kHz: upper harmonics, pick noise, amplifier fizz. Guitar speakers roll off steeply through this region.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 5–10 kHz for reference.",
+    values(state){ return _bandVals(state, 5000, 10000); } },
+
+  { key:"eq-air", name:"Air", cat:"EQ regions", hook:"EQ-speak: ≈10–20 kHz",
+    musician:"Openness and studio sheen — mostly room and string noise for guitars. Electrics through a cab have almost nothing up here; boosting “air” on one usually just lifts hiss.",
+    science:"Roughly 10–20 kHz. Guitar-cab speakers are typically 20+ dB down before 10 kHz, so this region matters mainly for acoustics and direct signals.",
+    measure:"Annotation only — colloquial region, not an app metric (the app's own Air band is 5–12 kHz). The share below is measured live over 10–20 kHz for reference.",
+    values(state){ return _bandVals(state, 10000, 20000); } },
+
   // ------------ tone descriptors ------------
   { key:"brightness", name:"Brightness", cat:"Tone descriptors", hook:"where the spectral balance sits",
     musician:"How trebly versus dark a guitar sounds overall. New strings, bridge pickups, and maple boards read as “brighter”.",
@@ -2059,7 +2096,7 @@ function termHtml(key, text){
    Term "links" inside canvases are recorded as hit rectangles.
    ============================================================ */
 
-const PLOT={ mL:52, mR:18, mT:30, mB:34 };
+const PLOT={ mL:52, mR:18, mT:46, mB:34 }; // mT holds the EQ-region lane (y 4–20) + tuning labels
 const CSS_COLORS={};
 function cssColor(name){
   if(!CSS_COLORS[name]){
@@ -2175,6 +2212,43 @@ function drawTuning(ctx, w, h, markers, hits){
       const tw=ctx.measureText(m.name).width;
       if(hits) hits.push({x:x-tw/2-3, y:PLOT.mT-16, w:tw+6, h:14, term:"fundamental"});
       lastX=x;
+    }
+  }
+  ctx.restore();
+}
+
+// ---------- colloquial EQ-region lane (M2.5 — annotation only, boundaries are folklore) ----------
+const EQ_REGIONS=[
+  { key:"eq-low-end",    label:"LOW END",    f0:60,    f1:250 },
+  { key:"eq-low-mids",   label:"LOW MIDS",   f0:250,   f1:800 },
+  { key:"eq-mids",       label:"MIDS",       f0:800,   f1:2500 },
+  { key:"eq-upper-mids", label:"UPPER MIDS", f0:2500,  f1:5000 },
+  { key:"eq-highs",      label:"HIGHS",      f0:5000,  f1:10000 },
+  { key:"eq-air",        label:"AIR",        f0:10000, f1:20000 },
+];
+function drawEqLane(ctx, w, hits){
+  const yMid=12.5, yTick0=8.5, yTick1=16.5; // lives in the top margin, above the plot area
+  ctx.save();
+  ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.lineWidth=1;
+  for(const r of EQ_REGIONS){
+    const x0=xOfF(r.f0,w), x1=xOfF(r.f1,w);
+    ctx.strokeStyle="rgba(232,229,222,0.18)";
+    ctx.beginPath();
+    ctx.moveTo(x0+0.5,yTick0); ctx.lineTo(x0+0.5,yTick1);
+    ctx.moveTo(x1+0.5,yTick0); ctx.lineTo(x1+0.5,yTick1);
+    ctx.stroke();
+    const cx=(x0+x1)/2, tw=ctx.measureText(r.label).width;
+    if(tw<(x1-x0)-14){ // dimension-line style: hairline broken by a centered label
+      ctx.beginPath();
+      ctx.moveTo(x0+3,yMid); ctx.lineTo(cx-tw/2-5,yMid);
+      ctx.moveTo(cx+tw/2+5,yMid); ctx.lineTo(x1-3,yMid);
+      ctx.stroke();
+      ctx.fillStyle=cssColor("dim");
+      ctx.fillText(r.label,cx,yMid);
+      if(hits) hits.push({x:cx-tw/2-3, y:yMid-7, w:tw+6, h:14, term:r.key});
+    }else{
+      ctx.beginPath(); ctx.moveTo(x0+3,yMid); ctx.lineTo(x1-3,yMid); ctx.stroke();
     }
   }
   ctx.restore();
@@ -2300,6 +2374,7 @@ function drawSpectrumScene(ctx, w, h, model, hits){
   drawBands(ctx, w, h, model.bands, hits);
   drawAxes(ctx, w, h, model.yMin, model.yMax, 10);
   drawTuning(ctx, w, h, model.markers, hits);
+  drawEqLane(ctx, w, hits);
   for(const c of model.curves){
     drawCurve(ctx, w, h, model.grid, c.db, model.yMin, model.yMax, c.color, 0.10);
   }
@@ -2341,6 +2416,7 @@ function drawDiffScene(ctx, w, h, model){
   // zero line
   ctx.strokeStyle="rgba(232,229,222,0.28)"; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(PLOT.mL,yOf(0)); ctx.lineTo(PLOT.mL+pW,yOf(0)); ctx.stroke();
+  drawEqLane(ctx, w, null); // diff canvas has no glossary click handler — no hit rects
 
   const {grid, diff}=model;
   // sign-split fills: above zero = A louder (A color), below = B louder
@@ -3839,7 +3915,7 @@ function openPopover(key,anchor){
 }
 function closePopover(){ popover.classList.remove("open"); }
 
-const GLOSS_CATS=["Frequency regions","Tone descriptors","Physics","Method"];
+const GLOSS_CATS=["Frequency regions","EQ regions","Tone descriptors","Physics","Method"];
 function buildGlossList(q){
   const needle=(q||"").trim().toLowerCase();
   let html="";

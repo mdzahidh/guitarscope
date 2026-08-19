@@ -463,6 +463,30 @@ kbd{
   font-size:13px; line-height:1.5; color:var(--ink);
 }
 
+/* plot magnify */
+.magbtn{
+  position:absolute; top:8px; right:8px; z-index:5; width:26px; height:24px;
+  display:flex; align-items:center; justify-content:center;
+  font:inherit; font-size:13px; line-height:1; padding:0;
+  color:var(--mut); background:var(--raise); border:1px solid var(--hair2);
+  border-radius:6px; cursor:pointer; opacity:0;
+  transition:opacity var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.plotwrap:hover .magbtn, .magbtn:focus-visible{ opacity:1; }
+.magbtn:hover{ color:var(--ink); }
+.modal .inner.mag{
+  display:flex; flex-direction:column;
+  width:calc(100vw - 56px); height:calc(100vh - 56px);
+  padding:18px 22px 22px;
+}
+.mag .mhead{
+  display:flex; justify-content:space-between; align-items:baseline;
+  gap:16px; margin-bottom:10px;
+}
+.mag .mhead h3{ margin-bottom:0; }
+.mag .magwrap{ flex:1; min-height:0; position:relative; }
+.mag .magwrap canvas{ position:absolute; inset:0; width:100%; height:100%; }
+
 @media (max-width:900px){
   .page{ padding:18px 16px 32px; }
   .filerow{ grid-template-columns:1fr; }
@@ -551,6 +575,7 @@ kbd{
       </div>
       <div class="cardbody">
         <div class="plotwrap" id="specWrap">
+          <button class="magbtn" data-mag="spec" title="Magnify" aria-label="Magnify spectrum plot">⤢</button>
           <canvas id="specCanvas"></canvas>
           <div class="xline" id="specXline"></div>
           <div class="readout" id="specReadout"></div>
@@ -575,6 +600,7 @@ kbd{
       </div>
       <div class="cardbody">
         <div class="plotwrap" id="diffWrap">
+          <button class="magbtn" data-mag="diff" title="Magnify" aria-label="Magnify difference plot">⤢</button>
           <canvas id="diffCanvas"></canvas>
           <div class="xline" id="diffXline"></div>
           <div class="readout" id="diffReadout"></div>
@@ -639,9 +665,11 @@ kbd{
       </div>
       <div class="cardbody">
         <div class="plotwrap">
+          <button class="magbtn" data-mag="eqface" title="Magnify" aria-label="Magnify EQ device panel">⤢</button>
           <canvas id="eqFaceCanvas"></canvas>
         </div>
         <div class="plotwrap">
+          <button class="magbtn" data-mag="eqresp" title="Magnify" aria-label="Magnify EQ response plot">⤢</button>
           <canvas id="eqRespCanvas"></canvas>
         </div>
         <div class="tablefoot" id="eqNote"></div>
@@ -671,16 +699,19 @@ kbd{
       <div class="cardbody">
         <div class="sgramstack">
           <div class="plotwrap" id="sgramWrapA" style="display:none">
+            <button class="magbtn" data-mag="sga" title="Magnify" aria-label="Magnify spectrogram A">⤢</button>
             <canvas id="sgramCanvasA"></canvas>
             <div class="xline" id="sgramXlineA"></div>
             <div class="readout" id="sgramReadoutA"></div>
           </div>
           <div class="plotwrap" id="sgramWrapB" style="display:none">
+            <button class="magbtn" data-mag="sgb" title="Magnify" aria-label="Magnify spectrogram B">⤢</button>
             <canvas id="sgramCanvasB"></canvas>
             <div class="xline" id="sgramXlineB"></div>
             <div class="readout" id="sgramReadoutB"></div>
           </div>
           <div class="plotwrap" id="sgramWrapD" style="display:none">
+            <button class="magbtn" data-mag="sgd" title="Magnify" aria-label="Magnify spectrogram difference">⤢</button>
             <canvas id="sgramCanvasD"></canvas>
             <div class="xline" id="sgramXlineD"></div>
             <div class="readout" id="sgramReadoutD"></div>
@@ -700,6 +731,7 @@ kbd{
       </div>
       <div class="cardbody">
         <div class="plotwrap" id="envWrap">
+          <button class="magbtn" data-mag="env" title="Magnify" aria-label="Magnify envelope plot">⤢</button>
           <canvas id="envCanvas"></canvas>
           <div class="xline" id="envXline"></div>
           <div class="readout" id="envReadout"></div>
@@ -804,6 +836,17 @@ kbd{
     <p>Drop the two files above — sample rate and bit depth are read from the file itself,
       and the two files don't need to match each other. Everything runs locally in this
       page; nothing is uploaded. One file alone gets the full single-guitar analysis.</p>
+  </div>
+</div>
+
+<!-- magnified plot -->
+<div class="modal" id="magModal">
+  <div class="inner mag">
+    <div class="mhead">
+      <h3 id="magTitle">Plot</h3>
+      <button class="iconbtn" id="magClose" aria-label="Close magnified view">✕</button>
+    </div>
+    <div class="magwrap"><canvas id="magCanvas"></canvas></div>
   </div>
 </div>
 
@@ -3263,6 +3306,9 @@ const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSeg=
 const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
 const guideModal=el("guideModal"), guideBtn=el("guideBtn"),
       guideLink=el("guideLink"), guideClose=el("guideClose");
+const magModal=el("magModal"), magTitle=el("magTitle"),
+      magCanvas=el("magCanvas"), magClose=el("magClose");
+const magBtns=Array.from(document.querySelectorAll(".magbtn"));
 const glossBackdrop=el("glossBackdrop"), glossPanel=el("glossPanel"),
       glossClose=el("glossClose"), glossSearch=el("glossSearch"), glossList=el("glossList");
 const popover=el("popover"), dropOverlay=el("dropOverlay"), dropTitle=el("dropTitle"),
@@ -3518,9 +3564,17 @@ function updateCurves(animate){
     requestDraw();
   }
 }
-function startAnimLoop(){ if(!rafId) rafId=requestAnimationFrame(animTick); }
+let rafAnim=false;
+function startAnimLoop(){
+  // A pending requestDraw must not swallow the animation start: if both files
+  // settle inside one frame, the plain-draw rAF is already booked and dispDb
+  // would never advance. Cancel it and let animTick own the frame — its first
+  // tick redraws everything the plain draw would have.
+  if(rafId&&!rafAnim){ cancelAnimationFrame(rafId); rafId=0; }
+  if(!rafId){ rafAnim=true; rafId=requestAnimationFrame(animTick); }
+}
 function animTick(ts){
-  rafId=0;
+  rafId=0; rafAnim=false;
   const t=Math.min(1,(ts-anim.start)/220);
   const k=1-Math.pow(1-t,3); // easeOutCubic
   for(let i=0;i<2;i++){
@@ -3742,17 +3796,22 @@ function buildEqModels(){
       statusText:"residual "+fit.settings.residualRms.toFixed(2)+" dB RMS"},
   };
 }
+function buildDiffModel(){
+  if(!(diffVisible()&&dispDb[0]&&dispDb[1])) return null;
+  if(!diffBuf) diffBuf=new Float64Array(GRID.length);
+  for(let k=0;k<GRID.length;k++) diffBuf[k]=dispDb[0][k]-dispDb[1][k];
+  return {grid:GRID,diff:diffBuf,yMax:diffYMax,
+    colorA:COLORS[0],colorB:COLORS[1],
+    nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)};
+}
 function drawAll(){
   const {ctx,w,h}=setupCanvas(specCanvas);
   specHits.length=0;
   drawSpectrumScene(ctx,w,h,buildSpecModel(false),specHits);
-  if(diffVisible()&&dispDb[0]&&dispDb[1]){
+  const dm=buildDiffModel();
+  if(dm){
     const d=setupCanvas(diffCanvas);
-    if(!diffBuf) diffBuf=new Float64Array(GRID.length);
-    for(let k=0;k<GRID.length;k++) diffBuf[k]=dispDb[0][k]-dispDb[1][k];
-    drawDiffScene(d.ctx,d.w,d.h,{grid:GRID,diff:diffBuf,yMax:diffYMax,
-      colorA:COLORS[0],colorB:COLORS[1],
-      nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)});
+    drawDiffScene(d.ctx,d.w,d.h,dm);
   }
   const scale=sgramScale();
   if(scale) for(let i=0;i<2;i++){
@@ -3782,7 +3841,50 @@ function drawAll(){
       drawEqRespScene(r.ctx,r.w,r.h,eqm.resp);
     }
   }
+  drawMag();
 }
+
+// ---------- plot magnify ----------
+// Each entry re-renders from the same model builders as drawAll, at the
+// overlay's size; drawAll's tail call keeps an open overlay in sync with
+// state changes (keyboard shortcuts, window resize).
+function sgMagTitle(i){
+  const s=state.slots[i];
+  return "Spectrogram — "+SLOT_LETTER[i]+(s?" · "+shortName(s.name,40):"");
+}
+const MAG_VIEWS={
+  spec:{ title:()=>"Spectrum — long-term average",
+    draw:(ctx,w,h)=>{ if(anyLoaded()) drawSpectrumScene(ctx,w,h,buildSpecModel(false),[]); } },
+  diff:{ title:()=>"Difference — A − B, dB",
+    draw:(ctx,w,h)=>{ const m=buildDiffModel(); if(m) drawDiffScene(ctx,w,h,m); } },
+  sga:{ title:()=>sgMagTitle(0),
+    draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(0,sc); if(m) drawSpectrogramScene(ctx,w,h,m); } },
+  sgb:{ title:()=>sgMagTitle(1),
+    draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(1,sc); if(m) drawSpectrogramScene(ctx,w,h,m); } },
+  sgd:{ title:()=>"Spectrogram — difference, A − B",
+    draw:(ctx,w,h)=>{ const m=sgDiffVisible()&&buildSgramDiffModel(); if(m) drawSgramDiffScene(ctx,w,h,m); } },
+  env:{ title:()=>"Envelope — dB re full scale",
+    draw:(ctx,w,h)=>{ const m=buildEnvModel(); if(m) drawEnvelopeScene(ctx,w,h,m); } },
+  eqface:{ title:()=>{ const f=bothLoaded()&&eqFitData(); return "EQ match — "+(f?f.device.name+" settings":"device settings"); },
+    draw:(ctx,w,h)=>{ const m=bothLoaded()&&buildEqModels(); if(m) drawEqFaceScene(ctx,w,h,m.face); } },
+  eqresp:{ title:()=>"EQ match — target vs fitted response",
+    draw:(ctx,w,h)=>{ const m=bothLoaded()&&buildEqModels(); if(m) drawEqRespScene(ctx,w,h,m.resp); } },
+};
+let magKey=null;
+function drawMag(){
+  if(!magKey||!magModal.classList.contains("open")) return;
+  magTitle.textContent=MAG_VIEWS[magKey].title();
+  const {ctx,w,h}=setupCanvas(magCanvas);
+  ctx.clearRect(0,0,w,h);
+  MAG_VIEWS[magKey].draw(ctx,w,h);
+}
+function openMag(key){
+  if(!MAG_VIEWS[key]) return;
+  magKey=key;
+  magModal.classList.add("open");
+  drawMag();
+}
+function closeMag(){ magModal.classList.remove("open"); magKey=null; }
 
 // ---------- crosshair readouts ----------
 function attachCrosshair(wrap,canvas,xline,readout,isDiff){
@@ -4239,6 +4341,7 @@ function renderEqNote(){
 function updateVisibility(){
   const n=(state.slots[0]?1:0)+(state.slots[1]?1:0), both=n===2;
   specEmpty.style.display=n?"none":"";
+  magBtns.forEach(b=>{ if(b.dataset.mag==="spec") b.style.display=n?"":"none"; });
   pngBtn.disabled=csvBtn.disabled=jsonBtn.disabled=!n;
   lmToggle.disabled=diffToggle.disabled=!both;
   lmSwitch.classList.toggle("disabled",!both);
@@ -4739,6 +4842,7 @@ function setSmooth(v){
   renderFooter();
 }
 function escCascade(){
+  if(magModal.classList.contains("open")) return closeMag();
   if(popover.classList.contains("open")) return closePopover();
   if(glossPanel.classList.contains("open")) return setGloss(false);
   if(shortcutsModal.classList.contains("open")) return shortcutsModal.classList.remove("open");
@@ -4845,6 +4949,9 @@ function boot(){
   guideModal.addEventListener("click",e=>{
     if(e.target===guideModal) guideModal.classList.remove("open");
   });
+  magBtns.forEach(b=>b.addEventListener("click",()=>openMag(b.dataset.mag)));
+  magClose.addEventListener("click",closeMag);
+  magModal.addEventListener("click",e=>{ if(e.target===magModal) closeMag(); });
 
   // term popovers: canvas hits are handled first, then document-level .term buttons
   specCanvas.addEventListener("click",e=>{
@@ -4963,6 +5070,8 @@ function boot(){
   const al=location.search.match(/[?&]sgalign=(file|onset)(?:&|$)/i);   // test hook
   if(al) setSgAlign(al[1].toLowerCase());
   if(/[?&]guide(?:&|$)/i.test(location.search)) guideModal.classList.add("open");   // test hook
+  const mg=location.search.match(/[?&]mag=([a-z]+)(?:&|$)/i);                       // test hook
+  if(mg) openMag(mg[1].toLowerCase());
 }
 boot();
 </script>

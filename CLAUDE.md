@@ -9,11 +9,13 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 ## Status
 
 - **M1 + M1.5 + acoustic support + glossary + M2 (spectrogram, envelope overlay, onset
-  ticks): BUILT, awaiting user testing.** M2 was built on explicit user request
-  2026-08-19. Do not start M3 (live input) or M4 (chain measure) until the user has
-  tested and said so.
-- 57/57 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end against
-  a numeric probe of the full pipeline; M2 views verified by headless `?demo` screenshot.
+  ticks) + M2.5 (spectrogram difference/level-match/string markers, EQ-region lane,
+  EQ match with device faces): BUILT, awaiting user testing.** M2 and M2.5 were built on
+  explicit user request 2026-08-19. Do not start M3 (live input) or M4 (chain measure)
+  until the user has tested and said so.
+- 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
+  against a numeric probe of the full pipeline; M2/M2.5 views verified by headless
+  `?demo` screenshots (all four EQ device faces inspected).
 
 ## File map
 
@@ -55,7 +57,12 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   metrics integrate 60 Hz–20 kHz only; octave smoothing off/1-12/1-6/1-3; peak detection
   always on 1/6-oct curve. Spectrogram 2048-pt Hann, 256 log cells 60 Hz–20 kHz,
   **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale,
-  level-match not applied; envelope overlay aligned at each file's first onset.
+  level-match off by default (toggle folds the spectrum lmOffset into pane B + scale);
+  difference pane onset-aligned, diverging amber/teal, p98 scale; envelope overlay
+  aligned at each file's first onset. EQ match: least-squares fit of RBJ
+  analog-magnitude band models against the **1/6-oct-smoothed** difference (never the
+  raw comb) on 140 log points; device trim absorbs the broadband level gap; the EQ-region
+  lane is colloquial annotation only — the M1 shaded bands still drive all numbers.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

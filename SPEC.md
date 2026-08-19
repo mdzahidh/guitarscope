@@ -132,3 +132,57 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   recomputed-looking plot from stored aggregates.
 - **Glossary grew three Method entries** (spectrogram, onset, envelope) with live values, and the
   bloom entry now points at the Envelope view where a bloom is directly visible.
+
+### 2026-08-19 — M2.5: comparable spectrograms, EQ vocabulary lane, EQ match (session 3)
+- **M2.5 built on explicit user request** (three asks in one message): (a) make the two
+  spectrograms comparable — a difference view, a level-match toggle, and open-string frequency
+  markers for the selected tuning; (b) annotate the spectrum with the colloquial EQ regions
+  guitarists use (low end, low mids, …); (c) an EQ-match feature that computes the settings that
+  reshape guitar A toward guitar B (or the reverse) on popular EQ units — Boss GE-7, MXR M108S
+  Ten Band EQ, Empress ParaEQ MkII Deluxe, Logic Pro Channel EQ — rendered to resemble the
+  selected device's physical panel, GE-7 default.
+- **Spectrogram level-match is a toggle, not the new default.** The M2 decision ("the spectrogram
+  shows what was recorded") stands as the default; the toggle folds the spectrum card's existing
+  level-match offset into pane B's image, the shared color scale, the crosshair readout (labeled
+  "LM"), the card sub line, and the footer — so the displayed number always matches the color.
+- **Spectrogram difference pane aligns A and B at their first onsets** (same convention as the
+  envelope overlay) and shows per-cell A−B on a diverging neutral→amber/teal map (amber = A
+  louder, teal = B louder — the slot accents). Display scale = 98th percentile of |Δ| snapped up
+  to 3 dB, so a few extreme cells can't wash out the map; cells unmeasured on either side stay
+  transparent with the dashed "not measured" boundary. Level-match and difference toggles are
+  disabled for snapshot slots (no audio to recompute from).
+- **The EQ-region lane is annotation, not measurement.** Regions (60–250 low end, 250–800 low
+  mids, 800–2.5k mids, 2.5–5k upper mids, 5–10k highs, 10–20k air) are colloquial conventions
+  with no standards body behind them; they are drawn as a dimension-line lane in the top margin
+  of the spectrum and difference plots, and each label opens a glossary entry that says exactly
+  that — while still reporting the live measured energy share per region. The M1 shaded analysis
+  bands (which do drive numbers) are untouched; the two vocabularies coexist deliberately.
+- **EQ match fits the 1/6-octave-smoothed difference, not the raw curve.** The raw A−B grid
+  difference is a comb of harmonic peaks (the two guitars' partials interleave); fitting it would
+  chase noise no EQ can or should correct. The fixed 1/6-oct curves (already computed for peak
+  detection) are the defensible "tonal envelope" target. Fit runs on 140 log-spaced points
+  (every 5th grid point) — plenty against models with ≤ 10 bands.
+- **EQ bands are modeled as RBJ analog-prototype magnitude responses** (peaking, low/high
+  shelf) — the standard biquad family — with device constraints honored: GE-7 7 fixed bands
+  ±15 dB Q≈1.41, M108S 10 fixed bands ±12 dB, ParaEQ 3 sweepable peaking bands with the
+  pedal's 3-position Q switch (0.7/1.4/2.8) and a boost-only 0…+30 dB level, Logic Channel EQ
+  low shelf + 4 peaking + high shelf with sampled Q choices and ±24 dB output gain. Graphic
+  fit = least-squares init + coordinate descent; parametric fit = greedy scan over log-spaced
+  centers × Q choices with projected gain, then refinement. Deterministic; recovers in-model
+  targets to < 0.15 dB (tested).
+- **The device trim absorbs the broadband level difference** — level-match is deliberately not
+  pre-applied to the EQ target, because a real pedal's level knob is exactly where that gap
+  belongs. The one exception is ParaEQ's boost-only trim, which cannot cut; the fitter clamps
+  it and the residual reports the consequence.
+- **Honesty telegraphed on the panel:** the face is captioned "modeled panel — controls show
+  the fitted settings", the response plot overlays the dashed target against the achieved
+  modeled response with a residual-RMS chip, and the card note states the model, the fit
+  method, and "real hardware differs from the model — treat the settings as a starting point,
+  not gospel." The device face uses neutral ink (a pedal is not a guitar); only the achieved
+  response curve takes the destination guitar's accent color.
+- **Direction default is A → B** ("make A sound like B"), matching the user's phrasing;
+  direction and device round-trip through JSON snapshots, and snapshots' stored 1/6-oct curves
+  are enough to recompute the fit, so EQ match works on reloaded snapshots too.
+- Block-0 test suite grew 57 → 100 (RBJ identities: exact center gain, asymptotes, boost/cut
+  reciprocity; fitter recovery; sgram-difference alignment and NaN propagation; diverging
+  colormap endpoints).

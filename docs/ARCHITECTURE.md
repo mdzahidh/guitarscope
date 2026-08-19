@@ -10,11 +10,11 @@ and their dates see SPEC.md's changelog; for the working brief see CLAUDE.md.
 
 | # | Role | Key contents |
 |---|------|-------------|
-| 0 | **DSP core** — pure functions, no DOM, node-safe | `welch`, `smoothOct`, `bandPower`, `spectralCentroid`, `spectralTilt`, `detectPeaks`, `makeLogGrid`, `resampleToGrid`, `noteInfo`, `TUNINGS`, `stftBands`, `detectOnsets`, `amplitudeEnvelope`, `attackTimes`, `bandDecays`, `autocorrF0`, `harmonicProfile`, `dynamicsMetrics`, `sniffAudioInfo`, `magmaColor`, `spectrogramLog`, `decimateEnvelope` |
+| 0 | **DSP core** — pure functions, no DOM, node-safe | `welch`, `smoothOct`, `bandPower`, `spectralCentroid`, `spectralTilt`, `detectPeaks`, `makeLogGrid`, `resampleToGrid`, `noteInfo`, `TUNINGS`, `stftBands`, `detectOnsets`, `amplitudeEnvelope`, `attackTimes`, `bandDecays`, `autocorrF0`, `harmonicProfile`, `dynamicsMetrics`, `sniffAudioInfo`, `magmaColor`, `spectrogramLog`, `decimateEnvelope`; M2.5: `eqPeakingDb`/`eqLowShelfDb`/`eqHighShelfDb`/`eqShapeDb`, `EQ_DEVICES`/`EQ_DEVICE_BY_ID`, `lsqSolve`, `fitGraphicEq`, `fitParametricEq`, `eqSettingsResponseDb`, `sgramDifference`, `divergeColor` |
 | 1 | **Audio ingestion** | File → ArrayBuffer → header sniff → `OfflineAudioContext` decode at the sniffed native rate → channel/mid selection |
 | 2 | **Glossary** | Term database (musician / scientific / formula registers), popover wiring, searchable panel |
-| 3 | **Rendering** | Canvas scenes (spectrum, difference, spectrogram, envelope), axes/bands/tuning markers, collision-aware peak labels, legend, status chip, hit-rects for glossary clicks, magma image renderer + colorbar, PNG export composition |
-| 4 | **App** | State, drag-drop, toggles, tone-character panel, comparison prose generator, spectrogram/envelope model builders + crosshairs, demo synth, CSV/JSON snapshot exports, keyboard shortcuts |
+| 3 | **Rendering** | Canvas scenes (spectrum, difference, spectrogram, spectrogram-difference, envelope, EQ device face, EQ response), axes/bands/tuning markers, EQ-region lane, collision-aware peak labels, legend, status chip, hit-rects for glossary clicks, magma + diverging image renderers + colorbars, PNG export composition |
+| 4 | **App** | State, drag-drop, toggles, tone-character panel, comparison prose generator, spectrogram/envelope/EQ model builders + crosshairs, EQ fit cache, demo synth, CSV/JSON snapshot exports, keyboard shortcuts |
 
 `tests/dsp.test.js` extracts block 0 with a regex and `require`s it under node — block 0
 must stay free of DOM/window references. Blocks were authored as separate files in a
@@ -68,13 +68,73 @@ power with the same full-scale-sine convention as Welch → resample each frame 
   (nFrames × 256), which `drawSpectrogramScene` stretches over the plot. The offscreen
   image is cached on the slot keyed by the shared color scale (`_sgImage`), so redraws
   (crosshair, resize) cost one `drawImage`. A and B share one scale — top = joint hottest
-  cell ceil'd to 5 dB, floor 80 dB below — and level-match is intentionally not applied.
+  cell ceil'd to 5 dB, floor 80 dB below. Level-match is off by default ("the spectrogram
+  shows what was recorded"); the M2.5 toggle folds the spectrum card's lmOffset into pane
+  B's image, the shared scale, the crosshair readout, and the sub/footer text, so the
+  printed dB always matches the color.
 - Envelope overlay: each file's peak-follower envelope (~8 kHz) is max-pool-decimated to
   ≤4096 points (`decimateEnvelope` — averaging would shave attack peaks), drawn on a fixed
   −60…0 dB axis with each file's **own first onset at t = 0** so decay shapes align even
   when lead-in silence differs. `slot.tvis` carries `{env, envRate, onsets (s),
   firstOnset, sg}`; snapshot slots have `tvis = null` and both panes show an "audio not
   stored" note instead.
+
+## M2.5 additions
+
+### Spectrogram difference + string markers
+
+- `sgramDifference` (block 0) aligns the two spectrograms at each file's first onset
+  (same convention as the envelope overlay), subtracts per log cell over the overlapping
+  span, applies the level offset to B when level-match is on, and propagates NaN when
+  either side is unmeasured. It also returns the 98th percentile of |Δ|, which the UI
+  snaps up to a 3 dB step for the display scale — a p98 scale keeps a few extreme cells
+  from washing out the map. Rendered with `divergeColor` (neutral → amber/teal, endpoints
+  = the slot accents; amber = A louder). Level-match and difference toggles are disabled
+  for snapshot slots (no audio to recompute from).
+- Open-string fundamentals of the selected tuning are drawn as dashed horizontal markers
+  on all spectrogram panes, labels at the right edge with collision skipping (adjacent
+  low strings sit only a few pixels apart on the log axis at this pane height).
+
+### Spectrum EQ-region lane
+
+- A dimension-line lane in the widened top margin (`PLOT.mT` 30 → 46) of the spectrum
+  and difference scenes names the colloquial mixer regions (60–250 low end, 250–800 low
+  mids, 800–2.5k mids, 2.5–5k upper mids, 5–10k highs, 10–20k air). It is annotation
+  only — the M1 shaded bands still drive every number. Labels are glossary hit-rects;
+  the six glossary entries state the boundaries are colloquial while reporting live
+  measured energy shares.
+
+### EQ match
+
+- **The fit target is the 1/6-octave-smoothed difference (`slot.fixed6db`), never the
+  raw grid difference.** The raw A−B curve is a comb of interleaved harmonics; fitting
+  it chases noise no EQ should correct. The fixed 1/6-oct curves already exist for peak
+  detection and are recomputable from snapshots, so EQ match works on reloaded snapshots
+  too. Fit runs on every 5th grid point (140 log-spaced points, 60 Hz–20 kHz).
+- **Band model:** RBJ analog-prototype *magnitude* responses (peaking, low shelf, high
+  shelf) — no phase, no digital-frequency warping; at these Qs and audio frequencies the
+  magnitude difference from a real biquad is negligible next to hardware tolerances,
+  which the card note already disclaims ("starting point, not gospel").
+- **Fitters** (block 0, deterministic, recover in-model targets to < 0.15 dB):
+  `fitGraphicEq` = least-squares init (`lsqSolve`, normal equations with the trim as an
+  extra flat column) + per-band ternary coordinate descent under the gain clamp;
+  `fitParametricEq` = greedy: for each band, scan log-spaced centers × the device's Q
+  choices, project the optimal gain in closed form, take the best triple, then a second
+  refinement pass over all bands. The trim absorbs the broadband level difference —
+  that's what a level knob is for — except ParaEQ's boost-only trim, which is clamped
+  to 0…+30 dB and lets the residual report the consequence.
+- **Device table** (`EQ_DEVICES`): GE-7 (7 bands, ±15, Q 1.41), M108S (10 bands, ±12),
+  ParaEQ MkII Deluxe (3 sweepable peaking bands, Q switch 0.7/1.4/2.8, boost-only
+  level), Logic Channel EQ (low shelf + 4 peaking + high shelf, Q sampled from its
+  continuous range, ±24 output gain). Adding a device = one table entry; the fitters
+  and both scenes read everything from it.
+- **Rendering:** the face scene dispatches on device kind — sliders with 0-dB detents
+  for graphics, FREQ/GAIN/Q knob trios for ParaEQ, a numeric strip with sign-aware
+  shape glyphs for Logic — in neutral ink (a pedal is not a guitar; only the achieved
+  curve in the response plot takes the destination slot's accent). The response scene
+  overlays the dashed target vs the modeled response with a residual-RMS chip.
+- The fit is cached on `state._eqFit` keyed by `device|direction` and invalidated in
+  `afterDataChange`; direction/device round-trip through JSON snapshots.
 
 ## Hard-won correctness notes (dead ends — do not retry)
 
@@ -111,7 +171,7 @@ of the live canvas.
 
 ## Snapshot format
 
-JSON with `kind:"guitarscope-snapshot"`, `version:1`, both slots' file facts (name,
+JSON with `app:"GuitarScope"`, `type:"snapshot"`, `version:1`, both slots' file facts (name,
 container, sample rate, bit depth, channels, duration, channel mode), the raw (unsmoothed)
 grid spectra, tone metrics, band table, peaks, and the analysis settings that produced
 them. Reload path treats a snapshot like a file drop: everything recomputable is
@@ -130,12 +190,14 @@ metrics) are carried as stored values and labeled as such.
 
 ## Testing strategy
 
-- `tests/dsp.test.js` (57 tests): physics identities (Hann gain/ENBW/scalloping),
+- `tests/dsp.test.js` (100 tests): physics identities (Hann gain/ENBW/scalloping),
   synthetic-signal metrics (band powers, centroid, tilt, decay slopes, dynamics),
   sniffer byte-fixtures for every container, tuning/note math, attack regression cases,
   spectrogram invariants (0 dB sine anywhere on the log grid, NaN above Nyquist, hop
-  bounding), magma colormap endpoints/monotonicity (within 8-bit quantization), and
-  envelope decimation peak preservation.
+  bounding), magma colormap endpoints/monotonicity (within 8-bit quantization),
+  envelope decimation peak preservation, and (M2.5) RBJ identities (exact center gain,
+  asymptotes, boost/cut reciprocity), EQ fitter recovery of in-model targets,
+  spectrogram-difference alignment/NaN propagation, and diverging-colormap endpoints.
 - `tests/make_samples.js`: regenerates the demo WAVs and round-trips them through the
   app's own sniffer.
 - A numeric probe replicating `computeTimeMetrics` end-to-end was used to validate the

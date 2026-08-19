@@ -186,3 +186,56 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
 - Block-0 test suite grew 57 → 100 (RBJ identities: exact center gain, asymptotes, boost/cut
   reciprocity; fitter recovery; sgram-difference alignment and NaN propagation; diverging
   colormap endpoints).
+
+### 2026-08-19 — M2.5 follow-ups: usability batch (session 4)
+- **Six requests in one user message, all built:** (a) spectrogram time-axis alignment options
+  plus string-frequency markers on the individual panes; (b) every plot magnifiable; (c) the
+  colloquial EQ regions added to the Band Energy table; (d) the whole interface works with a
+  single guitar, two-guitar features auto-disabled; (e) a prominent recording / signal-chain
+  guide; (f) color themes — the existing look named "Dark", a new cream "Bright" theme, and
+  **Bright is the default**.
+- **Spectrogram time axis is a three-way choice: Free / File time / First onset.** Free (default,
+  the M2 behavior) lets each pane fill its width with its own duration. File time puts both
+  panes on one shared seconds axis from file start; First onset shifts each pane so t = 0 sits
+  at that file's first detected onset — the same convention the envelope overlay and difference
+  pane already used. The seg is disabled until both guitars are loaded, the active mode is
+  printed in the card sub line, and the choice round-trips through JSON snapshots
+  (`?sgalign=file|onset` is the headless test hook).
+- **String markers on the spectrogram panes reuse the M2.5 difference-pane markers:** dashed
+  open-string fundamentals of the selected tuning, every string labeled. Low strings crowd on a
+  log axis, so labels stack downward with a minimum spacing and a short leader line reconnects a
+  displaced label to its true frequency.
+- **Magnify re-renders, never rescales.** Each plot card has a magnify button that opens the
+  same scene function (spectrum, difference, either spectrogram, spectrogram difference,
+  envelope, EQ face, EQ response) into a near-fullscreen overlay canvas at native resolution —
+  live state, crisp text, no bitmap stretching. Esc / ✕ / backdrop click closes; `?mag=<key>`
+  is the test hook. Fixing this surfaced a rAF race (a pending coalesced redraw could swallow
+  the animation loop's frame request, leaving pane B's spectrogram un-revealed); documented in
+  ARCHITECTURE.md.
+- **The Band Energy table now has two sections: the named analysis bands (unchanged, still
+  drive all metrics) and the EQ-vocabulary regions** (60–250 low end, 250–800 low mids,
+  800–2.5k mids, 2.5–5k upper mids, 5–10k highs, 10–20k air — the same regions as the M2.5
+  spectrum lane). The regions tile the whole 60 Hz–20 kHz range so their shares sum to ≤100 %;
+  the note under the table says which vocabulary is which.
+- **Single-guitar mode is gating, not a mode switch.** Everything that reads one file (spectrum,
+  bands, tone character, spectrogram pane, envelope, exports) works with either slot alone;
+  everything that needs two (difference toggle, level-match, spectrogram difference /
+  level-match / alignment seg, EQ match card, Δ columns, comparison prose) disables or hides
+  automatically and returns when the second file lands. `?demo=a|b` loads half the demo pair
+  for testing.
+- **The recording guide is a topbar button ("How to record"), not buried help.** One rule up
+  top — change only the guitar — then concrete signal-chain recipes (electric DI recommended,
+  mic'd amp with caveats, acoustic mic placement), level-setting discipline, what to play, and
+  what to avoid (no compression/EQ/reverb, no mixed DI-vs-mic comparisons, lossy formats only
+  if both files share the fate). Also linked from the empty state; `?guide` opens it headless.
+- **Themes: Bright is the default; plot chrome themes, data colormaps do not.** The cream
+  Bright palette lives on bare `:root`, the original panel look under `html[data-theme="dark"]`.
+  All canvas chrome colors route through CSS custom properties (new `*-rgb` triplets feed alpha
+  composites via one `cssRGBA` helper), so both themes share every drawing routine. The magma
+  spectrogram and the diverging amber/teal difference images are **data colormaps and stay dark
+  scope-screens in both themes** — perceptual-uniformity claims justify the palette, and keeping
+  them fixed means cached images survive a theme switch and PNG exports read identically in
+  either theme. Bright's accents darken to A `#a8690f` / B `#17786e` for contrast on cream.
+  Choice persists to localStorage; `?theme=bright|dark` wins over storage for headless tests.
+- Block-0 DSP untouched this session; suite stays at 100 passing. All six features verified by
+  headless screenshots in both themes, including single-guitar and magnify views.

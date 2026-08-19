@@ -10,12 +10,15 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 
 - **M1 + M1.5 + acoustic support + glossary + M2 (spectrogram, envelope overlay, onset
   ticks) + M2.5 (spectrogram difference/level-match/string markers, EQ-region lane,
-  EQ match with device faces): BUILT, awaiting user testing.** M2 and M2.5 were built on
+  EQ match with device faces) + M2.5 follow-ups (spectrogram time-axis alignment,
+  plot magnify, EQ-vocabulary rows in Band Energy, single-guitar mode, recording guide,
+  Bright/Dark themes with Bright default): BUILT, awaiting user testing.** All built on
   explicit user request 2026-08-19. Do not start M3 (live input) or M4 (chain measure)
   until the user has tested and said so.
 - 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; M2/M2.5 views verified by headless
-  `?demo` screenshots (all four EQ device faces inspected).
+  `?demo` screenshots (all four EQ device faces inspected; both themes, single-guitar
+  and magnify views inspected).
 
 ## File map
 
@@ -34,7 +37,9 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 
 ## Run / test
 
-- Open `index.html` in a browser. `?demo` auto-loads the built-in demo pair.
+- Open `index.html` in a browser. `?demo` auto-loads the built-in demo pair
+  (`?demo=a`/`=b` loads one side only). Other test hooks: `?theme=bright|dark`,
+  `?sgalign=file|onset`, `?mag=<viewkey>`, `?guide`.
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
@@ -50,15 +55,20 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 - **Every visible number defensible.** Analysis params live in the footer; smoothing
   state is always printed on the plot; dB re full-scale sine everywhere; glossary terms
   link each label to its formula with current values.
-- **Design brief:** laboratory instrument built by a luthier. Dark, one accent per
-  guitar (A amber `#d9a35b`, B teal `#5eb3ab`), tabular numerals, no chartjunk/3D/glow,
-  150–250 ms non-bouncy transitions. Spectrogram (M2) must be magma, never rainbow.
+- **Design brief:** laboratory instrument built by a luthier. Two themes, **Bright
+  (cream) is the default**, Dark is the original look; one accent per guitar per theme
+  (Dark: A amber `#d9a35b`, B teal `#5eb3ab`; Bright: A `#a8690f`, B `#17786e`).
+  Tabular numerals, no chartjunk/3D/glow, 150–250 ms non-bouncy transitions.
+  All plot chrome routes through CSS vars (`cssColor`/`cssRGBA`); **data colormaps
+  never theme** — the magma spectrogram (never rainbow) and the diverging amber/teal
+  difference stay dark scope-screens in both themes (see ARCHITECTURE.md).
 - **DSP params:** Welch LTAS 8192-pt Hann 50 % overlap; log grid 60 Hz–20 kHz (700 pts);
   metrics integrate 60 Hz–20 kHz only; octave smoothing off/1-12/1-6/1-3; peak detection
   always on 1/6-oct curve. Spectrogram 2048-pt Hann, 256 log cells 60 Hz–20 kHz,
   **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale,
   level-match off by default (toggle folds the spectrum lmOffset into pane B + scale);
-  difference pane onset-aligned, diverging amber/teal, p98 scale; envelope overlay
+  difference pane onset-aligned, diverging amber/teal, p98 scale; individual panes get
+  a Free / File-time / First-onset time-axis choice; envelope overlay
   aligned at each file's first onset. EQ match: least-squares fit of RBJ
   analog-magnitude band models against the **1/6-oct-smoothed** difference (never the
   raw comb) on 140 log points; device trim absorbs the broadband level gap; the EQ-region

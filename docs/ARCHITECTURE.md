@@ -92,8 +92,10 @@ power with the same full-scale-sine convention as Welch → resample each frame 
   = the slot accents; amber = A louder). Level-match and difference toggles are disabled
   for snapshot slots (no audio to recompute from).
 - Open-string fundamentals of the selected tuning are drawn as dashed horizontal markers
-  on all spectrogram panes, labels at the right edge with collision skipping (adjacent
-  low strings sit only a few pixels apart on the log axis at this pane height).
+  on all spectrogram panes. Session 4 upgraded the labels from collision *skipping* to
+  collision *stacking*: every string is named; labels that would overlap are pushed down
+  to a minimum spacing and a short leader line reconnects a displaced label to its true
+  frequency (adjacent low strings sit only a few pixels apart on the log axis).
 
 ### Spectrum EQ-region lane
 
@@ -136,6 +138,77 @@ power with the same full-scale-sine convention as Welch → resample each frame 
 - The fit is cached on `state._eqFit` keyed by `device|direction` and invalidated in
   `afterDataChange`; direction/device round-trip through JSON snapshots.
 
+## M2.5 follow-ups (session 4)
+
+### Spectrogram time-axis modes
+
+- `state.sgAlign` ∈ `off` (Free — each pane fills its width with its own duration, the
+  M2 behavior and default), `file` (shared seconds axis from file start), `onset` (t = 0
+  at each file's first detected onset — the convention the envelope overlay and the
+  difference pane already used). One helper computes the visible `{T0,T1}` window per
+  pane; the seg is disabled unless both spectrograms exist, the active mode is printed in
+  the card sub line, and the choice round-trips through snapshots. `?sgalign=file|onset`
+  is the headless hook.
+
+### Plot magnify
+
+- `MAG_VIEWS` (block 4) maps a view key (`spec`, `diff`, `sga`, `sgb`, `sgd`, `env`,
+  `eqface`, `eqresp`) to a title function and a draw function that calls the *same*
+  model-builder + scene function the card canvas uses. The overlay modal owns one canvas
+  sized to the viewport; magnify therefore **re-renders at native resolution — it never
+  rescales a bitmap**, so text stays crisp and the view stays live (state changes made
+  while the overlay is open, e.g. via keyboard, draw through). Esc / ✕ / backdrop close;
+  `?mag=<key>` is the headless hook. Cached spectrogram images are drawn at whatever
+  size the scene requests, so no extra invalidation is needed.
+
+### EQ-vocabulary rows in Band Energy
+
+- The band table gained a second section listing the same six colloquial `EQ_REGIONS`
+  the spectrum lane draws (60–250, 250–800, 800–2.5k, 2.5–5k, 5–10k, 10–20k Hz). They
+  tile the whole integration range, so their shares sum to ≤100 % (unlike the named M1
+  bands, which deliberately leave 1.2–2 kHz unnamed); the table note says which
+  vocabulary is which. Annotation vocabulary only — the M1 bands still drive every
+  metric.
+
+### Single-guitar mode
+
+- Gating, not a mode: `anyLoaded()` drives everything one file can support (spectrum,
+  bands, tone rows, its spectrogram pane, envelope, exports); `bothLoaded()` gates the
+  rest (difference + level-match toggles, spectrogram difference/level-match/alignment,
+  the whole EQ-match card, Δ columns, comparison prose). Controls disable, cards hide,
+  and everything returns when the second file lands. `?demo=a` / `?demo=b` load half the
+  demo pair.
+
+### Recording guide
+
+- A `guideModal` opened from a topbar "How to record" button and from the empty-state
+  link. Content states the one rule (change only the guitar), three signal-chain recipes
+  (electric DI recommended; mic'd amp with the mic-movement caveat; acoustic mic
+  placement), level discipline (set gain once with the louder guitar; clipped takes are
+  unusable), what to play, and what to avoid (no processing anywhere; never DI vs mic;
+  lossy only if both files share it). `?guide` opens it headless.
+
+### Theming (Bright default + Dark)
+
+- The cream **Bright** palette lives on bare `:root`; the original look moved intact
+  under `html[data-theme="dark"]`. Theme init runs at the *top of script block 4* —
+  inline scripts at the end of `<body>` execute before first paint, so there is no
+  flash-of-wrong-theme, and putting it in `<head>` would break the test extractor's
+  "block 0 is the first `<script>`" invariant. Priority: `?theme=` URL param (headless
+  hook) > `localStorage("gsTheme")` > `bright`.
+- Canvas chrome reads the active palette through `cssColor(name)` (cached computed-style
+  lookup) and `cssRGBA(name, a)` for alpha composites over `*-rgb` triplet variables
+  (`--ink-rgb`, `--grid-rgb`, `--chip-rgb`, …); CSS uses the same triplets in `rgba()`.
+  `setTheme` flips the attribute, flushes the `CSS_COLORS` cache, re-derives `COLORS`,
+  requests a redraw, and re-renders the HTML tables (their accent dots embed `COLORS`).
+- **Data colormaps deliberately do not theme.** The magma spectrogram and the diverging
+  amber/teal difference images are perceptual encodings, not chrome — they render as
+  dark scope-screens inside both themes. This keeps the palettes defensible (magma's
+  uniformity claims assume the dark ground), makes PNG exports identical across themes,
+  and means the cached `_sgImage`/`_sgDiff` bitmaps need no invalidation on switch.
+- Bright accents darken to A `#a8690f` / B `#17786e` (the Dark ambers/teals fail
+  contrast on cream); `--on-accent` provides badge-text color per theme.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never
@@ -156,6 +229,13 @@ power with the same full-scale-sine convention as Welch → resample each frame 
   seed luck.
 - **A first theory that Welch-averaging-over-decay strongly penalizes high harmonics was
   wrong** — the penalty is only ~1–2 dB (λ-ratio effect). Measured, not assumed.
+- **One rAF id cannot serve two clients.** The coalescing `requestDraw` and the reveal
+  animation loop originally shared `rafId`; a pending `requestDraw` frame made
+  `startAnimLoop` think a loop was already running, so the animation never ticked and
+  pane B's spectrogram stayed un-revealed (a race — only when a redraw was requested in
+  the same tick the animation started). Fixed with a `rafAnim` flag: the animation loop
+  cancels a pending plain redraw and takes over the id (its tick redraws anyway).
+  Symptom to remember: a blank pane with correct state and no errors.
 
 ## Rendering approach
 

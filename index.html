@@ -212,6 +212,9 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .plotwrap canvas{ display:block; width:100%; }
 #specCanvas{ height:440px; }
 #diffCanvas{ height:216px; }
+#sgramCanvasA, #sgramCanvasB{ height:230px; }
+#envCanvas{ height:280px; }
+.sgramstack{ display:flex; flex-direction:column; gap:14px; }
 .plotwrap.hoverable{ cursor:crosshair; }
 .xline{
   position:absolute; top:0; bottom:0; width:1px; background:rgba(232,229,222,.22);
@@ -570,6 +573,49 @@ kbd{
         <div class="tonerows" id="toneRows"></div>
         <div class="prose" id="prosePara" style="display:none"></div>
         <div class="tonenote" id="toneNote"></div>
+      </div>
+    </section>
+
+    <!-- spectrogram (M2) -->
+    <section class="card reveal" id="sgramCard" style="display:none">
+      <div class="cardhead">
+        <div>
+          <div class="cardtitle">Spectrogram</div>
+          <div class="cardsub">time–frequency energy, shared color scale across A and B (level-match not applied) · magma colormap</div>
+        </div>
+      </div>
+      <div class="cardbody">
+        <div class="sgramstack">
+          <div class="plotwrap" id="sgramWrapA" style="display:none">
+            <canvas id="sgramCanvasA"></canvas>
+            <div class="xline" id="sgramXlineA"></div>
+            <div class="readout" id="sgramReadoutA"></div>
+          </div>
+          <div class="plotwrap" id="sgramWrapB" style="display:none">
+            <canvas id="sgramCanvasB"></canvas>
+            <div class="xline" id="sgramXlineB"></div>
+            <div class="readout" id="sgramReadoutB"></div>
+          </div>
+          <div class="tablefoot" id="sgramNote" style="display:none"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- envelope overlay (M2) -->
+    <section class="card reveal" id="envCard" style="display:none">
+      <div class="cardhead">
+        <div>
+          <div class="cardtitle">Envelope</div>
+          <div class="cardsub">amplitude envelope in dB re full scale, A/B aligned at each file's first onset · tick marks show detected onsets</div>
+        </div>
+      </div>
+      <div class="cardbody">
+        <div class="plotwrap" id="envWrap">
+          <canvas id="envCanvas"></canvas>
+          <div class="xline" id="envXline"></div>
+          <div class="readout" id="envReadout"></div>
+        </div>
+        <div class="tablefoot" id="envNote" style="display:none"></div>
       </div>
     </section>
 
@@ -1553,7 +1599,7 @@ const GLOSSARY=[
   { key:"bloom", name:"Bloom", cat:"Tone descriptors", hook:"notes that swell after the attack",
     musician:"When a note gets warmer or louder a moment after the pick — common on big-bodied acoustics and semi-hollows as the body's resonances build up.",
     science:"Energy (often low-mid) that peaks tens to hundreds of milliseconds after the onset transient, i.e. slow build-up of body-mode resonance.",
-    measure:"Not yet computed as its own number. Its ingredients are here: compare Attack (fast transient) with low/mid Decay times — long mid decay after a modest attack is the bloom signature. A dedicated envelope view arrives with M2.",
+    measure:"Not yet computed as its own number. Its ingredients are here: compare Attack (fast transient) with low/mid Decay times — long mid decay after a modest attack is the bloom signature. The Envelope view shows it directly: a bloom is a curve that keeps rising after its onset tick.",
     values(){ return []; } },
 
   { key:"decay-time", name:"Decay time", cat:"Tone descriptors", hook:"seconds to shed 20 dB",
@@ -1638,6 +1684,24 @@ const GLOSSARY=[
     science:"The level of the recording between and beneath notes: preamp hiss, ambience, mains hum.",
     measure:"10th percentile of 50 ms RMS frame levels. SNR shown = 95th percentile of active frames − floor. Separately, if energy 20–55 Hz exceeds 12 % of the 60 Hz–20 kHz total, the app suggests recording with a ~45 Hz high-pass — advisory only; metrics already start at 60 Hz, so rumble never contaminates them.",
     values(state){ return _vals(state, s=>s.metrics.noiseFloor!=null ? s.metrics.noiseFloor.toFixed(1)+" dBFS"+(s.metrics.snr!=null?"  ·  SNR "+s.metrics.snr.toFixed(0)+" dB":"") : null); } },
+
+  { key:"spectrogram", name:"Spectrogram", cat:"Method", hook:"how the tone moves through time",
+    musician:"The film where the LTAS is the photograph: time runs left to right, low notes at the bottom, and color shows where the energy is at each instant — pick attacks are vertical streaks, ringing strings horizontal stripes.",
+    science:"Short-time Fourier transform power over time and frequency on a log-frequency axis, colored with a perceptually-uniform colormap (magma) so equal color steps mean roughly equal data steps. Rainbow maps are never used — their artificial hue edges invent detail that isn't in the data.",
+    measure:"2048-sample Hann windows; hop adapts so a file spans ≤ 1400 columns (never below 256 samples). Each display cell takes the MAX of the FFT bins it covers on a 256-point log grid (60 Hz–20 kHz) — max, not mean, so a sine reads the same 0 dB however many bins a cell spans. A and B share one color scale (level-match not applied); its dB range is printed on the colorbar.",
+    values(state){ return _vals(state, s=>s.tvis&&s.tvis.sg ? s.tvis.sg.nFrames+" cols · hop "+(s.tvis.sg.hop/s.info.sampleRate*1000).toFixed(1)+" ms" : null); } },
+
+  { key:"onset", name:"Onset", cat:"Method", hook:"where each note starts",
+    musician:"The instant a note begins — the pick meeting the string. Every timing number in this app (attack, decay, the envelope's t = 0) is anchored to these instants.",
+    science:"Detected as a burst of new spectral energy: positive spectral flux (frame-to-frame increase in magnitude, summed over frequency) rising above an adaptive threshold.",
+    measure:"STFT 2048/512; flux = Σ max(0, |X|−|X_prev|); threshold = running median (±0.35 s) + offset; 80 ms minimum gap. STFT lookahead makes onsets read ~30–45 ms early — equally for both files, so comparisons cancel. Tick marks on the spectrogram and envelope plots show every detected onset.",
+    values(state){ return _vals(state, s=>s.metrics.onsetCount!=null ? s.metrics.onsetCount+" detected" : null); } },
+
+  { key:"envelope", name:"Envelope", cat:"Method", hook:"the note's outline in time",
+    musician:"The note's shape if you squint past the wiggles: how hard it starts, how it settles, how long it rings. The Envelope view overlays A and B so you can see whose notes bloom and whose stop dead.",
+    science:"The instantaneous amplitude of the waveform — the smooth curve joining its peaks — shown in dB, where exponential decays appear as straight lines.",
+    measure:"Peak follower at ~8 kHz (instant attack, 8 ms release), max-decimated to ≤ 4096 points for display; dB = 20·log₁₀(env) re full scale, floor −60 dB. A and B are aligned at each file's own first onset (t = 0), because recordings start at arbitrary moments.",
+    values(state){ return _vals(state, s=>s.tvis ? "first onset at "+s.tvis.firstOnset.toFixed(3)+" s" : null); } },
 
   { key:"sample-rate", name:"Sample rate", cat:"Method", hook:"read from the file, never assumed",
     musician:"How many snapshots per second the recording took. It's a fact about the file — nothing you (or this app) should ever “set”.",
@@ -1976,6 +2040,230 @@ function drawDiffScene(ctx, w, h, model){
   ctx.fillText("▼ "+model.nameB+" louder", PLOT.mL+8, PLOT.mT+pH-10);
   ctx.restore();
 }
+
+// ---------- time axes (M2) ----------
+function timeTickStep(span){
+  const steps=[0.05,0.1,0.2,0.25,0.5,1,2,5,10,15,30,60,120];
+  for(const s of steps) if(span/s<=8) return s;
+  return Math.ceil(span/480)*60;
+}
+function tTickLabel(t, step){
+  const d = step<0.1 ? 2 : step<1 ? 1 : 0;
+  const v = t.toFixed(d);
+  return /^-0(\.0+)?$/.test(v) ? v.slice(1) : v;
+}
+
+// ---------- spectrogram image (M2) ----------
+// Renders a spectrogramLog result into an offscreen canvas, one pixel per
+// (frame, log-grid cell). Cached per slot: the live canvas just stretches this
+// bitmap, so hover/resize never re-touches the FFT data. NaN cells (above the
+// file's Nyquist) stay transparent — unmeasured is drawn as nothing.
+function sgramImage(sg, dbMax, dbMin){
+  const {frames, nFrames, gridN}=sg;
+  const cnv=document.createElement("canvas");
+  cnv.width=nFrames; cnv.height=gridN;
+  const c=cnv.getContext("2d");
+  const img=c.createImageData(nFrames, gridN);
+  const px=img.data, span=dbMax-dbMin;
+  for(let f=0; f<nFrames; f++){
+    const row=f*gridN;
+    for(let i=0;i<gridN;i++){
+      const p=frames[row+i];
+      const k=((gridN-1-i)*nFrames+f)*4;      // row 0 = top = highest frequency
+      if(!(p>=0)){ px[k+3]=0; continue; }
+      const db=10*Math.log10(p+1e-30);
+      const rgb=magmaColor((db-dbMin)/span);
+      px[k]=rgb[0]; px[k+1]=rgb[1]; px[k+2]=rgb[2]; px[k+3]=255;
+    }
+  }
+  c.putImageData(img,0,0);
+  return cnv;
+}
+
+// ---------- spectrogram scene (M2) ----------
+const SGPLOT={mL:52, mR:64, mT:30, mB:34};   // wider right margin hosts the colorbar
+
+function drawSpectrogramScene(ctx, w, h, model){
+  const {sg, image, name, color, onsets, dbMax, dbMin}=model;
+  const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
+  const dur=sg.duration;
+  const xOfT=t=>SGPLOT.mL+(t/dur)*pW;
+  const yOfF=f=>SGPLOT.mT+(1-Math.log(f/FMIN)/LOGSPAN)*pH;
+  ctx.clearRect(0,0,w,h);
+  if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
+  ctx.save();
+
+  // image — the grid is log-uniform, so a plain linear stretch of the bitmap
+  // matches the log-frequency axis (cell-center offset is under a pixel)
+  ctx.save();
+  ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(image, SGPLOT.mL, SGPLOT.mT, pW, pH);
+  ctx.restore();
+  ctx.strokeStyle=cssColor("hair"); ctx.lineWidth=1;
+  ctx.strokeRect(SGPLOT.mL+0.5, SGPLOT.mT+0.5, pW-1, pH-1);
+
+  // frequency ticks sit outside the image so gridlines never tint the colormap
+  ctx.font=FONT_S; ctx.textAlign="right"; ctx.textBaseline="middle";
+  for(const f of X_MAJOR){
+    const y=yOfF(f);
+    ctx.strokeStyle="rgba(255,255,255,0.25)";
+    ctx.beginPath(); ctx.moveTo(SGPLOT.mL-4,y); ctx.lineTo(SGPLOT.mL,y); ctx.stroke();
+    ctx.fillStyle=cssColor("dim");
+    ctx.fillText(fLabel(f), SGPLOT.mL-8, y);
+  }
+
+  // time ticks
+  const step=timeTickStep(dur);
+  ctx.textAlign="center"; ctx.textBaseline="top";
+  for(let t=0; t<=dur+1e-9; t+=step){
+    const x=xOfT(t);
+    ctx.strokeStyle="rgba(255,255,255,0.25)";
+    ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT+pH); ctx.lineTo(x,SGPLOT.mT+pH+4); ctx.stroke();
+    ctx.fillStyle=cssColor("dim");
+    ctx.fillText(tTickLabel(t,step), x, SGPLOT.mT+pH+7);
+  }
+
+  // axis units
+  ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint");
+  ctx.textAlign="left"; ctx.textBaseline="bottom";
+  ctx.fillText("s", SGPLOT.mL+pW+3, SGPLOT.mT+pH+18);
+  ctx.save();
+  ctx.translate(12, SGPLOT.mT+2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign="right"; ctx.textBaseline="middle";
+  ctx.fillText("Hz", 0, 0);
+  ctx.restore();
+
+  // onset markers along the top edge of the image
+  if(onsets && onsets.length){
+    ctx.strokeStyle=color; ctx.lineWidth=1.5;
+    for(const t of onsets){
+      const x=xOfT(t);
+      ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT); ctx.lineTo(x,SGPLOT.mT+7); ctx.stroke();
+    }
+  }
+
+  // honest boundary when the file's rate can't measure to 20 kHz
+  if(sg.nyquist<FMAX){
+    const y=yOfF(sg.nyquist);
+    ctx.strokeStyle="rgba(232,229,222,0.35)"; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=cssColor("dim"); ctx.font=FONT_XS;
+    ctx.textAlign="left"; ctx.textBaseline="bottom";
+    ctx.fillText("above fs/2 = "+fLabel(Math.round(sg.nyquist))+"Hz — not measured", SGPLOT.mL+8, y-4);
+  }
+
+  // colorbar: the exact magma → dB mapping the image used
+  const cbX=w-SGPLOT.mR+14, cbW=10;
+  for(let yy=0; yy<pH; yy++){
+    const rgb=magmaColor(1-yy/(pH-1));
+    ctx.fillStyle="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
+    ctx.fillRect(cbX, SGPLOT.mT+yy, cbW, 1);
+  }
+  ctx.strokeStyle=cssColor("hair2");
+  ctx.strokeRect(cbX+0.5, SGPLOT.mT+0.5, cbW-1, pH-1);
+  ctx.font=FONT_XS; ctx.fillStyle=cssColor("dim"); ctx.textAlign="left";
+  ctx.textBaseline="bottom"; ctx.fillText((dbMax>0?"+":"")+dbMax+" dB", cbX-2, SGPLOT.mT-4);
+  ctx.textBaseline="top";    ctx.fillText(dbMin+" dB", cbX-2, SGPLOT.mT+pH+4);
+
+  // file name (top margin — never over data)
+  ctx.font=FONT_S; ctx.textBaseline="middle";
+  ctx.fillStyle=color;
+  ctx.beginPath(); ctx.arc(SGPLOT.mL+4, 15, 3.5, 0, 2*Math.PI); ctx.fill();
+  ctx.fillStyle=cssColor("mut"); ctx.textAlign="left";
+  const nm=name.length>44 ? name.slice(0,42)+"…" : name;
+  ctx.fillText(nm, SGPLOT.mL+13, 15.5);
+  if(model.statusText){
+    ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint"); ctx.textAlign="right";
+    ctx.fillText(model.statusText, w-SGPLOT.mR-6, 15.5);
+  }
+  ctx.restore();
+}
+
+// ---------- envelope overlay scene (M2) ----------
+// Envelopes in dB re full scale (a 0 dBFS sine's envelope reads 0 dB), each
+// file shifted so t = 0 is its own first onset — the honest way to overlay
+// takes recorded at different moments.
+function drawEnvelopeScene(ctx, w, h, model){
+  const {curves, tMin, tMax}=model;
+  const pW=w-PLOT.mL-PLOT.mR, pH=h-PLOT.mT-PLOT.mB;
+  const yMin=-60, yMax=0;
+  const xOfT=t=>PLOT.mL+((t-tMin)/(tMax-tMin))*pW;
+  const yOf=db=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,db))-yMin)/(yMax-yMin))*pH;
+  ctx.clearRect(0,0,w,h);
+  if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
+  ctx.save();
+
+  // grids
+  ctx.font=FONT_S;
+  const step=timeTickStep(tMax-tMin);
+  ctx.textAlign="center"; ctx.textBaseline="top";
+  for(let t=Math.ceil(tMin/step)*step; t<=tMax+1e-9; t+=step){
+    const x=xOfT(t);
+    ctx.strokeStyle="rgba(255,255,255,0.05)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
+    ctx.fillStyle=cssColor("dim"); ctx.fillText(tTickLabel(t,step), x, PLOT.mT+pH+7);
+  }
+  ctx.textAlign="right"; ctx.textBaseline="middle";
+  for(let v=yMin; v<=yMax; v+=10){
+    const y=yOf(v);
+    ctx.strokeStyle = v===0 ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.05)";
+    ctx.beginPath(); ctx.moveTo(PLOT.mL,y); ctx.lineTo(PLOT.mL+pW,y); ctx.stroke();
+    ctx.fillStyle=cssColor("dim"); ctx.fillText((v>0?"+":"")+v, PLOT.mL-8, y);
+  }
+
+  // axis units
+  ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint");
+  ctx.textAlign="left"; ctx.textBaseline="bottom";
+  ctx.fillText("s", PLOT.mL+pW+3, PLOT.mT+pH+18);
+  ctx.save();
+  ctx.translate(12, PLOT.mT+2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign="right"; ctx.textBaseline="middle";
+  ctx.fillText("dB", 0, 0);
+  ctx.restore();
+
+  // t = 0 alignment line
+  if(tMin<=0 && 0<=tMax){
+    const x0=xOfT(0);
+    ctx.strokeStyle="rgba(232,229,222,0.28)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x0,PLOT.mT); ctx.lineTo(x0,PLOT.mT+pH); ctx.stroke();
+    ctx.font=FONT_XS; ctx.fillStyle=cssColor("dim");
+    ctx.textAlign="left"; ctx.textBaseline="bottom";
+    ctx.fillText("t = 0 · first onset", x0+5, PLOT.mT+pH-12);
+  }
+
+  // curves
+  curves.forEach((c, ci)=>{
+    const n=c.env.length;
+    const dbAt=k=>{ const a=c.env[k]; return a>0 ? 20*Math.log10(a) : yMin-1; };
+    ctx.beginPath();
+    ctx.moveTo(xOfT(-c.t0), yOf(yMin));
+    for(let k=0;k<n;k++) ctx.lineTo(xOfT(k/c.rate - c.t0), yOf(dbAt(k)));
+    ctx.lineTo(xOfT((n-1)/c.rate - c.t0), yOf(yMin));
+    ctx.closePath();
+    ctx.fillStyle=withAlpha(c.color,0.08); ctx.fill();
+    ctx.beginPath();
+    for(let k=0;k<n;k++){
+      const x=xOfT(k/c.rate - c.t0), y=yOf(dbAt(k));
+      if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle=c.color; ctx.lineWidth=1.6; ctx.lineJoin="round"; ctx.stroke();
+    // onset ticks near the bottom edge, one 6-px lane per curve
+    if(c.onsets && c.onsets.length){
+      const yBot=PLOT.mT+pH-6*ci, yTop=yBot-6;
+      ctx.strokeStyle=withAlpha(c.color,0.9); ctx.lineWidth=1.5;
+      for(const ot of c.onsets){
+        const x=xOfT(ot-c.t0);
+        ctx.beginPath(); ctx.moveTo(x,yTop); ctx.lineTo(x,yBot); ctx.stroke();
+      }
+    }
+  });
+
+  drawLegend(ctx, w, curves.map(c=>({color:c.color, label:c.label})));
+  drawStatusChip(ctx, w, model.statusText);
+  ctx.restore();
+}
 </script>
 <script>
 "use strict";
@@ -2026,6 +2314,13 @@ const diffCard=el("diffCard"), diffSub=el("diffSub"), diffWrap=el("diffWrap"),
 const bandsCard=el("bandsCard"), bandsTable=el("bandsTable"), bandsFoot=el("bandsFoot");
 const toneCard=el("toneCard"), toneRows=el("toneRows"),
       prosePara=el("prosePara"), toneNote=el("toneNote");
+const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"),
+      sgramWraps=[el("sgramWrapA"),el("sgramWrapB")],
+      sgramCanvases=[el("sgramCanvasA"),el("sgramCanvasB")],
+      sgramXlines=[el("sgramXlineA"),el("sgramXlineB")],
+      sgramReadouts=[el("sgramReadoutA"),el("sgramReadoutB")];
+const envCard=el("envCard"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
+      envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
 const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
 const glossBackdrop=el("glossBackdrop"), glossPanel=el("glossPanel"),
       glossClose=el("glossClose"), glossSearch=el("glossSearch"), glossList=el("glossList");
@@ -2112,6 +2407,17 @@ async function analyzeSlot(i,slot,seq){
     await new Promise(r=>setTimeout(r,0));
     await computeTimeMetrics(slot);
     if(seq!==loadSeq[i]) return;
+    if(slot.tvis){
+      setCardProgress(i,"Spectrogram…",0.85);
+      const sg=await spectrogramLog(slot.samples,slot.info.sampleRate,{},
+        f=>{ if(seq===loadSeq[i]) setCardProgress(i,"Spectrogram…",0.85+f*0.13); });
+      if(seq!==loadSeq[i]) return;
+      let mx=0;
+      for(let k=0;k<sg.frames.length;k++){ const p=sg.frames[k]; if(p>mx) mx=p; }
+      sg.maxDb=10*Math.log10(mx+1e-30);
+      slot.tvis.sg=sg;
+      slot._sgImage=null;
+    }
     slot._dispCache=null;
     state.slots[i]=slot;
     cardUI[i]={mode:"loaded"};
@@ -2154,7 +2460,7 @@ function computeSpectralExtras(slot){
 }
 
 async function computeTimeMetrics(slot){
-  if(!slot.samples) return; // snapshot: keep the stored time-domain metrics
+  if(!slot.samples){ slot.tvis=null; return; } // snapshot: keep the stored time-domain metrics
   const x=slot.samples, rate=slot.info.sampleRate;
   const m=slot.metrics;
   const dyn=dynamicsMetrics(x,rate);
@@ -2170,6 +2476,9 @@ async function computeTimeMetrics(slot){
   m.f0=null; m.f0Conf=null; m.richness=null; m.evenOdd=null; m.harmonicsCount=null;
   let segStart=-1, segLen=0;
   const times=onsets.map(fi=>fi/sb.frameRate);
+  const dec=decimateEnvelope(env,4096);
+  slot.tvis={env:dec.env, envRate:envRate/dec.factor, onsets:times.slice(),
+             firstOnset:times.length?times[0]:0, sg:null};
   let bestGap=0, bestT=-1;
   for(let k=0;k<times.length;k++){
     const end=(k+1<times.length)?times[k+1]:x.length/rate;
@@ -2345,6 +2654,41 @@ function buildSpecModel(forExport){
            curves, statusText:statusText() };
 }
 function diffVisible(){ return bothLoaded()&&state.diff; }
+function sgramScale(){
+  // one color scale shared by A and B, anchored to the louder file's hottest cell
+  let top=-Infinity;
+  for(let i=0;i<2;i++){
+    const s=state.slots[i];
+    if(s&&s.tvis&&s.tvis.sg&&s.tvis.sg.maxDb>top) top=s.tvis.sg.maxDb;
+  }
+  if(top===-Infinity) return null;
+  const dbMax=Math.ceil(top/5)*5;
+  return {dbMax, dbMin:dbMax-80};
+}
+function sgramModelFor(i,scale){
+  const s=state.slots[i], tv=s&&s.tvis;
+  if(!tv||!tv.sg) return null;
+  const key=scale.dbMax+"|"+scale.dbMin;
+  if(!s._sgImage||s._sgImage.key!==key)
+    s._sgImage={key, canvas:sgramImage(tv.sg,scale.dbMax,scale.dbMin)};
+  return { sg:tv.sg, image:s._sgImage.canvas,
+    name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
+    dbMax:scale.dbMax, dbMin:scale.dbMin,
+    statusText:tv.sg.win+"-pt Hann · max per log cell" };
+}
+function buildEnvModel(){
+  const curves=[]; let tMin=0, tMax=0;
+  for(let i=0;i<2;i++){
+    const s=state.slots[i], tv=s&&s.tvis;
+    if(!tv) continue;
+    curves.push({label:SLOT_LETTER[i]+" · "+shortName(s.name,26), color:COLORS[i],
+      env:tv.env, rate:tv.envRate, t0:tv.firstOnset, onsets:tv.onsets});
+    tMin=Math.min(tMin,-tv.firstOnset);
+    tMax=Math.max(tMax,s.duration-tv.firstOnset);
+  }
+  if(!curves.length) return null;
+  return {curves, tMin, tMax, statusText:"aligned at first onset · 0 dB = full scale"};
+}
 function drawAll(){
   const {ctx,w,h}=setupCanvas(specCanvas);
   specHits.length=0;
@@ -2356,6 +2700,18 @@ function drawAll(){
     drawDiffScene(d.ctx,d.w,d.h,{grid:GRID,diff:diffBuf,yMax:diffYMax,
       colorA:COLORS[0],colorB:COLORS[1],
       nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)});
+  }
+  const scale=sgramScale();
+  if(scale) for(let i=0;i<2;i++){
+    const model=sgramModelFor(i,scale);
+    if(!model) continue;
+    const c=setupCanvas(sgramCanvases[i]);
+    drawSpectrogramScene(c.ctx,c.w,c.h,model);
+  }
+  const em=buildEnvModel();
+  if(em){
+    const c=setupCanvas(envCanvas);
+    drawEnvelopeScene(c.ctx,c.w,c.h,em);
   }
 }
 
@@ -2404,6 +2760,73 @@ function attachCrosshair(wrap,canvas,xline,readout,isDiff){
   wrap.addEventListener("mouseleave",()=>{
     xline.style.display="none"; readout.style.display="none";
   });
+}
+function attachSgramCrosshair(i){
+  const wrap=sgramWraps[i], canvas=sgramCanvases[i],
+        xline=sgramXlines[i], readout=sgramReadouts[i];
+  const hide=()=>{ xline.style.display="none"; readout.style.display="none"; };
+  wrap.addEventListener("mousemove",e=>{
+    const s=state.slots[i], tv=s&&s.tvis;
+    if(!tv||!tv.sg){ hide(); return; }
+    const sg=tv.sg;
+    const rect=canvas.getBoundingClientRect();
+    const x=e.clientX-rect.left, y=e.clientY-rect.top;
+    const w=rect.width, h=rect.height;
+    const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
+    if(x<SGPLOT.mL||x>w-SGPLOT.mR||y<SGPLOT.mT||y>h-SGPLOT.mB){ hide(); return; }
+    const t=(x-SGPLOT.mL)/pW*sg.duration;
+    const fr=Math.exp((1-(y-SGPLOT.mT)/pH)*LOGSPAN)*FMIN;
+    const rate=s.info.sampleRate;
+    const f=Math.max(0,Math.min(sg.nFrames-1,Math.round((t*rate-sg.win/2)/sg.hop)));
+    const gi=Math.max(0,Math.min(sg.gridN-1,
+      Math.round(Math.log(fr/FMIN)/LOGSPAN*(sg.gridN-1))));
+    const p=sg.frames[f*sg.gridN+gi];
+    const measured=!isNaN(p);
+    const wrapRect=wrap.getBoundingClientRect();
+    const wx=e.clientX-wrapRect.left;
+    xline.style.display="block"; xline.style.left=wx+"px";
+    let html='<div class="rf">'+t.toFixed(3)+' s</div>'+
+             '<div class="rn">'+fmtHz(fr)+' · '+esc(noteStr(fr,state.a4))+'</div>';
+    html+='<div class="row"><span class="dot" style="background:'+COLORS[i]+'"></span>'+
+          '<span class="nm">'+(measured?'cell max':'above fs/2')+'</span>'+
+          '<span class="db">'+(measured?(10*Math.log10(p+1e-30)).toFixed(1)+' dB':'—')+'</span></div>';
+    readout.innerHTML=html;
+    readout.style.display="block";
+    const rw=readout.offsetWidth;
+    readout.style.left=((wx+16+rw>wrapRect.width)?(wx-14-rw):(wx+14))+"px";
+    readout.style.top="12px";
+  });
+  wrap.addEventListener("mouseleave",hide);
+}
+function attachEnvCrosshair(){
+  const hide=()=>{ envXline.style.display="none"; envReadout.style.display="none"; };
+  envWrap.addEventListener("mousemove",e=>{
+    const model=buildEnvModel();
+    if(!model){ hide(); return; }
+    const rect=envCanvas.getBoundingClientRect();
+    const x=e.clientX-rect.left, w=rect.width;
+    if(x<PLOT.mL||x>w-PLOT.mR){ hide(); return; }
+    const t=model.tMin+(x-PLOT.mL)/(w-PLOT.mL-PLOT.mR)*(model.tMax-model.tMin);
+    const wrapRect=envWrap.getBoundingClientRect();
+    const wx=e.clientX-wrapRect.left;
+    envXline.style.display="block"; envXline.style.left=wx+"px";
+    let html='<div class="rf">'+(t>=0?"+":"")+t.toFixed(3)+' s</div>'+
+             '<div class="rn">from first onset</div>';
+    for(const c of model.curves){
+      const k=Math.round((t+c.t0)*c.rate);
+      if(k<0||k>=c.env.length) continue;
+      const a=c.env[k];
+      html+='<div class="row"><span class="dot" style="background:'+c.color+'"></span>'+
+            '<span class="nm">'+esc(c.label)+'</span>'+
+            '<span class="db">'+(a>0?(20*Math.log10(a)).toFixed(1)+' dB':'−∞')+'</span></div>';
+    }
+    envReadout.innerHTML=html;
+    envReadout.style.display="block";
+    const rw=envReadout.offsetWidth;
+    envReadout.style.left=((wx+16+rw>wrapRect.width)?(wx-14-rw):(wx+14))+"px";
+    envReadout.style.top="12px";
+  });
+  envWrap.addEventListener("mouseleave",hide);
 }
 
 // ---------- band table ----------
@@ -2637,6 +3060,9 @@ function renderFooter(){
   parts.push(termHtml("octave-smoothing","smoothing")+" "+(state.smooth?"1/"+state.smooth+" octave":"off"));
   if(bothLoaded()) parts.push(termHtml("level-match","level-match")+" "+
     (state.lm&&state.lmOffset!=null?fmtDb(state.lmOffset,2)+" on B":"off"));
+  const sgS=state.slots.find(s=>s&&s.tvis&&s.tvis.sg);
+  if(sgS) parts.push(termHtml("spectrogram","spectrogram")+": "+sgS.tvis.sg.win+
+    "-pt Hann · "+sgS.tvis.sg.gridN+" log cells · max power per cell");
   paramsLine.innerHTML=parts.join('<span class="sep">·</span>');
 }
 function updateDiffSub(){
@@ -2657,6 +3083,21 @@ function updateVisibility(){
   diffCard.style.display=(both&&state.diff)?"":"none";
   bandsCard.style.display=n?"":"none";
   toneCard.style.display=n?"":"none";
+  const hasT=[0,1].map(i=>!!(state.slots[i]&&state.slots[i].tvis&&state.slots[i].tvis.sg));
+  const missT=[0,1].filter(i=>state.slots[i]&&!hasT[i]);
+  sgramCard.style.display=n?"":"none";
+  envCard.style.display=n?"":"none";
+  sgramWraps[0].style.display=hasT[0]?"":"none";
+  sgramWraps[1].style.display=hasT[1]?"":"none";
+  envWrap.style.display=(hasT[0]||hasT[1])?"":"none";
+  sgramNote.style.display=missT.length?"":"none";
+  envNote.style.display=missT.length?"":"none";
+  if(missT.length){
+    const who=missT.map(i=>SLOT_LETTER[i]).join(" and ")+
+      (missT.length>1?" are snapshots":" is a snapshot");
+    sgramNote.textContent=who+" — the original audio was not stored, so a spectrogram cannot be recomputed.";
+    envNote.textContent=who+" — the original audio was not stored, so an envelope cannot be redrawn.";
+  }
 }
 function renderAnalysis(){
   renderBandsTable(); renderToneRows(); renderProse(); renderToneNote();
@@ -3223,6 +3664,8 @@ function boot(){
 
   attachCrosshair(specWrap,specCanvas,specXline,specReadout,false);
   attachCrosshair(diffWrap,diffCanvas,diffXline,diffReadout,true);
+  attachSgramCrosshair(0); attachSgramCrosshair(1);
+  attachEnvCrosshair();
 
   cards.forEach((card,i)=>{
     card.addEventListener("click",e=>{

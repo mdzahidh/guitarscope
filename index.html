@@ -243,6 +243,8 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 }
 .plotempty .t1{ font-size:15px; color:var(--mut); font-weight:500; letter-spacing:.02em; }
 .plotempty .t2{ font-size:12.5px; color:var(--dim); max-width:380px; }
+.plotempty .t2 a{ color:var(--mut); text-decoration:underline; text-underline-offset:3px; }
+.plotempty .t2 a:hover{ color:var(--ink); }
 .plotempty .btn{ margin-top:8px; }
 
 /* ---------- tables ---------- */
@@ -439,6 +441,28 @@ kbd{
 .shortcutrow{ display:flex; justify-content:space-between; gap:30px; font-size:12.5px; color:var(--mut); padding:4px 0; }
 .shortcutrow span:last-child{ color:var(--dim); }
 
+/* recording guide */
+.modal .inner.guide{
+  max-width:660px; max-height:min(82vh,760px); overflow-y:auto;
+  padding:26px 30px 24px;
+}
+.guide .ghead{ display:flex; justify-content:space-between; align-items:baseline; gap:16px; }
+.guide h4{
+  font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--mut);
+  margin:18px 0 6px; padding-top:14px; border-top:1px solid var(--hair);
+}
+.guide h4:first-of-type{ margin-top:10px; }
+.guide p{ font-size:13px; line-height:1.55; color:var(--mut); margin:6px 0; }
+.guide p b{ color:var(--ink); font-weight:600; }
+.guide ul{ margin:6px 0 6px 18px; padding:0; }
+.guide li{ font-size:13px; line-height:1.55; color:var(--mut); margin:3px 0; }
+.guide li b{ color:var(--ink); font-weight:600; }
+.guide .rule{
+  margin:10px 0 2px; padding:10px 14px; border-left:3px solid var(--slot-a);
+  background:var(--raise); border-radius:0 8px 8px 0;
+  font-size:13px; line-height:1.5; color:var(--ink);
+}
+
 @media (max-width:900px){
   .page{ padding:18px 16px 32px; }
   .filerow{ grid-template-columns:1fr; }
@@ -484,6 +508,7 @@ kbd{
         <label for="a4Input">A4</label>
         <input type="number" id="a4Input" value="440" min="415" max="466" step="0.1"> <span style="font-size:11px;color:var(--dim)">Hz</span>
       </div>
+      <button class="btn" id="guideBtn">How to record</button>
       <button class="btn" id="glossaryBtn">Glossary</button>
     </div>
   </header>
@@ -532,7 +557,8 @@ kbd{
           <div class="plotempty" id="specEmpty">
             <div class="t1">One guitar to study, two to compare</div>
             <div class="t2">Drop recordings above — a single guitar gets the full analysis;
-              add a second playing the same riff and the comparison views unlock.</div>
+              add a second playing the same riff and the comparison views unlock.<br>
+              First time? Read <a href="#" id="guideLink">how to record a fair comparison</a>.</div>
             <button class="btn" id="demoBtn">Load demo pair</button>
           </div>
         </div>
@@ -720,6 +746,64 @@ kbd{
     <div class="shortcutrow"><span><kbd>G</kbd></span><span>glossary</span></div>
     <div class="shortcutrow"><span><kbd>E</kbd></span><span>export PNG</span></div>
     <div class="shortcutrow"><span><kbd>Esc</kbd></span><span>close panels</span></div>
+  </div>
+</div>
+
+<!-- recording guide -->
+<div class="modal" id="guideModal">
+  <div class="inner guide">
+    <div class="ghead">
+      <h3>How to record a fair comparison</h3>
+      <button class="iconbtn" id="guideClose" aria-label="Close guide">✕</button>
+    </div>
+    <div class="rule">The one rule: change only the guitar. Every difference this tool shows
+      you is a difference between the two recordings — it can only speak for the guitars if
+      the rest of the chain (player, pick, room, mic, cable, levels, settings) is identical.</div>
+
+    <h4>Signal chain — pick one and keep it</h4>
+    <ul>
+      <li><b>Electric, direct (recommended):</b> guitar → cable → audio interface instrument
+        (Hi-Z) input. No amp, no pedals, no amp sim. This is the cleanest reading of the
+        instrument itself. One cable, same input, same gain knob for both takes.</li>
+      <li><b>Electric, mic'd amp:</b> only if the amp's character is part of the question.
+        Same amp, same settings, mic untouched between takes — even a centimeter of mic
+        movement shifts the spectrum more than most guitar swaps. Never compare a DI take
+        against a mic'd take.</li>
+      <li><b>Acoustic:</b> one microphone on a stand (not handheld), 30–60 cm away, aimed
+        where the neck meets the body. Mark your seat and the mic position; re-seat yourself
+        exactly for the second guitar. Switch the instrument toggle above to Acoustic.</li>
+    </ul>
+
+    <h4>Levels</h4>
+    <ul>
+      <li>Set the input gain once, with the louder guitar: strum hard, aim the meter around
+        −12 dB with peaks safely under 0 — then <b>don't touch it</b> for the other take.</li>
+      <li>If clipping happens, lower the gain and redo both takes. A clipped take is unusable.</li>
+      <li>Different pickup outputs are fine — the Level-match toggle removes broadband level
+        differences in the analysis; distortion cannot be removed.</li>
+    </ul>
+
+    <h4>What to play</h4>
+    <ul>
+      <li>The same riff, same tempo, same pick, same picking position, ~10–30 seconds.
+        Something with open chords and a few single notes covers the range well.</li>
+      <li>Record each take as one continuous performance — don't splice.</li>
+      <li>A second of silence at the start is fine; onset detection ignores it.</li>
+    </ul>
+
+    <h4>What to avoid</h4>
+    <ul>
+      <li>No compression, EQ, reverb, gates or noise reduction anywhere in the chain —
+        they reshape exactly the spectrum you're trying to measure.</li>
+      <li>Avoid heavily lossy exports if you can; WAV or FLAC beats a low-bitrate MP3.
+        If you must use lossy, use it for <b>both</b> files.</li>
+      <li>Don't normalize or edit the files afterwards — analyze what you recorded.</li>
+    </ul>
+
+    <h4>File handling</h4>
+    <p>Drop the two files above — sample rate and bit depth are read from the file itself,
+      and the two files don't need to match each other. Everything runs locally in this
+      page; nothing is uploaded. One file alone gets the full single-guitar analysis.</p>
   </div>
 </div>
 
@@ -3177,6 +3261,8 @@ const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanv
 const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSeg=el("eqDevSeg"),
       eqFaceCanvas=el("eqFaceCanvas"), eqRespCanvas=el("eqRespCanvas"), eqNote=el("eqNote");
 const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
+const guideModal=el("guideModal"), guideBtn=el("guideBtn"),
+      guideLink=el("guideLink"), guideClose=el("guideClose");
 const glossBackdrop=el("glossBackdrop"), glossPanel=el("glossPanel"),
       glossClose=el("glossClose"), glossSearch=el("glossSearch"), glossList=el("glossList");
 const popover=el("popover"), dropOverlay=el("dropOverlay"), dropTitle=el("dropTitle"),
@@ -4656,6 +4742,7 @@ function escCascade(){
   if(popover.classList.contains("open")) return closePopover();
   if(glossPanel.classList.contains("open")) return setGloss(false);
   if(shortcutsModal.classList.contains("open")) return shortcutsModal.classList.remove("open");
+  if(guideModal.classList.contains("open")) return guideModal.classList.remove("open");
   if(dropOverlay.classList.contains("show")) hideDropOverlay();
 }
 
@@ -4751,6 +4838,12 @@ function boot(){
   shortcutsBtn.addEventListener("click",()=>shortcutsModal.classList.add("open"));
   shortcutsModal.addEventListener("click",e=>{
     if(e.target===shortcutsModal) shortcutsModal.classList.remove("open");
+  });
+  guideBtn.addEventListener("click",()=>guideModal.classList.add("open"));
+  guideLink.addEventListener("click",e=>{ e.preventDefault(); guideModal.classList.add("open"); });
+  guideClose.addEventListener("click",()=>guideModal.classList.remove("open"));
+  guideModal.addEventListener("click",e=>{
+    if(e.target===guideModal) guideModal.classList.remove("open");
   });
 
   // term popovers: canvas hits are handled first, then document-level .term buttons
@@ -4869,6 +4962,7 @@ function boot(){
   if(dm) loadDemo(dm[1]&&dm[1].toLowerCase());
   const al=location.search.match(/[?&]sgalign=(file|onset)(?:&|$)/i);   // test hook
   if(al) setSgAlign(al[1].toLowerCase());
+  if(/[?&]guide(?:&|$)/i.test(location.search)) guideModal.classList.add("open");   // test hook
 }
 boot();
 </script>

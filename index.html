@@ -1,0 +1,3180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>GuitarScope</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315181d'/%3E%3Cpath d='M4 20 C8 20 8 9 12 9 S16 24 20 24 24 13 28 13' stroke='%23d9a35b' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ============================================================
+   GuitarScope — stylesheet
+   Palette discipline: color encodes data (slot A amber, slot B
+   teal). Chrome stays monochrome. One type family, tabular
+   numerals for every readout.
+   ============================================================ */
+:root{
+  --bg:      #0f1114;
+  --panel:   #15181d;
+  --panel2:  #1a1e25;
+  --raise:   #20252d;
+  --hair:    #262c35;
+  --hair2:   #313945;
+  --ink:     #e8e5de;
+  --mut:     #9aa0ab;
+  --dim:     #6a7280;
+  --faint:   #4a515c;
+  --slot-a:  #d9a35b;
+  --slot-b:  #5eb3ab;
+  --err:     #c9756a;
+  --warn:    #c9a763;
+  --radius:  12px;
+  --radius-s:8px;
+  --ease:    cubic-bezier(.25,.6,.3,1);
+  --dur:     190ms;
+  --font:    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+html{ background:var(--bg); }
+body{
+  font-family:var(--font);
+  font-size:13.5px; line-height:1.55;
+  color:var(--ink); background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+::selection{ background:rgba(217,163,91,.25); }
+.num{ font-variant-numeric:tabular-nums; }
+
+/* ---------- layout ---------- */
+.page{ max-width:1240px; margin:0 auto; padding:26px 32px 40px; }
+main{ display:flex; flex-direction:column; gap:18px; }
+
+/* ---------- top bar ---------- */
+.topbar{
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:24px; flex-wrap:wrap; padding:6px 2px 20px;
+}
+.brand h1{
+  font-size:21px; font-weight:600; letter-spacing:.02em;
+}
+.brand h1 .thin{ font-weight:300; color:var(--mut); }
+.tagline{ font-size:12px; color:var(--dim); letter-spacing:.04em; margin-top:1px; }
+.globals{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+.field{ display:flex; align-items:center; gap:8px; }
+.field > label{ font-size:11px; color:var(--mut); letter-spacing:.1em; text-transform:uppercase; }
+
+/* ---------- controls ---------- */
+.seg{
+  display:inline-flex; background:var(--panel2); border:1px solid var(--hair);
+  border-radius:9px; padding:2px; gap:2px;
+}
+.seg button{
+  font:inherit; font-size:12px; color:var(--mut); background:transparent; border:0;
+  padding:4px 11px; border-radius:7px; cursor:pointer;
+  transition:background var(--dur) var(--ease), color var(--dur) var(--ease);
+  font-variant-numeric:tabular-nums;
+}
+.seg button:hover{ color:var(--ink); }
+.seg button.on{ background:var(--raise); color:var(--ink); }
+select, input[type=number]{
+  font:inherit; font-size:12.5px; color:var(--ink);
+  background:var(--panel2); border:1px solid var(--hair); border-radius:8px;
+  padding:4px 8px; outline:none;
+  font-variant-numeric:tabular-nums;
+}
+select:focus, input:focus{ border-color:var(--hair2); }
+input[type=number]{ width:64px; }
+input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
+.btn{
+  font:inherit; font-size:12px; color:var(--mut);
+  background:transparent; border:1px solid var(--hair); border-radius:8px;
+  padding:4.5px 12px; cursor:pointer;
+  transition:color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.btn:hover{ color:var(--ink); border-color:var(--hair2); background:var(--panel2); }
+.btn:disabled{ opacity:.35; cursor:default; }
+.btn:disabled:hover{ color:var(--mut); border-color:var(--hair); background:transparent; }
+.linkish{
+  font:inherit; font-size:inherit; background:none; border:none; padding:0;
+  color:var(--mut); text-decoration:underline; text-underline-offset:3px;
+  text-decoration-color:var(--faint); cursor:pointer;
+  transition:color var(--dur) var(--ease);
+}
+.linkish:hover{ color:var(--ink); }
+
+/* switch */
+.switch{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none; }
+.switch input{ position:absolute; opacity:0; pointer-events:none; }
+.switch .tk{
+  width:30px; height:17px; border-radius:9px; background:var(--raise);
+  border:1px solid var(--hair); position:relative; flex:none;
+  transition:background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.switch .tk::after{
+  content:""; position:absolute; top:2px; left:2px; width:11px; height:11px;
+  border-radius:50%; background:var(--dim);
+  transition:transform var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.switch input:checked + .tk{ background:#39424f; border-color:var(--hair2); }
+.switch input:checked + .tk::after{ transform:translateX(13px); background:var(--ink); }
+.switch input:focus-visible + .tk{ outline:1px solid var(--hair2); outline-offset:2px; }
+.switch .lbl{ font-size:12px; color:var(--mut); }
+.switch input:checked ~ .lbl{ color:var(--ink); }
+.switch.disabled{ opacity:.4; pointer-events:none; }
+
+/* ---------- cards ---------- */
+.card{
+  background:var(--panel); border:1px solid var(--hair); border-radius:var(--radius);
+  padding:0; overflow:visible;
+}
+.cardhead{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:14px 20px 12px; flex-wrap:wrap;
+}
+.cardtitle{
+  font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--mut);
+}
+.cardsub{ font-size:11.5px; color:var(--dim); margin-top:2px; font-variant-numeric:tabular-nums; }
+.cardbody{ padding:0 20px 18px; }
+.controls{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.ctlgroup{ display:flex; align-items:center; gap:7px; }
+.ctlgroup > span{ font-size:11px; color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
+.exports{ display:flex; gap:6px; }
+
+/* section reveal */
+.reveal{ animation:reveal 240ms var(--ease); }
+@keyframes reveal{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:none;} }
+
+/* ---------- file cards ---------- */
+.filerow{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.filecard{
+  background:var(--panel); border:1px solid var(--hair); border-radius:var(--radius);
+  min-height:118px; padding:16px 18px; position:relative;
+  transition:border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.filecard.empty{ border-style:dashed; border-color:var(--hair2); background:transparent; cursor:pointer; }
+.filecard.empty:hover{ border-color:var(--dim); background:rgba(255,255,255,.015); }
+.filecard.dragover{ border-color:var(--slot-c); background:rgba(255,255,255,.03); border-style:solid; }
+.filecard.error{ border-color:rgba(201,117,106,.5); }
+.emptyinner{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; min-height:86px; text-align:center; color:var(--dim);
+}
+.emptyinner .big{ font-size:13.5px; color:var(--mut); }
+.emptyinner .big b{ color:var(--slot-c); font-weight:600; }
+.emptyinner .fmts{ font-size:11px; letter-spacing:.06em; color:var(--faint); }
+.slotchip{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:20px; height:20px; border-radius:6px; flex:none;
+  font-size:11.5px; font-weight:700; color:#12141a; background:var(--slot-c);
+}
+.filehead{ display:flex; align-items:center; gap:10px; min-width:0; }
+.filename{
+  font-size:13.5px; font-weight:600; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1;
+}
+.fileacts{ display:flex; gap:4px; flex:none; }
+.iconbtn{
+  font:inherit; font-size:11px; color:var(--dim); background:none; border:0; cursor:pointer;
+  padding:2px 6px; border-radius:6px;
+  transition:color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.iconbtn:hover{ color:var(--ink); background:var(--raise); }
+.fileinfo{
+  font-size:11.5px; color:var(--mut); margin-top:5px;
+  font-variant-numeric:tabular-nums; letter-spacing:.01em;
+}
+.fileinfo .sep{ color:var(--faint); padding:0 4px; }
+.filemeta{ display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
+.chip{
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:10.5px; color:var(--mut); background:var(--panel2);
+  border:1px solid var(--hair); border-radius:20px; padding:2px 9px;
+  font-variant-numeric:tabular-nums;
+}
+.chip.warn{ color:var(--warn); border-color:rgba(201,167,99,.35); }
+.chip.err{ color:var(--err); border-color:rgba(201,117,106,.35); }
+.chip .k{ color:var(--dim); }
+.errbox{ color:var(--err); font-size:12.5px; line-height:1.5; margin-top:6px; }
+.errbox .hint{ color:var(--dim); font-size:11.5px; display:block; margin-top:3px; }
+.progresswrap{ margin-top:12px; }
+.progressbar{ height:2px; border-radius:1px; background:var(--raise); overflow:hidden; }
+.progressbar i{
+  display:block; height:100%; width:0%; background:var(--slot-c); border-radius:1px;
+  transition:width 160ms linear;
+}
+.progresslabel{ font-size:11px; color:var(--dim); margin-top:6px; font-variant-numeric:tabular-nums; }
+
+/* ---------- plots ---------- */
+.plotwrap{ position:relative; }
+.plotwrap canvas{ display:block; width:100%; }
+#specCanvas{ height:440px; }
+#diffCanvas{ height:216px; }
+.plotwrap.hoverable{ cursor:crosshair; }
+.xline{
+  position:absolute; top:0; bottom:0; width:1px; background:rgba(232,229,222,.22);
+  pointer-events:none; display:none;
+}
+.readout{
+  position:absolute; pointer-events:none; display:none; z-index:5;
+  background:rgba(26,30,37,.94); border:1px solid var(--hair2); border-radius:9px;
+  padding:8px 11px; font-size:11.5px; line-height:1.6; white-space:nowrap;
+  font-variant-numeric:tabular-nums; backdrop-filter:blur(3px);
+  box-shadow:0 6px 24px rgba(0,0,0,.35);
+}
+.readout .rf{ color:var(--ink); font-weight:600; }
+.readout .rn{ color:var(--mut); }
+.readout .row{ display:flex; align-items:baseline; gap:7px; }
+.readout .dot{ width:7px; height:7px; border-radius:50%; display:inline-block; flex:none; position:relative; top:-1px; }
+.readout .nm{ color:var(--mut); max-width:120px; overflow:hidden; text-overflow:ellipsis; }
+.readout .db{ margin-left:auto; color:var(--ink); }
+.plotempty{
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:8px; text-align:center;
+}
+.plotempty .t1{ font-size:15px; color:var(--mut); font-weight:500; letter-spacing:.02em; }
+.plotempty .t2{ font-size:12.5px; color:var(--dim); max-width:380px; }
+.plotempty .btn{ margin-top:8px; }
+
+/* ---------- tables ---------- */
+table.datatable{ border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; }
+table.datatable th{
+  font-size:10.5px; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--dim); text-align:right; padding:6px 10px; border-bottom:1px solid var(--hair);
+}
+table.datatable th:first-child, table.datatable td:first-child{ text-align:left; padding-left:2px; }
+table.datatable th.rng, table.datatable td.rng{ text-align:left; color:var(--dim); }
+table.datatable td{
+  font-size:12.5px; color:var(--ink); text-align:right; padding:7px 10px;
+  border-bottom:1px solid rgba(38,44,53,.55);
+}
+table.datatable tr:last-child td{ border-bottom:0; }
+table.datatable td.rng{ font-size:11.5px; }
+.tablefoot{ font-size:11px; color:var(--dim); margin-top:10px; }
+.delta-a{ color:var(--slot-a); }
+.delta-b{ color:var(--slot-b); }
+.delta-0{ color:var(--dim); }
+
+/* ---------- tone character ---------- */
+.tonerows{ display:flex; flex-direction:column; margin-top:4px; }
+.tonerow{
+  display:grid; grid-template-columns:210px 118px 1fr 118px; gap:14px;
+  align-items:center; padding:8px 0; border-bottom:1px solid rgba(38,44,53,.5);
+}
+.tonerow:last-child{ border-bottom:0; }
+.tonename{ font-size:12.5px; color:var(--ink); }
+.tonename small{ display:block; font-size:10.5px; color:var(--dim); letter-spacing:.02em; }
+.toneval{ font-size:12.5px; font-variant-numeric:tabular-nums; }
+.toneval.va{ text-align:right; color:var(--slot-a); }
+.toneval.vb{ text-align:left; color:var(--slot-b); }
+.toneval small{ color:var(--dim); font-size:10.5px; display:block; }
+.toneval .none{ color:var(--faint); }
+.track{ position:relative; height:22px; }
+.track::before{
+  content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:var(--hair2);
+}
+.track .zero{ position:absolute; top:5px; bottom:5px; width:1px; background:var(--faint); }
+.track .pt{
+  position:absolute; top:50%; width:9px; height:9px; border-radius:50%;
+  transform:translate(-50%,-50%); border:1.5px solid var(--bg);
+  transition:left 260ms var(--ease);
+}
+.track .pt.a{ background:var(--slot-a); }
+.track .pt.b{ background:var(--slot-b); }
+.track .tick{ position:absolute; top:100%; font-size:9.5px; color:var(--faint); transform:translateX(-50%); font-variant-numeric:tabular-nums; }
+.prose{
+  font-size:13.5px; line-height:1.75; color:var(--mut); max-width:74ch;
+  margin-top:16px; padding-top:14px; border-top:1px solid var(--hair);
+}
+.prose .lead{ color:var(--dim); font-size:11px; letter-spacing:.12em; text-transform:uppercase; display:block; margin-bottom:6px; }
+.tonenote{ font-size:11.5px; color:var(--dim); margin-top:12px; font-variant-numeric:tabular-nums; }
+
+/* ---------- terms ---------- */
+.term{
+  font:inherit; color:inherit; background:none; border:none; padding:0; cursor:help;
+  border-bottom:1px dotted rgba(154,160,171,.55);
+  transition:border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+  text-align:inherit; font-variant-numeric:tabular-nums;
+}
+.term:hover{ color:var(--ink); border-bottom-color:var(--ink); border-bottom-style:solid; }
+.prose .term{ color:var(--ink); }
+
+/* ---------- popover ---------- */
+.popover{
+  position:fixed; z-index:60; width:360px; max-width:calc(100vw - 24px);
+  background:var(--panel2); border:1px solid var(--hair2); border-radius:var(--radius);
+  box-shadow:0 18px 50px rgba(0,0,0,.5); padding:16px 18px 15px;
+  opacity:0; transform:translateY(5px); pointer-events:none;
+  transition:opacity 170ms var(--ease), transform 170ms var(--ease);
+  max-height:min(70vh, 560px); overflow-y:auto;
+}
+.popover.open{ opacity:1; transform:none; pointer-events:auto; }
+.pop-term{ font-size:15px; font-weight:600; letter-spacing:.01em; }
+.pop-cat{ font-size:10.5px; color:var(--dim); letter-spacing:.1em; text-transform:uppercase; margin-top:1px; }
+.pop-sec{ margin-top:12px; }
+.pop-label{
+  font-size:10px; font-weight:600; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--dim); margin-bottom:3px;
+}
+.pop-sec p{ font-size:12.5px; line-height:1.6; color:var(--mut); }
+.pop-sec p b{ color:var(--ink); font-weight:500; }
+.pop-formula{
+  font-size:12px; line-height:1.6; color:var(--mut);
+  background:var(--panel); border:1px solid var(--hair); border-radius:8px;
+  padding:8px 11px; font-variant-numeric:tabular-nums;
+}
+.pop-vals{ margin-top:6px; display:flex; flex-direction:column; gap:4px; }
+.pop-val{ display:flex; align-items:baseline; gap:8px; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.pop-val .dot{ width:8px; height:8px; border-radius:50%; flex:none; position:relative; top:0; }
+.pop-val .l{ color:var(--mut); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pop-val .v{ margin-left:auto; color:var(--ink); white-space:nowrap; }
+.pop-val .v small{ color:var(--dim); }
+.pop-none{ font-size:12px; color:var(--faint); font-style:italic; }
+
+/* ---------- glossary panel ---------- */
+.backdrop{
+  position:fixed; inset:0; z-index:48; background:rgba(10,12,15,.45);
+  opacity:0; pointer-events:none; transition:opacity 220ms var(--ease);
+}
+.backdrop.open{ opacity:1; pointer-events:auto; }
+.glosspanel{
+  position:fixed; top:0; right:0; bottom:0; z-index:50; width:412px; max-width:92vw;
+  background:var(--panel); border-left:1px solid var(--hair);
+  transform:translateX(102%); transition:transform 240ms var(--ease);
+  display:flex; flex-direction:column;
+}
+.glosspanel.open{ transform:none; box-shadow:-24px 0 60px rgba(0,0,0,.4); }
+.glosshead{ padding:18px 20px 12px; border-bottom:1px solid var(--hair); }
+.glosshead .row1{ display:flex; align-items:center; justify-content:space-between; }
+.glosshead h2{ font-size:13px; font-weight:600; letter-spacing:.13em; text-transform:uppercase; color:var(--mut); }
+#glossSearch{
+  width:100%; margin-top:12px; font:inherit; font-size:13px; color:var(--ink);
+  background:var(--panel2); border:1px solid var(--hair); border-radius:8px;
+  padding:7px 11px; outline:none;
+}
+#glossSearch:focus{ border-color:var(--hair2); }
+#glossSearch::placeholder{ color:var(--faint); }
+.glosslist{ overflow-y:auto; flex:1; padding:6px 8px 30px; }
+.glosscat{
+  font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--faint); padding:16px 14px 5px;
+}
+.glossitem{ border-radius:9px; }
+.glossitem > button{
+  display:block; width:100%; text-align:left; font:inherit; background:none; border:0;
+  cursor:pointer; padding:8px 14px; border-radius:9px;
+  transition:background var(--dur) var(--ease);
+}
+.glossitem > button:hover{ background:var(--panel2); }
+.glossitem .gname{ font-size:13.5px; color:var(--ink); font-weight:500; }
+.glossitem .ghook{ font-size:11.5px; color:var(--dim); margin-top:1px; }
+.glossdetail{ padding:2px 16px 14px; display:none; }
+.glossitem.open{ background:var(--panel2); }
+.glossitem.open .glossdetail{ display:block; animation:reveal 200ms var(--ease); }
+.glossempty{ padding:30px 16px; color:var(--faint); font-size:12.5px; text-align:center; }
+
+/* ---------- footer ---------- */
+footer{
+  margin-top:26px; padding-top:16px; border-top:1px solid var(--hair);
+  display:flex; align-items:baseline; justify-content:space-between; gap:20px; flex-wrap:wrap;
+}
+#paramsLine{
+  font-size:11px; color:var(--dim); letter-spacing:.02em; line-height:1.8;
+  font-variant-numeric:tabular-nums; max-width:82ch;
+}
+#paramsLine .sep{ color:var(--faint); padding:0 5px; }
+.footright{ font-size:11px; color:var(--faint); display:flex; gap:14px; align-items:baseline; white-space:nowrap; }
+kbd{
+  font:inherit; font-size:10px; color:var(--mut); background:var(--panel2);
+  border:1px solid var(--hair); border-bottom-width:2px; border-radius:5px;
+  padding:0 5px; margin:0 1px;
+}
+
+/* ---------- overlays ---------- */
+#dropOverlay{
+  position:fixed; inset:0; z-index:70; display:none;
+  background:rgba(15,17,20,.82); backdrop-filter:blur(2px);
+  align-items:center; justify-content:center;
+}
+#dropOverlay.show{ display:flex; }
+#dropOverlay .inner{
+  border:1.5px dashed var(--dim); border-radius:18px; padding:44px 70px; text-align:center;
+}
+#dropOverlay .t1{ font-size:17px; color:var(--ink); font-weight:500; }
+#dropOverlay .t2{ font-size:12.5px; color:var(--mut); margin-top:6px; }
+.toast{
+  position:fixed; left:50%; bottom:26px; transform:translate(-50%, 16px); z-index:80;
+  background:var(--panel2); border:1px solid var(--hair2); border-radius:10px;
+  padding:10px 18px; font-size:12.5px; color:var(--ink);
+  box-shadow:0 10px 34px rgba(0,0,0,.45); opacity:0; pointer-events:none;
+  transition:opacity 200ms var(--ease), transform 200ms var(--ease);
+  max-width:min(560px, 90vw);
+}
+.toast.show{ opacity:1; transform:translate(-50%,0); }
+.toast.err{ border-color:rgba(201,117,106,.5); }
+.modal{
+  position:fixed; inset:0; z-index:75; display:none; align-items:center; justify-content:center;
+  background:rgba(10,12,15,.55);
+}
+.modal.open{ display:flex; }
+.modal .inner{
+  background:var(--panel2); border:1px solid var(--hair2); border-radius:14px;
+  padding:22px 26px; min-width:320px; box-shadow:0 24px 60px rgba(0,0,0,.5);
+}
+.modal h3{ font-size:12px; letter-spacing:.13em; text-transform:uppercase; color:var(--mut); margin-bottom:12px; }
+.shortcutrow{ display:flex; justify-content:space-between; gap:30px; font-size:12.5px; color:var(--mut); padding:4px 0; }
+.shortcutrow span:last-child{ color:var(--dim); }
+
+@media (max-width:900px){
+  .page{ padding:18px 16px 32px; }
+  .filerow{ grid-template-columns:1fr; }
+  .tonerow{ grid-template-columns:150px 90px 1fr 90px; gap:8px; }
+  #specCanvas{ height:340px; }
+}
+@media (prefers-reduced-motion:reduce){
+  *{ transition-duration:1ms !important; animation-duration:1ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="topbar">
+    <div class="brand">
+      <h1>Guitar<span class="thin">Scope</span></h1>
+      <div class="tagline">long-term average spectrum · A/B comparison</div>
+    </div>
+    <div class="globals">
+      <div class="field">
+        <label>Instrument</label>
+        <div class="seg" id="modeSeg" role="group" aria-label="Instrument mode">
+          <button data-mode="electric" class="on">Electric</button>
+          <button data-mode="acoustic">Acoustic</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="tuningSel">Tuning</label>
+        <select id="tuningSel">
+          <option value="estd">E standard</option>
+          <option value="eb">E♭ standard</option>
+          <option value="dstd">D standard</option>
+          <option value="dropd">Drop D</option>
+          <option value="dadgad">DADGAD</option>
+          <option value="custom">Custom offset…</option>
+        </select>
+        <span class="field" id="customOffsetWrap" style="display:none">
+          <input type="number" id="customOffset" value="0" min="-12" max="12" step="1" aria-label="Semitone offset"> st
+        </span>
+      </div>
+      <div class="field">
+        <label for="a4Input">A4</label>
+        <input type="number" id="a4Input" value="440" min="415" max="466" step="0.1"> <span style="font-size:11px;color:var(--dim)">Hz</span>
+      </div>
+      <button class="btn" id="glossaryBtn">Glossary</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- file slots -->
+    <div class="filerow">
+      <div class="filecard empty" id="card0" style="--slot-c:var(--slot-a)" tabindex="0" role="button" aria-label="Load file A"></div>
+      <div class="filecard empty" id="card1" style="--slot-c:var(--slot-b)" tabindex="0" role="button" aria-label="Load file B"></div>
+      <input type="file" id="fileInput0" accept=".wav,.aif,.aiff,.mp3,.m4a,.mp4,.flac,.json,audio/*" hidden>
+      <input type="file" id="fileInput1" accept=".wav,.aif,.aiff,.mp3,.m4a,.mp4,.flac,.json,audio/*" hidden>
+    </div>
+
+    <!-- spectrum -->
+    <section class="card" id="specCard">
+      <div class="cardhead">
+        <div>
+          <div class="cardtitle">Spectrum</div>
+          <div class="cardsub" id="specSub">long-term average · dB re full-scale sine</div>
+        </div>
+        <div class="controls">
+          <div class="ctlgroup">
+            <span>Smoothing</span>
+            <div class="seg" id="smoothSeg" role="group" aria-label="Octave smoothing">
+              <button data-sm="0">Off</button>
+              <button data-sm="12">1/12</button>
+              <button data-sm="6" class="on">1/6</button>
+              <button data-sm="3">1/3</button>
+            </div>
+          </div>
+          <label class="switch" id="lmSwitch"><input type="checkbox" id="lmToggle"><span class="tk"></span><span class="lbl">Level-match</span></label>
+          <label class="switch" id="diffSwitch"><input type="checkbox" id="diffToggle"><span class="tk"></span><span class="lbl">Difference</span></label>
+          <div class="exports">
+            <button class="btn" id="pngBtn" disabled>PNG</button>
+            <button class="btn" id="csvBtn" disabled>CSV</button>
+            <button class="btn" id="jsonBtn" disabled>Snapshot</button>
+          </div>
+        </div>
+      </div>
+      <div class="cardbody">
+        <div class="plotwrap" id="specWrap">
+          <canvas id="specCanvas"></canvas>
+          <div class="xline" id="specXline"></div>
+          <div class="readout" id="specReadout"></div>
+          <div class="plotempty" id="specEmpty">
+            <div class="t1">Two guitars, one picture</div>
+            <div class="t2">Drop two recordings above — the same riff on different guitars —
+              and their average spectra will be drawn here for comparison.</div>
+            <button class="btn" id="demoBtn">Load demo pair</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- difference -->
+    <section class="card reveal" id="diffCard" style="display:none">
+      <div class="cardhead">
+        <div>
+          <div class="cardtitle">Difference</div>
+          <div class="cardsub" id="diffSub">A − B, dB</div>
+        </div>
+      </div>
+      <div class="cardbody">
+        <div class="plotwrap" id="diffWrap">
+          <canvas id="diffCanvas"></canvas>
+          <div class="xline" id="diffXline"></div>
+          <div class="readout" id="diffReadout"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- band energy -->
+    <section class="card reveal" id="bandsCard" style="display:none">
+      <div class="cardhead">
+        <div>
+          <div class="cardtitle">Band energy</div>
+          <div class="cardsub">share of total 60 Hz–20 kHz energy · Δ in dB</div>
+        </div>
+      </div>
+      <div class="cardbody">
+        <table class="datatable" id="bandsTable"></table>
+        <div class="tablefoot" id="bandsFoot"></div>
+      </div>
+    </section>
+
+    <!-- tone character -->
+    <section class="card reveal" id="toneCard" style="display:none">
+      <div class="cardhead">
+        <div>
+          <div class="cardtitle">Tone character</div>
+          <div class="cardsub">named descriptors, each backed by a measurement — click any term for its formula</div>
+        </div>
+      </div>
+      <div class="cardbody">
+        <div class="tonerows" id="toneRows"></div>
+        <div class="prose" id="prosePara" style="display:none"></div>
+        <div class="tonenote" id="toneNote"></div>
+      </div>
+    </section>
+
+    <footer>
+      <div id="paramsLine"></div>
+      <div class="footright">
+        <button class="linkish" id="shortcutsBtn"><kbd>?</kbd> shortcuts</button>
+        <span>GuitarScope · offline · files never leave this page</span>
+      </div>
+    </footer>
+
+  </main>
+</div>
+
+<!-- glossary -->
+<div class="backdrop" id="glossBackdrop"></div>
+<aside class="glosspanel" id="glossPanel" aria-label="Glossary">
+  <div class="glosshead">
+    <div class="row1">
+      <h2>Glossary</h2>
+      <button class="iconbtn" id="glossClose" aria-label="Close glossary">✕</button>
+    </div>
+    <input type="search" id="glossSearch" placeholder="Search terms…" autocomplete="off">
+  </div>
+  <div class="glosslist" id="glossList"></div>
+</aside>
+
+<!-- term popover -->
+<div class="popover" id="popover" role="dialog" aria-modal="false"></div>
+
+<!-- shortcuts modal -->
+<div class="modal" id="shortcutsModal">
+  <div class="inner">
+    <h3>Keyboard shortcuts</h3>
+    <div class="shortcutrow"><span><kbd>1</kbd>–<kbd>4</kbd></span><span>smoothing off · 1/12 · 1/6 · 1/3</span></div>
+    <div class="shortcutrow"><span><kbd>D</kbd></span><span>difference view</span></div>
+    <div class="shortcutrow"><span><kbd>L</kbd></span><span>level-match</span></div>
+    <div class="shortcutrow"><span><kbd>M</kbd></span><span>electric / acoustic mode</span></div>
+    <div class="shortcutrow"><span><kbd>G</kbd></span><span>glossary</span></div>
+    <div class="shortcutrow"><span><kbd>E</kbd></span><span>export PNG</span></div>
+    <div class="shortcutrow"><span><kbd>Esc</kbd></span><span>close panels</span></div>
+  </div>
+</div>
+
+<!-- drag overlay -->
+<div id="dropOverlay">
+  <div class="inner">
+    <div class="t1" id="dropTitle">Drop audio file</div>
+    <div class="t2">WAV · AIFF · MP3 · M4A · FLAC — or a GuitarScope snapshot (.json)</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+"use strict";
+/* ============================================================
+   GuitarScope — DSP core
+   Everything above the NODE-TEST BOUNDARY is pure computation on
+   typed arrays (no DOM, no Web Audio) and is exercised by the
+   node test harness in tests/.
+   ============================================================ */
+
+// ---------- FFT ----------
+class FFT {
+  constructor(n){
+    this.n = n;
+    this.rev = new Uint32Array(n);
+    this.cos = new Float64Array(n/2);
+    this.sin = new Float64Array(n/2);
+    for(let i=0;i<n/2;i++){ this.cos[i]=Math.cos(-2*Math.PI*i/n); this.sin[i]=Math.sin(-2*Math.PI*i/n); }
+    const bits = Math.log2(n);
+    for(let i=0;i<n;i++){ let r=0; for(let j=0;j<bits;j++) r=(r<<1)|((i>>j)&1); this.rev[i]=r; }
+  }
+  forward(re, im){
+    const {n, rev, cos, sin} = this;
+    for(let i=0;i<n;i++){ const r=rev[i]; if(r>i){ let t=re[i]; re[i]=re[r]; re[r]=t; t=im[i]; im[i]=im[r]; im[r]=t; } }
+    for(let len=2; len<=n; len<<=1){
+      const half=len>>1, step=n/len;
+      for(let i=0;i<n;i+=len){
+        for(let j=0;j<half;j++){
+          const k=j*step, c=cos[k], s=sin[k];
+          const qr=re[i+j+half]*c - im[i+j+half]*s;
+          const qi=re[i+j+half]*s + im[i+j+half]*c;
+          const pr=re[i+j], pi=im[i+j];
+          re[i+j]=pr+qr; im[i+j]=pi+qi;
+          re[i+j+half]=pr-qr; im[i+j+half]=pi-qi;
+        }
+      }
+    }
+  }
+}
+const _fftCache = new Map();
+function getFFT(n){ let f=_fftCache.get(n); if(!f){ f=new FFT(n); _fftCache.set(n,f); } return f; }
+
+const _hannCache = new Map();
+function hannCache(n){
+  let h=_hannCache.get(n);
+  if(!h){
+    const w=new Float64Array(n); let s1=0, s2=0;
+    for(let i=0;i<n;i++){ const v=0.5*(1-Math.cos(2*Math.PI*i/n)); w[i]=v; s1+=v; s2+=v*v; }
+    h={w,s1,s2}; _hannCache.set(n,h);
+  }
+  return h;
+}
+
+// ---------- Welch LTAS ----------
+// Averaged power spectrum scaled so a full-scale sine reads ~0 dB:
+// per frame P[k] = (2|X[k]|/S1)^2, i.e. amplitude^2 of the sine that
+// would produce that bin. Returns {power, df, frames}.
+async function welch(samples, rate, N, hop, onProgress){
+  N = N || 8192; hop = hop || (N>>1);
+  if(samples.length < N){
+    // Short file: zero-pad a single frame rather than refuse.
+    const padded = new Float64Array(N); padded.set(samples);
+    samples = padded;
+  }
+  const fft = getFFT(N), {w, s1} = hannCache(N);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const power = new Float64Array(N/2+1);
+  const nFrames = Math.max(1, Math.floor((samples.length - N)/hop) + 1);
+  for(let f=0; f<nFrames; f++){
+    const off = f*hop;
+    for(let i=0;i<N;i++){ re[i]=samples[off+i]*w[i]; im[i]=0; }
+    fft.forward(re, im);
+    for(let k=0;k<=N/2;k++) power[k] += re[k]*re[k] + im[k]*im[k];
+    if(onProgress && (f & 31) === 31){
+      onProgress(f/nFrames);
+      await new Promise(r=>setTimeout(r,0)); // yield to keep UI alive
+    }
+  }
+  const scale = 4/(s1*s1*nFrames); // (2/S1)^2, averaged
+  for(let k=0;k<=power.length-1;k++) power[k] *= scale;
+  return { power, df: rate/N, frames: nFrames };
+}
+
+function powerToDb(p){ return 10*Math.log10(Math.max(p, 1e-20)); }
+
+// ---------- fractional-octave smoothing ----------
+// Power-average over [f/2^(1/2m), f·2^(1/2m)] per bin, via cumulative sum.
+function smoothOct(power, df, frac){
+  const n = power.length;
+  if(!frac) return power.slice();
+  const half = Math.pow(2, 1/(2*frac));
+  const cum = new Float64Array(n+1);
+  for(let i=0;i<n;i++) cum[i+1] = cum[i] + power[i];
+  const out = new Float64Array(n);
+  for(let k=0;k<n;k++){
+    const f = k*df;
+    if(f<=0){ out[k]=power[k]; continue; }
+    let lo = Math.round(f/half/df), hi = Math.round(f*half/df);
+    if(lo<0) lo=0; if(hi>n-1) hi=n-1; if(hi<lo) hi=lo;
+    out[k] = (cum[hi+1]-cum[lo]) / (hi-lo+1);
+  }
+  return out;
+}
+
+// ---------- integration helpers ----------
+function bandPower(power, df, f0, f1){
+  let lo = Math.ceil(f0/df), hi = Math.floor(f1/df);
+  if(lo<1) lo=1; if(hi>power.length-1) hi=power.length-1;
+  let s=0; for(let k=lo;k<=hi;k++) s+=power[k];
+  return s;
+}
+
+function spectralCentroid(power, df, f0, f1){
+  let lo = Math.ceil(f0/df), hi = Math.floor(f1/df);
+  if(lo<1) lo=1; if(hi>power.length-1) hi=power.length-1;
+  let num=0, den=0;
+  for(let k=lo;k<=hi;k++){ num += (k*df)*power[k]; den += power[k]; }
+  return den>0 ? num/den : 0;
+}
+
+// dB-per-octave slope: OLS of dB vs log2(f), sampled on a log grid
+// (100 Hz–10 kHz, 240 points) over a 1/6-oct-smoothed curve so bin
+// density doesn't weight the fit toward high frequencies.
+function spectralTilt(power, df){
+  const sm = smoothOct(power, df, 6);
+  const NPTS=240, F0=100, F1=10000;
+  let sx=0, sy=0, sxx=0, sxy=0, n=0;
+  for(let i=0;i<NPTS;i++){
+    const f = F0*Math.pow(F1/F0, i/(NPTS-1));
+    const k = Math.round(f/df);
+    if(k<1 || k>=sm.length) continue;
+    const x = Math.log2(f), y = powerToDb(sm[k]);
+    sx+=x; sy+=y; sxx+=x*x; sxy+=x*y; n++;
+  }
+  if(n<2) return 0;
+  return (n*sxy - sx*sy) / (n*sxx - sx*sx);
+}
+
+// ---------- peak detection ----------
+// Local maxima with prominence >= minProm dB; parabolic refinement;
+// nearest-kept-peak spacing enforced in log-f. Runs on a dB curve.
+function detectPeaks(db, df, opts){
+  opts = opts || {};
+  const fmin = opts.fmin || 60, fmax = opts.fmax || 12000;
+  const minProm = opts.minProm != null ? opts.minProm : 6;
+  const maxCount = opts.maxCount || 6;
+  const minDistOct = opts.minDistOct != null ? opts.minDistOct : 1/6;
+  const lo = Math.max(2, Math.ceil(fmin/df)), hi = Math.min(db.length-2, Math.floor(fmax/df));
+  const cands = [];
+  for(let k=lo;k<=hi;k++){
+    if(db[k]>db[k-1] && db[k]>=db[k+1]){
+      // prominence: drop to the higher of the two valley minima before a taller point
+      let leftMin=db[k], i=k-1;
+      while(i>=1 && db[i]<db[k]){ if(db[i]<leftMin) leftMin=db[i]; i--; }
+      let rightMin=db[k]; i=k+1;
+      while(i<db.length-1 && db[i]<db[k]){ if(db[i]<rightMin) rightMin=db[i]; i++; }
+      const prom = db[k] - Math.max(leftMin, rightMin);
+      if(prom >= minProm){
+        // parabolic vertex refinement on the dB curve
+        const y0=db[k-1], y1=db[k], y2=db[k+1];
+        const denom = y0 - 2*y1 + y2;
+        const d = denom!==0 ? 0.5*(y0-y2)/denom : 0;
+        cands.push({ f:(k+Math.max(-0.5,Math.min(0.5,d)))*df, db:y1 - 0.25*(y0-y2)*d, prom });
+      }
+    }
+  }
+  cands.sort((a,b)=>b.prom-a.prom);
+  const kept=[];
+  for(const c of cands){
+    if(kept.length>=maxCount) break;
+    if(kept.every(p=>Math.abs(Math.log2(c.f/p.f))>=minDistOct)) kept.push(c);
+  }
+  kept.sort((a,b)=>a.f-b.f);
+  return kept;
+}
+
+// ---------- display grid ----------
+function makeLogGrid(n, f0, f1){
+  n=n||700; f0=f0||60; f1=f1||20000;
+  const g=new Float64Array(n);
+  for(let i=0;i<n;i++) g[i]=f0*Math.pow(f1/f0, i/(n-1));
+  return g;
+}
+// Linear interpolation in the dB domain from native bins onto a grid.
+function resampleToGrid(db, df, grid){
+  const out=new Float64Array(grid.length);
+  for(let i=0;i<grid.length;i++){
+    const x=grid[i]/df;
+    let k=Math.floor(x);
+    if(k<0) k=0;
+    if(k>=db.length-1){ out[i]=db[db.length-1]; continue; }
+    const t=x-k;
+    out[i]=db[k]*(1-t)+db[k+1]*t;
+  }
+  return out;
+}
+
+// ---------- note math ----------
+const NOTE_NAMES=["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+function noteInfo(f, a4){
+  a4=a4||440;
+  if(!(f>0)) return null;
+  const midiF = 69 + 12*Math.log2(f/a4);
+  const midi = Math.round(midiF);
+  const cents = Math.round((midiF-midi)*100);
+  const name = NOTE_NAMES[((midi%12)+12)%12] + (Math.floor(midi/12)-1);
+  return { midi, name, cents };
+}
+function midiToFreq(m, a4){ a4=a4||440; return a4*Math.pow(2,(m-69)/12); }
+
+const TUNINGS = {
+  estd:  { name:"E standard",  midi:[40,45,50,55,59,64] },
+  eb:    { name:"E♭ standard", midi:[39,44,49,54,58,63] },
+  dstd:  { name:"D standard",  midi:[38,43,48,53,57,62] },
+  dropd: { name:"Drop D",      midi:[38,45,50,55,59,64] },
+  dadgad:{ name:"DADGAD",      midi:[38,45,50,55,57,62] },
+};
+function tuningMidi(key, customOffset){
+  if(key==="custom") return TUNINGS.estd.midi.map(m=>m+(customOffset|0));
+  return (TUNINGS[key]||TUNINGS.estd).midi.slice();
+}
+
+// ---------- STFT band envelopes (for onsets & decay) ----------
+// win 2048, hop 512. Returns per-frame power in given bands plus
+// full-band magnitude spectra flux for onset detection.
+function stftBands(samples, rate, bands, win, hop){
+  win=win||2048; hop=hop||512;
+  const fft=getFFT(win), {w}=hannCache(win);
+  const nFrames=Math.max(1, Math.floor((samples.length-win)/hop)+1);
+  const re=new Float64Array(win), im=new Float64Array(win);
+  const nb=bands.length;
+  const bandP=bands.map(()=>new Float64Array(nFrames));
+  const flux=new Float64Array(nFrames);
+  let prevMag=new Float64Array(win/2+1);
+  const binLo=bands.map(b=>Math.max(1,Math.ceil(b[0]/ (rate/win))));
+  const binHi=bands.map(b=>Math.min(win/2, Math.floor(b[1]/(rate/win))));
+  const mag=new Float64Array(win/2+1);
+  for(let f=0; f<nFrames; f++){
+    const off=f*hop;
+    for(let i=0;i<win;i++){ re[i]=samples[off+i]*w[i]; im[i]=0; }
+    fft.forward(re,im);
+    let fl=0;
+    for(let k=0;k<=win/2;k++){
+      const m=Math.sqrt(re[k]*re[k]+im[k]*im[k]);
+      mag[k]=m;
+      const d=m-prevMag[k];
+      if(d>0) fl+=d;                 // half-wave rectified spectral flux
+      prevMag[k]=m;
+    }
+    flux[f]=fl;
+    for(let b=0;b<nb;b++){
+      let s=0;
+      for(let k=binLo[b];k<=binHi[b];k++) s+=mag[k]*mag[k];
+      bandP[b][f]=s;
+    }
+  }
+  return { bandP, flux, hop, win, frameRate: rate/hop, nFrames };
+}
+
+// ---------- onset detection ----------
+// Adaptive threshold: flux > median(window) * factor + tiny floor.
+function detectOnsets(flux, frameRate, opts){
+  opts=opts||{};
+  const minSepFrames=Math.round((opts.minSepSec!=null?opts.minSepSec:0.09)*frameRate);
+  const halfWin=Math.round((opts.medianWinSec!=null?opts.medianWinSec:0.5)*frameRate/2);
+  const factor=opts.factor!=null?opts.factor:1.6;
+  const n=flux.length;
+  let fluxMax=0; for(let i=0;i<n;i++) if(flux[i]>fluxMax) fluxMax=flux[i];
+  if(fluxMax<=0) return [];
+  const onsets=[];
+  let last=-minSepFrames-1;
+  for(let i=1;i<n-1;i++){
+    if(flux[i]<=flux[i-1] || flux[i]<flux[i+1]) continue; // local max
+    const lo=Math.max(0,i-halfWin), hi=Math.min(n-1,i+halfWin);
+    const seg=Array.prototype.slice.call(flux.subarray(lo,hi+1)).sort((a,b)=>a-b);
+    const med=seg[seg.length>>1];
+    if(flux[i] > med*factor + 0.01*fluxMax && i-last>=minSepFrames){
+      onsets.push(i); last=i;
+    }
+  }
+  return onsets;
+}
+
+// ---------- amplitude envelope ----------
+// Peak follower: instant attack, exponential release (~8 ms), then
+// downsampled by `step` for cheap storage (default ~8 kHz at 44.1k).
+function amplitudeEnvelope(samples, rate, step){
+  step=step||Math.max(1,Math.round(rate/8000));
+  const relCoef=Math.exp(-1/(0.008*rate));
+  const n=Math.floor(samples.length/step);
+  const env=new Float64Array(n);
+  let e=0;
+  for(let i=0, j=0; i<samples.length; i++){
+    const a=Math.abs(samples[i]);
+    e = a>e ? a : a+(e-a)*relCoef;
+    if(i%step===0 && j<n){ env[j++]=e; }
+  }
+  return { env, envRate: rate/step };
+}
+
+// ---------- attack times ----------
+// Per onset: find the local env peak within 60 ms and the pre-peak
+// envelope minimum (the level the previous note is still ringing at),
+// then measure the 10%->90% rise time relative to that minimum.
+// Thresholds must be relative: an absolute 10%-of-peak level is never
+// crossed while an earlier note rings above it. Median across onsets.
+function attackTimes(env, envRate, onsetTimes){
+  const times=[];
+  for(const t of onsetTimes){
+    const i0=Math.round(t*envRate);
+    const iHi=Math.min(env.length-1, i0+Math.round(0.06*envRate));
+    let ip=i0, pv=0;
+    for(let i=Math.max(0,i0-2); i<=iHi; i++) if(env[i]>pv){ pv=env[i]; ip=i; }
+    if(pv<=0) continue;
+    const iLo=Math.max(0, ip-Math.round(0.12*envRate));
+    let im=ip, mn=pv;
+    for(let i=iLo; i<ip; i++) if(env[i]<mn){ mn=env[i]; im=i; }
+    if(mn>=0.95*pv) continue; // envelope barely moves: not a measurable rise
+    const t10=mn+0.1*(pv-mn), t90=mn+0.9*(pv-mn);
+    let i10=-1, i90=-1;
+    for(let i=im; i<=ip; i++){
+      if(i10<0 && env[i]>=t10) i10=i;
+      if(env[i]>=t90){ i90=i; break; }
+    }
+    if(i10>=0 && i90>=i10) times.push(Math.max(i90-i10,1)/envRate);
+  }
+  if(!times.length) return null;
+  times.sort((a,b)=>a-b);
+  return times[times.length>>1];
+}
+
+// ---------- per-band decay ----------
+// For each onset and band: from the post-onset band-power peak, fit
+// dB-vs-time slope over the fall until the next onset (or +1.5 s),
+// report T20-style time-to-shed-20dB = 20/|slope|. Median per band.
+// Slopes shallower than 10 dB/s are discarded (not a decaying note).
+function bandDecays(bandP, frameRate, onsets){
+  const results=[];
+  for(const p of bandP){
+    const times=[];
+    for(let oi=0; oi<onsets.length; oi++){
+      const start=onsets[oi];
+      const end=Math.min(p.length-1, (oi+1<onsets.length ? onsets[oi+1]-1 : start+Math.round(1.5*frameRate)));
+      if(end-start<Math.round(0.12*frameRate)) continue;
+      let ip=start, pv=0;
+      const searchHi=Math.min(end, start+Math.round(0.08*frameRate));
+      for(let i=start;i<=searchHi;i++) if(p[i]>pv){ pv=p[i]; ip=i; }
+      if(pv<=0) continue;
+      // regression of dB on time from peak to end, stopping if we hit the floor (-35 dB rel)
+      let sx=0,sy=0,sxx=0,sxy=0,n=0;
+      for(let i=ip;i<=end;i++){
+        const rel=10*Math.log10(Math.max(p[i]/pv,1e-8));
+        if(rel<-35) break;
+        const x=(i-ip)/frameRate;
+        sx+=x; sy+=rel; sxx+=x*x; sxy+=x*rel; n++;
+      }
+      if(n<5) continue;
+      const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx); // dB/s, negative when decaying
+      if(slope<-10) times.push(20/(-slope));
+    }
+    if(times.length){ times.sort((a,b)=>a-b); results.push(times[times.length>>1]); }
+    else results.push(null);
+  }
+  return results;
+}
+
+// ---------- f0 via normalized autocorrelation ----------
+function autocorrF0(samples, rate, start, win){
+  win=win||8192;
+  if(start+win>samples.length) start=Math.max(0,samples.length-win);
+  const seg=samples.subarray(start,start+win);
+  let mean=0; for(let i=0;i<win;i++) mean+=seg[i]; mean/=win;
+  const x=new Float64Array(win);
+  let e0=0;
+  for(let i=0;i<win;i++){ x[i]=seg[i]-mean; e0+=x[i]*x[i]; }
+  if(e0<=0) return null;
+  const minLag=Math.floor(rate/1200), maxLag=Math.min(win-2, Math.ceil(rate/60));
+  const ac=new Float64Array(maxLag+1);
+  let best=-1, bestLag=0;
+  for(let lag=minLag; lag<=maxLag; lag++){
+    let s=0, e1=0, e2=0;
+    const m=win-lag;
+    for(let i=0;i<m;i++){ s+=x[i]*x[i+lag]; e1+=x[i]*x[i]; e2+=x[i+lag]*x[i+lag]; }
+    const norm=Math.sqrt(e1*e2);
+    const v=norm>0 ? s/norm : 0;
+    ac[lag]=v;
+    if(v>best){ best=v; bestLag=lag; }
+  }
+  if(best<0.45) return null;
+  // octave-error fix: prefer the SMALLEST lag whose peak is >= 0.9*best
+  // (smallest lag = highest f0 candidate; guards against picking a
+  // subharmonic when the true period's multiple correlates slightly better)
+  for(let lag=minLag; lag<bestLag; lag++){
+    if(ac[lag]>=0.9*best && ac[lag]>ac[lag-1] && ac[lag]>=ac[lag+1]){ bestLag=lag; break; }
+  }
+  // parabolic refinement of the lag
+  let lagF=bestLag;
+  if(bestLag>minLag && bestLag<maxLag){
+    const y0=ac[bestLag-1], y1=ac[bestLag], y2=ac[bestLag+1];
+    const den=y0-2*y1+y2;
+    if(den!==0) lagF=bestLag+Math.max(-0.5,Math.min(0.5,0.5*(y0-y2)/den));
+  }
+  return { f0: rate/lagF, conf: best };
+}
+
+// ---------- harmonic profile ----------
+// Welch over a sustained segment; search h*f0 ± 3.5% for h=1..10.
+// richness = 10log10(sum P_h>=2 / P_1); evenOdd = 10log10(P_even/P_odd).
+async function harmonicProfile(samples, rate, segStart, segLen, f0){
+  const N = segLen>=8192*2 ? 8192 : 4096;
+  const seg=samples.subarray(segStart, Math.min(samples.length, segStart+segLen));
+  if(seg.length<N) return null;
+  const {power, df}=await welch(seg, rate, N, N>>1, null);
+  const hp=[];
+  for(let h=1; h<=10; h++){
+    const fc=h*f0;
+    if(fc>=rate/2) break;
+    const lo=Math.max(1, Math.floor(fc*0.965/df)), hi=Math.min(power.length-1, Math.ceil(fc*1.035/df));
+    let pk=0, pkF=fc;
+    for(let k=lo;k<=hi;k++) if(power[k]>pk){ pk=power[k]; pkF=k*df; }
+    hp.push({ h, f:pkF, p:pk });
+  }
+  if(hp.length<4 || hp[0].p<=0) return null;
+  let hSum=0, even=0, odd=0;
+  for(const o of hp){ if(o.h>=2) hSum+=o.p; if(o.h>=2){ if(o.h%2===0) even+=o.p; else odd+=o.p; } }
+  return {
+    harmonics: hp,
+    richness: 10*Math.log10(Math.max(hSum,1e-20)/hp[0].p),
+    evenOdd: (even>0 && odd>0) ? 10*Math.log10(even/odd) : null,
+  };
+}
+
+// ---------- short-term RMS / dynamics / noise floor ----------
+// 50 ms frames, 25 ms hop, in dBFS (sine reference: +3.01 dB over RMS-of-1...
+// we keep plain RMS dBFS here and say so in the glossary).
+function shortTermRms(samples, rate){
+  const win=Math.round(0.05*rate), hop=Math.round(0.025*rate);
+  const n=Math.max(1,Math.floor((samples.length-win)/hop)+1);
+  const out=new Float64Array(n);
+  // rolling sum of squares
+  let s=0;
+  for(let i=0;i<win && i<samples.length;i++) s+=samples[i]*samples[i];
+  out[0]=10*Math.log10(Math.max(s/win,1e-20));
+  for(let f=1;f<n;f++){
+    const drop=(f-1)*hop, add=drop+win;
+    for(let i=drop;i<drop+hop;i++) s-=samples[i]*samples[i];
+    for(let i=add;i<add+hop && i<samples.length;i++) s+=samples[i]*samples[i];
+    out[f]=10*Math.log10(Math.max(s/win,1e-20));
+  }
+  return out;
+}
+function percentile(sorted, q){
+  const idx=(sorted.length-1)*q;
+  const lo=Math.floor(idx), t=idx-lo;
+  return lo+1<sorted.length ? sorted[lo]*(1-t)+sorted[lo+1]*t : sorted[lo];
+}
+function dynamicsMetrics(samples, rate){
+  const rms=shortTermRms(samples, rate);
+  const all=Array.from(rms).sort((a,b)=>a-b);
+  const floor=percentile(all, 0.10);
+  const active=all.filter(v=>v>floor+8);
+  let dr=null, p95=null;
+  if(active.length>=4){
+    p95=percentile(active,0.95);
+    dr=p95-percentile(active,0.10);
+  }
+  // clipping: count of samples at/over ~0.9985 FS
+  let clip=0;
+  for(let i=0;i<samples.length;i++) if(Math.abs(samples[i])>=0.9985) clip++;
+  return {
+    dr, noiseFloor: floor,
+    snr: p95!=null ? p95-floor : null,
+    clipped: clip>64, clipCount: clip,
+  };
+}
+// Rumble advisory: power below 55 Hz vs total 60 Hz–20 kHz.
+function rumbleCheck(power, df){
+  const sub=bandPower(power, df, 20, 55);
+  const total=bandPower(power, df, 60, 20000);
+  if(total<=0) return { ratio:0, advise:false };
+  const ratio=sub/total;
+  return { ratio, advise: ratio>0.12 };
+}
+
+// ---------- container sniffing (sample rate is DATA, never assumed) ----------
+function sniffAudioInfo(buf){
+  const u8=new Uint8Array(buf);
+  const dv=new DataView(buf);
+  const tag=(off)=>String.fromCharCode(u8[off],u8[off+1],u8[off+2],u8[off+3]);
+  if(u8.length<12) return null;
+
+  // ---- WAV / RIFF ----
+  if(tag(0)==="RIFF" && tag(8)==="WAVE"){
+    let off=12;
+    while(off+8<=u8.length){
+      const id=tag(off), size=dv.getUint32(off+4,true);
+      if(id==="fmt "){
+        let fmt=dv.getUint16(off+8,true);
+        const channels=dv.getUint16(off+10,true);
+        const rate=dv.getUint32(off+12,true);
+        const bits=dv.getUint16(off+22,true);
+        if(fmt===0xFFFE && size>=40) fmt=dv.getUint16(off+32,true); // extensible: subformat
+        if(!(rate>=8000 && rate<=384000)) return null;
+        return { container:"WAV", sampleRate:rate, channels,
+                 bitDepth: fmt===3 ? bits+"-bit float" : bits+"-bit" };
+      }
+      off += 8 + size + (size&1);
+    }
+    return null;
+  }
+
+  // ---- AIFF / AIFF-C ----
+  if(tag(0)==="FORM" && (tag(8)==="AIFF" || tag(8)==="AIFC")){
+    let off=12;
+    while(off+8<=u8.length){
+      const id=tag(off), size=dv.getUint32(off+4,false);
+      if(id==="COMM"){
+        const channels=dv.getUint16(off+8,false);
+        const bits=dv.getUint16(off+14,false);
+        // 80-bit IEEE 754 extended float at off+16
+        const expRaw=dv.getUint16(off+16,false);
+        const hi=dv.getUint32(off+18,false), lo=dv.getUint32(off+22,false);
+        const sign=(expRaw&0x8000)?-1:1;
+        const exp=expRaw&0x7FFF;
+        const mant=hi*4294967296+lo;
+        const rate=sign*mant*Math.pow(2,exp-16383-63);
+        if(!(rate>=8000 && rate<=384000)) return null;
+        return { container: tag(8)==="AIFC"?"AIFF-C":"AIFF", sampleRate:Math.round(rate), channels, bitDepth:bits+"-bit" };
+      }
+      off += 8 + size + (size&1);
+    }
+    return null;
+  }
+
+  // ---- FLAC ----
+  if(tag(0)==="fLaC"){
+    // STREAMINFO is the first metadata block; rate = 20 bits at byte 18 of the block body.
+    let off=4;
+    while(off+4<=u8.length){
+      const isLast=(u8[off]&0x80)!==0, type=u8[off]&0x7F;
+      const size=(u8[off+1]<<16)|(u8[off+2]<<8)|u8[off+3];
+      if(type===0){
+        const b=off+4+10;
+        if(b+3>u8.length) return null;
+        const rate=(u8[b]<<12)|(u8[b+1]<<4)|(u8[b+2]>>4);
+        const channels=((u8[b+2]>>1)&0x7)+1;
+        const bits=(((u8[b+2]&1)<<4)|(u8[b+3]>>4))+1;
+        if(!(rate>=8000 && rate<=384000)) return null;
+        return { container:"FLAC", sampleRate:rate, channels, bitDepth:bits+"-bit" };
+      }
+      if(isLast) break;
+      off += 4 + size;
+    }
+    return null;
+  }
+
+  // ---- M4A / MP4 ----
+  if(u8.length>=12 && tag(4)==="ftyp"){
+    // Walk boxes: moov > trak > mdia > minf > stbl > stsd > mp4a (rate: 16.16 fixed at +32)
+    // Fallback: mdhd timescale.
+    let mdhdRate=null;
+    const CONTAINERS=new Set(["moov","trak","mdia","minf","stbl"]);
+    function walk(start, end, depth){
+      let off=start;
+      while(off+8<=end){
+        let size=dv.getUint32(off,false);
+        const id=tag(off+4);
+        let hdr=8;
+        if(size===1){ // 64-bit size
+          if(off+16>end) return null;
+          const szHi=dv.getUint32(off+8,false), szLo=dv.getUint32(off+12,false);
+          size=szHi*4294967296+szLo; hdr=16;
+        } else if(size===0){ size=end-off; }
+        if(size<hdr || off+size>end) return null;
+        if(CONTAINERS.has(id)){
+          const r=walk(off+hdr, off+size, depth+1);
+          if(r) return r;
+        } else if(id==="mdhd"){
+          const ver=u8[off+hdr];
+          const tsOff=ver===1 ? off+hdr+20 : off+hdr+12;
+          if(tsOff+4<=end){ const ts=dv.getUint32(tsOff,false); if(ts>=8000&&ts<=384000) mdhdRate=ts; }
+        } else if(id==="stsd"){
+          // version/flags(4) + entryCount(4), then first sample entry
+          const e=off+hdr+8;
+          if(e+8<=end){
+            const eid=tag(e+4);
+            if(eid==="mp4a" || eid==="alac" || eid==="fLaC"){
+              const chOff=e+24, srOff=e+32;
+              if(srOff+4<=end){
+                const rate=dv.getUint32(srOff,false)/65536;
+                const channels=dv.getUint16(chOff,false);
+                if(rate>=8000 && rate<=384000)
+                  return { container:"M4A", sampleRate:Math.round(rate), channels, bitDepth:"compressed" };
+              }
+            }
+          }
+        }
+        off+=size;
+      }
+      return null;
+    }
+    const r=walk(0, u8.length, 0);
+    if(r) return r;
+    if(mdhdRate) return { container:"M4A", sampleRate:mdhdRate, channels:null, bitDepth:"compressed" };
+    return null;
+  }
+
+  // ---- MP3 ----
+  {
+    let off=0;
+    // skip ID3v2
+    if(u8.length>10 && tag(0).startsWith("ID3")){
+      const sz=((u8[6]&0x7f)<<21)|((u8[7]&0x7f)<<14)|((u8[8]&0x7f)<<7)|(u8[9]&0x7f);
+      off=10+sz;
+    }
+    const RATES={ 3:[44100,48000,32000], 2:[22050,24000,16000], 0:[11025,12000,8000] }; // MPEG1, MPEG2, MPEG2.5
+    const limit=Math.min(u8.length-3, off+512*1024);
+    for(let i=off; i<limit; i++){
+      if(u8[i]===0xFF && (u8[i+1]&0xE0)===0xE0){
+        const ver=(u8[i+1]>>3)&0x3;         // 3=MPEG1, 2=MPEG2, 0=MPEG2.5
+        const layer=(u8[i+1]>>1)&0x3;
+        const rateIdx=(u8[i+2]>>2)&0x3;
+        if(ver!==1 && layer!==0 && rateIdx!==3){
+          const rates=RATES[ver];
+          if(rates){
+            const chMode=(u8[i+3]>>6)&0x3;
+            return { container:"MP3", sampleRate:rates[rateIdx],
+                     channels: chMode===3?1:2, bitDepth:"compressed" };
+          }
+        }
+      }
+    }
+    return null;
+  }
+}
+
+// ==== [NODE-TEST BOUNDARY] ==== everything below touches DOM / Web Audio ====
+</script>
+<script>
+"use strict";
+/* ============================================================
+   GuitarScope — audio decode (browser side)
+   Sample-rate policy: rate is read from the container bytes, then
+   decoding happens in an OfflineAudioContext AT that rate, so
+   decodeAudioData never silently resamples. If the container can't
+   tell us the rate, we refuse — never assume.
+   ============================================================ */
+
+async function decodeAtNativeRate(arrayBuffer, sniffed){
+  const rate = sniffed.sampleRate;
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if(!OAC) throw new Error("This browser has no OfflineAudioContext — cannot decode audio.");
+  const ctx = new OAC(1, 1, rate);
+  // callback form wrapped in a Promise: Safari's promise form is unreliable
+  const audioBuf = await new Promise((resolve, reject)=>{
+    const p = ctx.decodeAudioData(arrayBuffer.slice(0), resolve,
+      (e)=>reject(e instanceof Error ? e : new Error("decodeAudioData failed")));
+    if(p && p.then) p.then(resolve, (e)=>reject(e instanceof Error ? e : new Error("decodeAudioData failed")));
+  });
+  if(Math.abs(audioBuf.sampleRate - rate) > 1){
+    // Should not happen (context rate == native rate), but never lie about it.
+    throw new Error(`Decoder returned ${audioBuf.sampleRate} Hz instead of the file's native ${rate} Hz.`);
+  }
+  return audioBuf;
+}
+
+// Channel handling: 'mid' = (L+R)/2 (default, correct mono fold-down for
+// mic'd acoustic stereo), or 'left'/'right' to isolate one mic.
+function mixChannel(audioBuf, mode){
+  const n = audioBuf.length;
+  if(audioBuf.numberOfChannels === 1 || mode==="left"){
+    const out = new Float64Array(n);
+    out.set(audioBuf.getChannelData(0));
+    return out;
+  }
+  if(mode==="right"){
+    const out = new Float64Array(n);
+    out.set(audioBuf.getChannelData(Math.min(1, audioBuf.numberOfChannels-1)));
+    return out;
+  }
+  // mid
+  const L = audioBuf.getChannelData(0), R = audioBuf.getChannelData(1);
+  const out = new Float64Array(n);
+  for(let i=0;i<n;i++) out[i]=(L[i]+R[i])*0.5;
+  return out;
+}
+</script>
+<script>
+"use strict";
+/* ============================================================
+   GuitarScope — glossary
+   Every term the app prints is defined here with three registers:
+   what musicians mean, the scientific definition, and the exact
+   measurement THIS app performs — with current values for the
+   loaded guitars. values(state) returns [{slot, label, value}] or [].
+   ============================================================ */
+
+// ---- shared formatters (used by glossary and UI) ----
+function fmtHz(f, digits){
+  if(f==null || !isFinite(f)) return "—";
+  if(f>=1000) return (f/1000).toFixed(digits!=null?digits:2)+" kHz";
+  return f.toFixed(f<100?1:0)+" Hz";
+}
+function fmtDb(v, digits){ return (v==null||!isFinite(v)) ? "—" : ((v>0?"+":"")+v.toFixed(digits!=null?digits:1)+" dB"); }
+function fmtMs(s){ return (s==null||!isFinite(s)) ? "—" : (s<1 ? Math.round(s*1000)+" ms" : s.toFixed(2)+" s"); }
+function fmtPct(r){ return (r==null||!isFinite(r)) ? "—" : (r*100).toFixed(1)+" %"; }
+function noteStr(f, a4){
+  const n=noteInfo(f, a4);
+  return n ? n.name+(n.cents ? " "+(n.cents>0?"+":"")+n.cents+"¢" : "") : "—";
+}
+
+// value helpers: map over loaded slots
+function _vals(state, fn){
+  const out=[];
+  for(let i=0;i<2;i++){
+    const s=state.slots[i];
+    if(!s || !s.metrics) continue;
+    const v=fn(s, i);
+    if(v!=null) out.push({ slot:i, label:s.name, value:v });
+  }
+  return out;
+}
+function _bandVals(state, f0, f1){
+  return _vals(state, s=>{
+    const share=bandPower(s.welch.power, s.welch.df, f0, f1)/Math.max(bandPower(s.welch.power, s.welch.df, 60, 20000),1e-20);
+    return fmtPct(share)+" of energy";
+  });
+}
+
+const GLOSSARY=[
+  // ------------ frequency regions ------------
+  { key:"low-end", name:"Low end", cat:"Frequency regions", hook:"60–200 Hz — weight and foundation",
+    musician:"The physical weight of the sound — what you feel in your chest. Too little and a guitar sounds thin; too much and it swamps the band.",
+    science:"Energy between roughly 60 and 200 Hz, where the fundamentals of a guitar's lowest strings sit (low E ≈ 82 Hz, drop-D ≈ 73 Hz).",
+    measure:"Share of total energy: ∫P(f)df over 60–200 Hz divided by the total over 60 Hz–20 kHz, from the Welch average spectrum.",
+    values(state){ return _bandVals(state, 60, 200); } },
+
+  { key:"warmth", name:"Warmth", cat:"Frequency regions", hook:"200–500 Hz in balance",
+    musician:"Roundness and comfort in the tone — enough low-mids that notes feel full-bodied rather than brittle. The dividing line between “warm” and “muddy” is taste and quantity.",
+    science:"Energy in the low-mid band, ≈200–500 Hz, where a guitar's note bodies and lower harmonics live.",
+    measure:"Share of total energy: ∫P(f)df over 200–500 Hz ÷ total 60 Hz–20 kHz, from the Welch average.",
+    values(state){ return _bandVals(state, 200, 500); } },
+
+  { key:"mud", name:"Mud", cat:"Frequency regions", hook:"200–500 Hz in excess (electric)",
+    musician:"The same low-mids as warmth, but too much of them: notes blur together, the mix gets congested, definition disappears. One player's warmth is another's mud.",
+    science:"Excessive 200–500 Hz energy relative to the rest of the spectrum — identical band to Warmth; the judgement is about proportion, not location.",
+    measure:"This app prints one number for the band (200–500 Hz energy share) and leaves the warm/muddy verdict to you.",
+    values(state){ return _bandVals(state, 200, 500); } },
+
+  { key:"boxiness", name:"Boxiness", cat:"Frequency regions", hook:"200–500 Hz in excess (acoustic)",
+    musician:"An acoustic that sounds like it's playing inside a cardboard box — hollow, honky low-mids. Usually the body's own resonances over-represented by mic placement.",
+    science:"Excess energy ≈200–500 Hz, often reinforced by body modes and comb effects from close-mic'ing near the soundhole.",
+    measure:"Same measurement as Warmth/Mud: 200–500 Hz energy share of the 60 Hz–20 kHz total. The acoustic-mode label changes; the physics doesn't.",
+    values(state){ return _bandVals(state, 200, 500); } },
+
+  { key:"body-band", name:"Body", cat:"Frequency regions", hook:"500 Hz–1.2 kHz — the note's core",
+    musician:"The midrange heart of the guitar sound; where a note's identity sits. Scooping it makes a guitar sound hollow, boosting it makes it honky or “present” depending on taste.",
+    science:"Mid-band energy ≈500 Hz–1.2 kHz, dominated by mid-order harmonics of most fretted notes.",
+    measure:"Share of total energy: ∫P(f)df over 500 Hz–1.2 kHz ÷ total 60 Hz–20 kHz.",
+    values(state){ return _bandVals(state, 500, 1200); } },
+
+  { key:"presence", name:"Presence", cat:"Frequency regions", hook:"2–5 kHz — cut and articulation",
+    musician:"What makes a guitar cut through a band without being louder: pick attack, string detail, edge. Too much becomes harsh.",
+    science:"Upper-mid energy ≈2–5 kHz, where the ear is most sensitive and pick transients carry most information.",
+    measure:"Share of total energy: ∫P(f)df over 2–5 kHz ÷ total 60 Hz–20 kHz.",
+    values(state){ return _bandVals(state, 2000, 5000); } },
+
+  { key:"air", name:"Air", cat:"Frequency regions", hook:"5–12 kHz — openness and sheen",
+    musician:"The open, breathy top of the sound — string zing, room shimmer. Electric guitar speakers roll off steeply here, so electrics naturally have little of it.",
+    science:"High-frequency energy ≈5–12 kHz: string brightness, pick noise, room ambience.",
+    measure:"Share of total energy: ∫P(f)df over 5–12 kHz ÷ total 60 Hz–20 kHz.",
+    values(state){ return _bandVals(state, 5000, 12000); } },
+
+  // ------------ tone descriptors ------------
+  { key:"brightness", name:"Brightness", cat:"Tone descriptors", hook:"where the spectral balance sits",
+    musician:"How trebly versus dark a guitar sounds overall. New strings, bridge pickups, and maple boards read as “brighter”.",
+    science:"Perceived brightness correlates strongly with the spectral centroid — the energy-weighted average frequency of the spectrum.",
+    measure:"Spectral centroid Σf·P(f) / ΣP(f) over 60 Hz–20 kHz of the Welch average, quoted in Hz with the nearest note.",
+    values(state){ return _vals(state, s=>fmtHz(s.metrics.centroid)+"  ·  near "+noteStr(s.metrics.centroid, state.a4)); } },
+
+  { key:"spectral-centroid", name:"Spectral centroid", cat:"Tone descriptors", hook:"the spectrum's centre of mass",
+    musician:"A single number for “where the tone lives”: low centroid = dark, high centroid = bright.",
+    science:"The first moment of the power spectrum: f̄ = Σ f·P(f) ⁄ Σ P(f). The standard objective correlate of brightness in timbre research.",
+    measure:"Computed on the Welch average power spectrum, integrating 60 Hz–20 kHz at native bin resolution (rate⁄8192 per bin).",
+    values(state){ return _vals(state, s=>fmtHz(s.metrics.centroid)); } },
+
+  { key:"spectral-tilt", name:"Spectral tilt", cat:"Tone descriptors", hook:"dB-per-octave slope",
+    musician:"How fast the highs fall away. A steep tilt sounds dark and vintage; a shallow tilt sounds modern and open.",
+    science:"The average slope of the spectrum in dB per octave — natural instrument spectra fall off roughly linearly against log-frequency.",
+    measure:"Least-squares fit of dB vs log₂f, sampled at 240 log-spaced points 100 Hz–10 kHz on a 1/6-octave-smoothed curve (so dense high-frequency bins don't dominate the fit).",
+    values(state){ return _vals(state, s=>s.metrics.tilt.toFixed(1)+" dB/oct"); } },
+
+  { key:"harmonic-richness", name:"Harmonic richness", cat:"Tone descriptors", hook:"overtones vs fundamental",
+    musician:"How “complex” a single note sounds. A note that's mostly fundamental is pure and hollow; one with strong overtones is rich, brassy, or jangly.",
+    science:"The ratio of energy in harmonics 2–10 to energy at the fundamental, from a sustained note.",
+    measure:"On the longest sustained segment: f₀ by normalized autocorrelation, then Welch over the segment; harmonic peaks searched at h·f₀ ± 3.5 % for h = 1…10; richness = 10·log₁₀(ΣP₂₋₁₀ ⁄ P₁).",
+    values(state){ return _vals(state, s=>s.metrics.richness!=null ? fmtDb(s.metrics.richness)+(s.metrics.f0 ? "  ·  note "+noteStr(s.metrics.f0, state.a4) : "") : null); } },
+
+  { key:"even-odd", name:"Even/odd balance", cat:"Tone descriptors", hook:"which overtone family dominates",
+    musician:"Even harmonics (octave, octave+fifth…) sound sweet and consonant; odd harmonics (twelfth, clarinet-like) sound hollow or edgy.",
+    science:"The energy ratio between even-numbered (2,4,6,8,10) and odd-numbered (3,5,7,9) harmonics of a sustained note.",
+    measure:"From the same harmonic peaks as richness: 10·log₁₀(ΣP_even ⁄ ΣP_odd), harmonics 2–10. Positive = even-dominant.",
+    values(state){ return _vals(state, s=>s.metrics.evenOdd!=null ? fmtDb(s.metrics.evenOdd)+(s.metrics.evenOdd>0?"  (even)":"  (odd)") : null); } },
+
+  { key:"attack", name:"Attack", cat:"Tone descriptors", hook:"how fast notes start",
+    musician:"The snap at the front of a note. Fast attack reads as percussive and immediate; slow attack as soft or compressed.",
+    science:"The rise time of the amplitude envelope at note onset — conventionally the 10 %→90 % rise time.",
+    measure:"Onsets by spectral flux (2048/512 STFT, adaptive median threshold); envelope by peak-follower (instant attack, 8 ms release); attack = median t₉₀−t₁₀ across detected onsets.",
+    values(state){ return _vals(state, s=>s.metrics.attack!=null ? fmtMs(s.metrics.attack) : null); } },
+
+  { key:"sustain", name:"Sustain", cat:"Tone descriptors", hook:"how long the mids ring",
+    musician:"How long a note keeps singing after you pick it. The quality players chase with heavier bodies, better break angles, and compression.",
+    science:"The decay time of note energy after the attack — here measured in the midrange (200 Hz–1.2 kHz), where the note's core lives.",
+    measure:"Per onset: mid-band (200–1200 Hz) STFT power from post-onset peak, dB-vs-time regression → time to shed 20 dB. Median across onsets.",
+    values(state){ return _vals(state, s=>s.metrics.decays && s.metrics.decays[1]!=null ? fmtMs(s.metrics.decays[1])+" to −20 dB" : null); } },
+
+  { key:"tightness", name:"Tightness", cat:"Tone descriptors", hook:"how fast the low end gets out of the way",
+    musician:"A “tight” low end starts and stops with the note — no boom hanging over the next one. “Loose” or “flubby” lows keep ringing.",
+    science:"Short decay time in the low band: the faster low-frequency energy decays after each note, the tighter it sounds.",
+    measure:"Per onset: low-band (60–200 Hz) STFT power decay from post-onset peak → time to shed 20 dB. Median across onsets. Shorter = tighter.",
+    values(state){ return _vals(state, s=>s.metrics.decays && s.metrics.decays[0]!=null ? fmtMs(s.metrics.decays[0])+" to −20 dB" : null); } },
+
+  { key:"bloom", name:"Bloom", cat:"Tone descriptors", hook:"notes that swell after the attack",
+    musician:"When a note gets warmer or louder a moment after the pick — common on big-bodied acoustics and semi-hollows as the body's resonances build up.",
+    science:"Energy (often low-mid) that peaks tens to hundreds of milliseconds after the onset transient, i.e. slow build-up of body-mode resonance.",
+    measure:"Not yet computed as its own number. Its ingredients are here: compare Attack (fast transient) with low/mid Decay times — long mid decay after a modest attack is the bloom signature. A dedicated envelope view arrives with M2.",
+    values(){ return []; } },
+
+  { key:"decay-time", name:"Decay time", cat:"Tone descriptors", hook:"seconds to shed 20 dB",
+    musician:"How long the note takes to die away — the objective number behind both “sustain” and “tightness”.",
+    science:"Exponential decay appears as a straight line in dB vs time; its slope gives a decay constant. Room acoustics uses T60 (time to −60 dB); we use a T20-style figure for reliability at instrument SNRs.",
+    measure:"Linear regression of band power (dB) against time from the post-onset peak until −35 dB or the next onset; reported as 20 ⁄ |slope| seconds. Fits shallower than 10 dB/s are discarded.",
+    values(state){ return _vals(state, s=>{
+      const d=s.metrics.decays; if(!d) return null;
+      const parts=[]; if(d[0]!=null)parts.push("lows "+fmtMs(d[0])); if(d[1]!=null)parts.push("mids "+fmtMs(d[1])); if(d[2]!=null)parts.push("highs "+fmtMs(d[2]));
+      return parts.length?parts.join(" · "):null; }); } },
+
+  { key:"dynamic-range", name:"Dynamic range", cat:"Tone descriptors", hook:"loud-to-quiet spread",
+    musician:"How much louder the loud bits are than the quiet bits. Wide range = expressive, uncompressed playing; narrow = compressed or consistently dug-in.",
+    science:"The statistical spread of short-term level over the performance, ignoring silence.",
+    measure:"RMS in 50 ms frames (25 ms hop); frames above noise-floor + 8 dB count as active; DR = 95th − 10th percentile of active frame levels, in dB.",
+    values(state){ return _vals(state, s=>s.metrics.dr!=null ? s.metrics.dr.toFixed(1)+" dB" : null); } },
+
+  // ------------ physics ------------
+  { key:"fundamental", name:"Fundamental", cat:"Physics", hook:"the note's base frequency",
+    musician:"The pitch you'd sing. Everything above it is colour, not pitch.",
+    science:"The lowest partial of a periodic tone, f₀; for an ideal string f₀ = (1/2L)·√(T/μ). The pitch of the note.",
+    measure:"Estimated from the longest sustained segment by normalized autocorrelation (lag range 60–1200 Hz, parabolic refinement, octave-error guard). Confidence must exceed 0.45 or no value is shown.",
+    values(state){ return _vals(state, s=>s.metrics.f0 ? fmtHz(s.metrics.f0)+"  ·  "+noteStr(s.metrics.f0, state.a4)+"  (conf "+s.metrics.f0Conf.toFixed(2)+")" : null); } },
+
+  { key:"harmonic-series", name:"Harmonic series", cat:"Physics", hook:"overtones at integer multiples",
+    musician:"The ladder of overtones a string produces above the note: octave, fifth, second octave, major third… Their mix is most of what we call tone.",
+    science:"A vibrating string supports modes at ≈ integer multiples h·f₀ (slightly stretched by stiffness — inharmonicity). Their relative amplitudes define the steady-state timbre.",
+    measure:"This app locates harmonics 1–10 by searching h·f₀ ± 3.5 % in the sustained-segment Welch spectrum, and summarizes them as Harmonic richness and Even/odd balance.",
+    values(state){ return _vals(state, s=>s.metrics.f0 ? "f₀ "+fmtHz(s.metrics.f0)+", "+(s.metrics.harmonicsCount||0)+" harmonics located" : null); } },
+
+  { key:"helmholtz", name:"Helmholtz / air resonance", cat:"Physics", hook:"the body's breathing mode, ~90–120 Hz",
+    musician:"The acoustic guitar's “whoomp” — the low resonance you hear humming into the soundhole. It gives an acoustic its low-end bloom, and it's what a feedback-buster plug removes.",
+    science:"The air in the body cavity plus the soundhole acts as a Helmholtz resonator: f = (c/2π)·√(A/(V·L′)), typically 90–120 Hz on steel-string guitars (≈ F♯2–B2), shifted by the flexible top.",
+    measure:"In Acoustic mode: the most prominent peak between 70 and 130 Hz on a fixed 1/12-octave-smoothed curve (prominence ≥ 3 dB), labelled on the plot with frequency and nearest note.",
+    values(state){ return _vals(state, s=>s.metrics.air ? fmtHz(s.metrics.air.f)+"  ·  "+noteStr(s.metrics.air.f, state.a4) : null); } },
+
+  { key:"top-resonance", name:"Top resonance", cat:"Physics", hook:"the soundboard's main mode, ~140–260 Hz",
+    musician:"The soundboard's own preferred note. Notes near it jump out (or boom); luthiers voice the top by shaving braces to move it.",
+    science:"The first major coupled top-plate mode (T(1,1)₂ in plate-mode terms), typically 140–260 Hz, strongly coupled to the air resonance below it.",
+    measure:"In Acoustic mode: the most prominent peak between 140 and 260 Hz (fixed 1/12-oct smoothing, prominence ≥ 3 dB), excluding anything within 1/6 octave of the detected air resonance.",
+    values(state){ return _vals(state, s=>s.metrics.top ? fmtHz(s.metrics.top.f)+"  ·  "+noteStr(s.metrics.top.f, state.a4) : null); } },
+
+  { key:"resonance-peak", name:"Resonance peak", cat:"Physics", hook:"a bump the instrument adds",
+    musician:"Frequencies the guitar (or cab, or room) likes: notes there ring louder and longer than their neighbours.",
+    science:"A local maximum of the frequency response caused by a weakly-damped mode — body mode, cavity mode, speaker-cone mode.",
+    measure:"Peak picking on a FIXED 1/6-octave-smoothed dB curve (so annotations don't move when you change display smoothing): local maxima with ≥ 6 dB prominence, parabolic refinement, the six most prominent kept, labelled with frequency + nearest note.",
+    values(state){ return _vals(state, s=>s.metrics.peaks && s.metrics.peaks.length ? s.metrics.peaks.slice(0,3).map(p=>fmtHz(p.f)).join(" · ")+(s.metrics.peaks.length>3?" …":"") : null); } },
+
+  { key:"cents", name:"Cents", cat:"Physics", hook:"1⁄100 of a semitone",
+    musician:"Fine tuning units: 100 cents to a fret. Most players hear a few cents of error on sustained notes; ±5¢ is respectable tuning.",
+    science:"A logarithmic interval unit: cents = 1200·log₂(f₂/f₁). An equal-tempered semitone is exactly 100 ¢.",
+    measure:"Wherever a frequency is labelled with a note, the cent offset is 1200·log₂(f ⁄ f_note) from the nearest equal-tempered pitch at your A4 reference.",
+    values(state){ return [{slot:-1, label:"A4 reference", value:state.a4.toFixed(1)+" Hz"}]; } },
+
+  // ------------ method ------------
+  { key:"ltas", name:"LTAS (Welch average)", cat:"Method", hook:"the main curve on the plot",
+    musician:"The guitar's long-term tonal fingerprint: everything it played, averaged into one curve. Individual notes disappear; the voicing remains.",
+    science:"Long-Term Average Spectrum via Welch's method: split the signal into overlapping windowed frames, take each frame's power spectrum, and average. Averaging trades time detail for a stable spectrum estimate.",
+    measure:"8192-sample Hann windows, 50 % overlap, power average of (2|X[k]|⁄S₁)² per frame — scaled so a full-scale sine reads 0 dB. Frequency resolution is rate⁄8192 (≈ 5.4 Hz at 44.1 kHz).",
+    values(state){ return _vals(state, s=>s.welch.frames+" frames · Δf "+(s.welch.df).toFixed(2)+" Hz"); } },
+
+  { key:"octave-smoothing", name:"Octave smoothing", cat:"Method", hook:"averaging in fractional-octave bands",
+    musician:"Zoom for meaning, not detail: heavy smoothing shows tonal balance the way ears sum it; “off” shows every comb-filter wiggle of the take.",
+    science:"Each frequency's value becomes the average over a surrounding fractional-octave band — constant-Q smoothing matching the ear's roughly logarithmic resolution.",
+    measure:"Power (not dB) averaged over [f·2^(−1/2m), f·2^(+1/2m)] for 1/m-octave smoothing, m ∈ {12, 6, 3}. The current setting is printed on the plot; peak detection always uses its own fixed 1/6-octave curve.",
+    values(state){ return [{slot:-1,label:"Display smoothing", value: state.smooth? "1/"+state.smooth+" octave":"off"}]; } },
+
+  { key:"level-match", name:"Level-match", cat:"Method", hook:"same total energy, fair fight",
+    musician:"Louder always sounds better — so to compare tone honestly, make both takes equally loud first.",
+    science:"Gain applied to one signal so both have equal total energy in the analysis band; tonal differences then appear as shape differences, not level differences.",
+    measure:"Offset = 10·log₁₀(ΣP_A ⁄ ΣP_B) over 60 Hz–20 kHz, applied to B's curve (and its table/descriptor dB values) when the toggle is on. The applied offset is printed in the footer.",
+    values(state){ return state.lmOffset!=null ? [{slot:-1,label:"Current offset on B", value:fmtDb(state.lm ? state.lmOffset : 0, 2)+(state.lm?"":" (off)")}] : []; } },
+
+  { key:"dbfs", name:"dB re full scale", cat:"Method", hook:"the vertical axis",
+    musician:"How far below “as loud as this file can possibly be” each frequency sits. All curves share it, so heights are comparable.",
+    science:"Decibels relative to digital full scale: 0 dB is the largest sine a file can carry without clipping. Purely relative — no acoustic calibration (no dB SPL) is possible from a file alone.",
+    measure:"Spectrum bins are scaled so a full-scale sine peaks at 0 dB (amplitude spectrum, Hann coherent gain corrected). Levels/dynamics use RMS dBFS in 50 ms frames.",
+    values(){ return []; } },
+
+  { key:"noise-floor", name:"Noise floor", cat:"Method", hook:"the quiet part of your recording",
+    musician:"The hiss/hum/room sound under the playing. If it's close to the music, quiet details drown in it — and the analysis sees noise, not guitar.",
+    science:"The level of the recording between and beneath notes: preamp hiss, ambience, mains hum.",
+    measure:"10th percentile of 50 ms RMS frame levels. SNR shown = 95th percentile of active frames − floor. Separately, if energy 20–55 Hz exceeds 12 % of the 60 Hz–20 kHz total, the app suggests recording with a ~45 Hz high-pass — advisory only; metrics already start at 60 Hz, so rumble never contaminates them.",
+    values(state){ return _vals(state, s=>s.metrics.noiseFloor!=null ? s.metrics.noiseFloor.toFixed(1)+" dBFS"+(s.metrics.snr!=null?"  ·  SNR "+s.metrics.snr.toFixed(0)+" dB":"") : null); } },
+
+  { key:"sample-rate", name:"Sample rate", cat:"Method", hook:"read from the file, never assumed",
+    musician:"How many snapshots per second the recording took. It's a fact about the file — nothing you (or this app) should ever “set”.",
+    science:"Sampling frequency f_s; content above f_s/2 (Nyquist) cannot exist in the file. 44.1/48 kHz cover the audible band fully.",
+    measure:"Read directly from the container header (WAV fmt / AIFF COMM / FLAC STREAMINFO / MP4 stsd / MP3 frame header) and decoded in an OfflineAudioContext at exactly that rate, so the browser never silently resamples. Each file's own rate drives its frequency axis. House rule: facts come from the data; intent comes from you.",
+    values(state){ return _vals(state, s=>(s.info.sampleRate/1000)+" kHz · "+s.info.container); } },
+];
+
+const GLOSSARY_BY_KEY = new Map(GLOSSARY.map(t=>[t.key,t]));
+
+// Wrap a printed word in a clickable term button.
+function termHtml(key, text){
+  return GLOSSARY_BY_KEY.has(key)
+    ? '<button class="term" data-term="'+key+'">'+text+'</button>'
+    : text;
+}
+</script>
+<script>
+"use strict";
+/* ============================================================
+   GuitarScope — canvas rendering
+   Draw functions are parameterized by (ctx, cssW, cssH, model) so
+   the same code renders the live plots and the 2× PNG export.
+   Term "links" inside canvases are recorded as hit rectangles.
+   ============================================================ */
+
+const PLOT={ mL:52, mR:18, mT:30, mB:34 };
+const CSS_COLORS={};
+function cssColor(name){
+  if(!CSS_COLORS[name]){
+    CSS_COLORS[name]=getComputedStyle(document.documentElement).getPropertyValue("--"+name).trim();
+  }
+  return CSS_COLORS[name];
+}
+function withAlpha(hex, a){
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+const FMIN=60, FMAX=20000, LOGSPAN=Math.log(FMAX/FMIN);
+function xOfF(f, w){ return PLOT.mL + Math.log(f/FMIN)/LOGSPAN * (w-PLOT.mL-PLOT.mR); }
+function fOfX(x, w){ return FMIN*Math.exp((x-PLOT.mL)/(w-PLOT.mL-PLOT.mR)*LOGSPAN); }
+
+function setupCanvas(canvas, scale){
+  const cssW=canvas.clientWidth, cssH=canvas.clientHeight;
+  const dpr=(scale||window.devicePixelRatio||1);
+  if(canvas.width!==Math.round(cssW*dpr) || canvas.height!==Math.round(cssH*dpr)){
+    canvas.width=Math.round(cssW*dpr); canvas.height=Math.round(cssH*dpr);
+  }
+  const ctx=canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx, w:cssW, h:cssH};
+}
+
+const FONT="12px "+"system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+const FONT_S="10.5px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+const FONT_XS="10px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+
+// ---------- axes ----------
+const X_MAJOR=[100,200,500,1000,2000,5000,10000,20000];
+const X_MINOR=[60,70,80,90,300,400,600,700,800,900,3000,4000,6000,7000,8000,9000];
+function fLabel(f){ return f>=1000 ? (f/1000)+"k" : ""+f; }
+
+function drawAxes(ctx, w, h, yMin, yMax, yStep){
+  const pW=w-PLOT.mL-PLOT.mR, pH=h-PLOT.mT-PLOT.mB;
+  ctx.save();
+  ctx.font=FONT_S; ctx.textAlign="center"; ctx.textBaseline="top";
+  for(const f of X_MINOR){
+    const x=xOfF(f,w);
+    ctx.strokeStyle="rgba(255,255,255,0.028)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
+  }
+  for(const f of X_MAJOR){
+    const x=xOfF(f,w);
+    ctx.strokeStyle="rgba(255,255,255,0.06)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
+    ctx.fillStyle=cssColor("dim");
+    ctx.fillText(fLabel(f), x, PLOT.mT+pH+7);
+  }
+  ctx.textAlign="right"; ctx.textBaseline="middle";
+  for(let v=Math.ceil(yMin/yStep)*yStep; v<=yMax; v+=yStep){
+    const y=PLOT.mT+(1-(v-yMin)/(yMax-yMin))*pH;
+    ctx.strokeStyle = v===0 ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.05)";
+    ctx.beginPath(); ctx.moveTo(PLOT.mL,y); ctx.lineTo(PLOT.mL+pW,y); ctx.stroke();
+    ctx.fillStyle=cssColor("dim");
+    ctx.fillText((v>0?"+":"")+v, PLOT.mL-8, y);
+  }
+  // axis units
+  ctx.textAlign="left"; ctx.textBaseline="bottom";
+  ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint");
+  ctx.fillText("Hz", PLOT.mL+pW+3, PLOT.mT+pH+18);
+  ctx.save();
+  ctx.translate(12, PLOT.mT+2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign="right"; ctx.textBaseline="middle";
+  ctx.fillText("dB", 0, 0);
+  ctx.restore();
+  ctx.restore();
+}
+
+// ---------- shaded bands with clickable labels ----------
+function drawBands(ctx, w, h, bands, hits){
+  const pH=h-PLOT.mT-PLOT.mB;
+  ctx.save();
+  ctx.font=FONT_XS;
+  ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+  bands.forEach((b,i)=>{
+    const x0=xOfF(b.f0,w), x1=xOfF(b.f1,w);
+    ctx.fillStyle = i%2 ? "rgba(255,255,255,0.016)" : "rgba(255,255,255,0.032)";
+    ctx.fillRect(x0, PLOT.mT, x1-x0, pH);
+    const cx=(x0+x1)/2, ly=PLOT.mT+pH-8;
+    ctx.fillStyle=cssColor("dim");
+    const label=b.label.toUpperCase();
+    ctx.save(); ctx.font=FONT_XS;
+    const tw=ctx.measureText(label).width;
+    if(tw < (x1-x0)-6){
+      ctx.fillText(label, cx, ly);
+      if(hits) hits.push({x:cx-tw/2-3, y:ly-11, w:tw+6, h:14, term:b.key});
+    }
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+// ---------- tuning markers ----------
+function drawTuning(ctx, w, h, markers, hits){
+  const pH=h-PLOT.mT-PLOT.mB;
+  ctx.save();
+  ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="bottom";
+  let lastX=-100;
+  for(const m of markers){
+    if(m.f<FMIN || m.f>FMAX) continue;
+    const x=xOfF(m.f,w);
+    ctx.strokeStyle="rgba(232,229,222,0.13)";
+    ctx.setLineDash([1,3]); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
+    ctx.setLineDash([]);
+    if(x-lastX>16){ // avoid label pile-up for close strings
+      ctx.fillStyle=cssColor("mut");
+      ctx.fillText(m.name, x, PLOT.mT-4);
+      const tw=ctx.measureText(m.name).width;
+      if(hits) hits.push({x:x-tw/2-3, y:PLOT.mT-16, w:tw+6, h:14, term:"fundamental"});
+      lastX=x;
+    }
+  }
+  ctx.restore();
+}
+
+// ---------- curve + area fill ----------
+function drawCurve(ctx, w, h, grid, db, yMin, yMax, color, fillAlpha){
+  const pH=h-PLOT.mT-PLOT.mB;
+  const yOf=v=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,v))-yMin)/(yMax-yMin))*pH;
+  ctx.save();
+  ctx.beginPath();
+  for(let i=0;i<grid.length;i++){
+    const x=xOfF(grid[i],w), y=yOf(db[i]);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  if(fillAlpha>0){
+    ctx.save();
+    ctx.lineTo(xOfF(grid[grid.length-1],w), PLOT.mT+pH);
+    ctx.lineTo(xOfF(grid[0],w), PLOT.mT+pH);
+    ctx.closePath();
+    const grad=ctx.createLinearGradient(0,PLOT.mT,0,PLOT.mT+pH);
+    grad.addColorStop(0, withAlpha(color, fillAlpha));
+    grad.addColorStop(1, withAlpha(color, 0.0));
+    ctx.fillStyle=grad;
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.beginPath();
+  for(let i=0;i<grid.length;i++){
+    const x=xOfF(grid[i],w), y=yOf(db[i]);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle=color; ctx.lineWidth=1.6; ctx.lineJoin="round";
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ---------- peak & resonance annotations ----------
+function rectsOverlap(a,b){
+  return a.x<b.x+b.w && b.x<a.x+a.w && a.y<b.y+b.h && b.y<a.y+a.h;
+}
+// occ: occupied label rectangles (legend, status chip, labels already placed).
+// Each label tries its preferred side of the dot first, then flips and steps
+// away until it lands clear; the chosen rect is added to occ.
+function drawPeakDots(ctx, w, h, peaks, grid, db, yMin, yMax, color, hits, occ){
+  const pH=h-PLOT.mT-PLOT.mB;
+  const yOf=v=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,v))-yMin)/(yMax-yMin))*pH;
+  const dbAt=f=>{
+    const i=Math.round(Math.log(f/grid[0])/Math.log(grid[grid.length-1]/grid[0])*(grid.length-1));
+    return db[Math.max(0,Math.min(db.length-1,i))];
+  };
+  ctx.save();
+  ctx.font=FONT_XS; ctx.textAlign="center";
+  peaks.forEach(p=>{
+    if(p.f<FMIN||p.f>FMAX) return;
+    const x=xOfF(p.f,w), y=yOf(dbAt(p.f));
+    ctx.fillStyle=color;
+    ctx.beginPath(); ctx.arc(x,y,2.4,0,2*Math.PI); ctx.fill();
+    if(p.labelText){
+      const tw=ctx.measureText(p.labelText).width;
+      const cands = p.labelUp===false
+        ? [y+16, y-10, y+28, y-22, y+40]
+        : [y-10, y+16, y-22, y+28, y-34];
+      let ly=cands[0], rect=null;
+      for(const cy of cands){
+        if(cy-10<PLOT.mT-14) continue; // keep labels off the string-marker row
+        const r={x:x-tw/2-3, y:cy-10, w:tw+6, h:13};
+        if(!occ || !occ.some(o=>rectsOverlap(o,r))){ ly=cy; rect=r; break; }
+      }
+      if(!rect) rect={x:x-tw/2-3, y:ly-10, w:tw+6, h:13};
+      ctx.fillStyle=withAlpha(color,0.85);
+      ctx.fillText(p.labelText, x, ly);
+      if(occ) occ.push(rect);
+      if(hits) hits.push({x:rect.x, y:rect.y, w:rect.w, h:rect.h, term:p.term||"resonance-peak"});
+    }
+  });
+  ctx.restore();
+}
+
+// ---------- status chip (smoothing / level-match) drawn on plot ----------
+function drawStatusChip(ctx, w, text){
+  ctx.save();
+  ctx.font=FONT_XS;
+  const tw=ctx.measureText(text).width;
+  const x=w-PLOT.mR-tw-16, y=PLOT.mT+8;
+  ctx.fillStyle="rgba(26,30,37,0.85)";
+  ctx.strokeStyle="rgba(49,57,69,0.9)";
+  roundRect(ctx, x-8, y-3, tw+16, 18, 9); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=cssColor("mut");
+  ctx.textAlign="left"; ctx.textBaseline="middle";
+  ctx.fillText(text, x, y+6);
+  ctx.restore();
+  return {x:x-8, y:y-3, w:tw+16, h:18};
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+// ---------- legend ----------
+function drawLegend(ctx, w, items){
+  ctx.save();
+  ctx.font=FONT_S; ctx.textBaseline="middle";
+  let x=PLOT.mL+10;
+  const y=PLOT.mT+14;
+  for(const it of items){
+    ctx.fillStyle=it.color;
+    ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 2*Math.PI); ctx.fill();
+    ctx.fillStyle=cssColor("mut"); ctx.textAlign="left";
+    const label=it.label.length>34 ? it.label.slice(0,32)+"…" : it.label;
+    ctx.fillText(label, x+9, y+0.5);
+    x += 9 + ctx.measureText(label).width + 22;
+  }
+  ctx.restore();
+  return {x:PLOT.mL+2, y:y-10, w:x-PLOT.mL-16, h:20};
+}
+
+// ---------- full spectrum scene ----------
+function drawSpectrumScene(ctx, w, h, model, hits){
+  ctx.clearRect(0,0,w,h);
+  if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
+  drawBands(ctx, w, h, model.bands, hits);
+  drawAxes(ctx, w, h, model.yMin, model.yMax, 10);
+  drawTuning(ctx, w, h, model.markers, hits);
+  for(const c of model.curves){
+    drawCurve(ctx, w, h, model.grid, c.db, model.yMin, model.yMax, c.color, 0.10);
+  }
+  // legend + chip first so peak labels can dodge their rectangles
+  const occ=[
+    drawLegend(ctx, w, model.curves.map(c=>({color:c.color, label:c.label}))),
+    drawStatusChip(ctx, w, model.statusText),
+  ];
+  for(const c of model.curves){
+    if(c.annotations && c.annotations.length)
+      drawPeakDots(ctx, w, h, c.annotations, model.grid, c.db, model.yMin, model.yMax, c.color, hits, occ);
+  }
+}
+
+// ---------- difference scene ----------
+function drawDiffScene(ctx, w, h, model){
+  ctx.clearRect(0,0,w,h);
+  const pH=h-PLOT.mT-PLOT.mB, pW=w-PLOT.mL-PLOT.mR;
+  const {yMax}=model, yMin=-yMax;
+  const yOf=v=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,v))-yMin)/(yMax-yMin))*pH;
+  ctx.save();
+  // x grid
+  ctx.font=FONT_S; ctx.textAlign="center"; ctx.textBaseline="top";
+  for(const f of X_MAJOR){
+    const x=xOfF(f,w);
+    ctx.strokeStyle="rgba(255,255,255,0.05)";
+    ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
+    ctx.fillStyle=cssColor("dim"); ctx.fillText(fLabel(f), x, PLOT.mT+pH+7);
+  }
+  // y grid
+  ctx.textAlign="right"; ctx.textBaseline="middle";
+  const step=yMax>12?6:3;
+  for(let v=Math.ceil(yMin/step)*step; v<=yMax; v+=step){
+    const y=yOf(v);
+    ctx.strokeStyle="rgba(255,255,255,0.05)";
+    ctx.beginPath(); ctx.moveTo(PLOT.mL,y); ctx.lineTo(PLOT.mL+pW,y); ctx.stroke();
+    ctx.fillStyle=cssColor("dim"); ctx.fillText((v>0?"+":"")+v, PLOT.mL-8, y);
+  }
+  // zero line
+  ctx.strokeStyle="rgba(232,229,222,0.28)"; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(PLOT.mL,yOf(0)); ctx.lineTo(PLOT.mL+pW,yOf(0)); ctx.stroke();
+
+  const {grid, diff}=model;
+  // sign-split fills: above zero = A louder (A color), below = B louder
+  for(const sign of [1,-1]){
+    ctx.beginPath();
+    ctx.moveTo(xOfF(grid[0],w), yOf(0));
+    for(let i=0;i<grid.length;i++){
+      const v=diff[i];
+      ctx.lineTo(xOfF(grid[i],w), yOf(sign>0 ? Math.max(0,v) : Math.min(0,v)));
+    }
+    ctx.lineTo(xOfF(grid[grid.length-1],w), yOf(0));
+    ctx.closePath();
+    ctx.fillStyle=withAlpha(sign>0?model.colorA:model.colorB, 0.20);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  for(let i=0;i<grid.length;i++){
+    const x=xOfF(grid[i],w), y=yOf(diff[i]);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle="rgba(232,229,222,0.75)"; ctx.lineWidth=1.3; ctx.lineJoin="round";
+  ctx.stroke();
+  // side labels
+  ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="middle";
+  ctx.fillStyle=withAlpha(model.colorA,0.8);
+  ctx.fillText("▲ "+model.nameA+" louder", PLOT.mL+8, PLOT.mT+10);
+  ctx.fillStyle=withAlpha(model.colorB,0.8);
+  ctx.fillText("▼ "+model.nameB+" louder", PLOT.mL+8, PLOT.mT+pH-10);
+  ctx.restore();
+}
+</script>
+<script>
+"use strict";
+/* ============================================================
+   GuitarScope — application
+   State, file loading, analysis pipeline, rendering, exports,
+   glossary UI, snapshots, demo pair, keyboard, drag & drop.
+   ============================================================ */
+
+// ---------- tiny helpers ----------
+const el=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function shortName(n,max){
+  let s=String(n).replace(/\.[a-z0-9]{2,5}$/i,"");
+  if(s.length>max) s=s.slice(0,max-1)+"…";
+  return s;
+}
+function rateK(hz){ return (hz/1000).toFixed(3).replace(/0+$/,"").replace(/\.$/,"")+" kHz"; }
+
+const SLOT_LETTER=["A","B"];
+let COLORS=["#d9a35b","#5eb3ab"];
+const GRID=makeLogGrid(700,60,20000);
+
+// ---------- state (contract shared with the glossary) ----------
+const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
+              a4:440, smooth:6, lm:false, lmOffset:null, diff:false };
+const cardUI=[{mode:"empty"},{mode:"empty"}];
+const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
+
+function anyLoaded(){ return !!(state.slots[0]||state.slots[1]); }
+function bothLoaded(){ return !!(state.slots[0]&&state.slots[1]); }
+
+// ---------- DOM ----------
+const cards=[el("card0"),el("card1")];
+const fileInputs=[el("fileInput0"),el("fileInput1")];
+const modeSeg=el("modeSeg"), tuningSel=el("tuningSel"),
+      customOffsetWrap=el("customOffsetWrap"), customOffsetEl=el("customOffset"),
+      a4Input=el("a4Input"), glossaryBtn=el("glossaryBtn");
+const smoothSeg=el("smoothSeg"),
+      lmSwitch=el("lmSwitch"), lmToggle=el("lmToggle"),
+      diffSwitch=el("diffSwitch"), diffToggle=el("diffToggle"),
+      pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn");
+const specWrap=el("specWrap"), specCanvas=el("specCanvas"),
+      specXline=el("specXline"), specReadout=el("specReadout"),
+      specEmpty=el("specEmpty"), demoBtn=el("demoBtn");
+const diffCard=el("diffCard"), diffSub=el("diffSub"), diffWrap=el("diffWrap"),
+      diffCanvas=el("diffCanvas"), diffXline=el("diffXline"), diffReadout=el("diffReadout");
+const bandsCard=el("bandsCard"), bandsTable=el("bandsTable"), bandsFoot=el("bandsFoot");
+const toneCard=el("toneCard"), toneRows=el("toneRows"),
+      prosePara=el("prosePara"), toneNote=el("toneNote");
+const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
+const glossBackdrop=el("glossBackdrop"), glossPanel=el("glossPanel"),
+      glossClose=el("glossClose"), glossSearch=el("glossSearch"), glossList=el("glossList");
+const popover=el("popover"), dropOverlay=el("dropOverlay"), dropTitle=el("dropTitle"),
+      toastEl=el("toast");
+
+// ---------- bands ----------
+function bandsFor(mode){
+  const mid = mode==="acoustic"
+    ? {key:"boxiness", label:"Warmth / Boxiness", f0:200, f1:500,
+       termsHtml:termHtml("warmth","Warmth")+" / "+termHtml("boxiness","Boxiness")}
+    : {key:"warmth", label:"Warmth / Mud", f0:200, f1:500,
+       termsHtml:termHtml("warmth","Warmth")+" / "+termHtml("mud","Mud")};
+  return [
+    {key:"low-end",  label:"Low end",  f0:60,   f1:200,   termsHtml:termHtml("low-end","Low end")},
+    mid,
+    {key:"body-band",label:"Body",     f0:500,  f1:1200,  termsHtml:termHtml("body-band","Body")},
+    {key:"presence", label:"Presence", f0:2000, f1:5000,  termsHtml:termHtml("presence","Presence")},
+    {key:"air",      label:"Air",      f0:5000, f1:12000, termsHtml:termHtml("air","Air")},
+  ];
+}
+
+// ---------- analysis pipeline ----------
+function setCardProgress(i,label,frac){
+  if(cardUI[i].mode!=="loading") return;
+  cardUI[i].label=label; cardUI[i].frac=frac;
+  const bar=cards[i].querySelector(".progressbar i"), lb=cards[i].querySelector(".progresslabel");
+  if(bar) bar.style.width=Math.round(Math.max(0,Math.min(1,frac))*100)+"%";
+  if(lb) lb.textContent=label;
+}
+
+async function loadFileIntoSlot(i,file){
+  if(/\.json$/i.test(file.name)||file.type==="application/json"){
+    try{ await loadSnapshotFile(file); }
+    catch(err){ toast("Snapshot: "+(err.message||"could not be read."),true); }
+    return;
+  }
+  const seq=++loadSeq[i];
+  cardUI[i]={mode:"loading",name:file.name,label:"Reading file…",frac:0.02};
+  renderCard(i);
+  try{
+    const buf=await file.arrayBuffer();
+    if(seq!==loadSeq[i]) return;
+    const sniffed=sniffAudioInfo(buf);
+    if(!sniffed){
+      const e=new Error("Couldn't determine this file's sample rate from its bytes.");
+      e.hint="GuitarScope refuses to guess a rate. Try a WAV, AIFF, FLAC, MP3 or M4A export.";
+      throw e;
+    }
+    setCardProgress(i,"Decoding at "+sniffed.sampleRate+" Hz…",0.08);
+    const audioBuf=await decodeAtNativeRate(buf,sniffed);
+    if(seq!==loadSeq[i]) return;
+    const slot={
+      name:file.name, kind:"file",
+      info:{ container:sniffed.container, sampleRate:sniffed.sampleRate,
+             channels:sniffed.channels!=null?sniffed.channels:audioBuf.numberOfChannels,
+             bitDepth:sniffed.bitDepth },
+      duration:audioBuf.duration, samples:null, audioBuf,
+      channelMode:"mid", metrics:{}
+    };
+    await analyzeSlot(i,slot,seq);
+  }catch(err){
+    if(seq!==loadSeq[i]) return;
+    state.slots[i]=null;
+    cardUI[i]={mode:"error",name:file.name,
+      message:err.message||"This file could not be decoded.",
+      hint:err.hint||"Try a different export of the same recording."};
+    renderCard(i);
+    afterDataChange(true);
+  }
+}
+
+async function analyzeSlot(i,slot,seq){
+  if(seq==null) seq=++loadSeq[i];
+  if(cardUI[i].mode!=="loading"){ cardUI[i]={mode:"loading",name:slot.name,label:"Analyzing…",frac:0.1}; renderCard(i); }
+  try{
+    if(slot.audioBuf) slot.samples=mixChannel(slot.audioBuf,slot.channelMode);
+    setCardProgress(i,"Averaging spectrum…",0.15);
+    slot.welch=await welch(slot.samples,slot.info.sampleRate,8192,4096,
+      f=>{ if(seq===loadSeq[i]) setCardProgress(i,"Averaging spectrum…",0.15+f*0.55); });
+    if(seq!==loadSeq[i]) return;
+    computeSpectralExtras(slot);
+    setCardProgress(i,"Timing, harmonics & dynamics…",0.8);
+    await new Promise(r=>setTimeout(r,0));
+    await computeTimeMetrics(slot);
+    if(seq!==loadSeq[i]) return;
+    slot._dispCache=null;
+    state.slots[i]=slot;
+    cardUI[i]={mode:"loaded"};
+    renderCard(i);
+    afterDataChange(true);
+  }catch(err){
+    if(seq!==loadSeq[i]) return;
+    state.slots[i]=null;
+    cardUI[i]={mode:"error",name:slot.name,
+      message:err.message||"Analysis failed.",
+      hint:"Try a different file, or a shorter excerpt."};
+    renderCard(i);
+    afterDataChange(true);
+  }
+}
+
+function computeSpectralExtras(slot){
+  const {power,df}=slot.welch;
+  const m=slot.metrics=slot.metrics||{};
+  m.centroid=spectralCentroid(power,df,60,20000);
+  m.tilt=spectralTilt(power,df);
+  const p6=smoothOct(power,df,6);
+  const db6=new Float64Array(p6.length);
+  for(let k=0;k<p6.length;k++) db6[k]=powerToDb(p6[k]);
+  slot.fixed6db=db6;
+  m.peaks=detectPeaks(db6,df,{fmin:70,fmax:12000,minProm:6,maxCount:6});
+  m.rumble=rumbleCheck(power,df);
+  // body resonances (shown in acoustic mode): search a lightly-smoothed curve
+  const p12=smoothOct(power,df,12);
+  const db12=new Float64Array(p12.length);
+  for(let k=0;k<p12.length;k++) db12[k]=powerToDb(p12[k]);
+  const airC=detectPeaks(db12,df,{fmin:70,fmax:130,minProm:3,maxCount:1,minDistOct:1/12});
+  m.air=airC.length?{f:airC[0].f,db:airC[0].db}:null;
+  const topC=detectPeaks(db12,df,{fmin:140,fmax:260,minProm:3,maxCount:3,minDistOct:1/12});
+  let top=null;
+  for(const t of topC){
+    if(!m.air||Math.abs(Math.log2(t.f/m.air.f))>1/6){ top={f:t.f,db:t.db}; break; }
+  }
+  m.top=top;
+}
+
+async function computeTimeMetrics(slot){
+  if(!slot.samples) return; // snapshot: keep the stored time-domain metrics
+  const x=slot.samples, rate=slot.info.sampleRate;
+  const m=slot.metrics;
+  const dyn=dynamicsMetrics(x,rate);
+  m.dr=dyn.dr; m.noiseFloor=dyn.noiseFloor; m.snr=dyn.snr;
+  m.clipped=dyn.clipped; m.clipCount=dyn.clipCount;
+  const sb=stftBands(x,rate,[[60,200],[200,1200],[2000,6000]]);
+  const onsets=detectOnsets(sb.flux,sb.frameRate);
+  m.onsetCount=onsets.length;
+  const {env,envRate}=amplitudeEnvelope(x,rate);
+  m.attack=attackTimes(env,envRate,onsets.map(fi=>fi/sb.frameRate));
+  m.decays=bandDecays(sb.bandP,sb.frameRate,onsets);
+  // longest sustained segment: biggest inter-onset gap, else the loudest second
+  m.f0=null; m.f0Conf=null; m.richness=null; m.evenOdd=null; m.harmonicsCount=null;
+  let segStart=-1, segLen=0;
+  const times=onsets.map(fi=>fi/sb.frameRate);
+  let bestGap=0, bestT=-1;
+  for(let k=0;k<times.length;k++){
+    const end=(k+1<times.length)?times[k+1]:x.length/rate;
+    const gap=end-times[k];
+    if(gap>bestGap){ bestGap=gap; bestT=times[k]; }
+  }
+  if(bestGap>=0.35&&bestT>=0){
+    segStart=Math.round((bestT+0.05)*rate);
+    segLen=Math.min(Math.round((bestGap-0.05)*rate),x.length-segStart);
+  }else{
+    const rms=shortTermRms(x,rate);
+    let bi=0; for(let k=1;k<rms.length;k++) if(rms[k]>rms[bi]) bi=k;
+    segStart=Math.round(bi*0.025*rate);
+    segLen=Math.min(Math.round(1.0*rate),x.length-segStart);
+  }
+  if(segLen>2048&&segStart>=0){
+    // Pitch from the temporal middle of the segment: right after the onset
+    // earlier notes may still ring, and the autocorrelation of a two-note
+    // mixture peaks at the notes' common period (a subharmonic), not at
+    // either pitch. Mid-segment the sustained note dominates.
+    const f0win=Math.min(8192,segLen);
+    const f0start=segStart+Math.max(0,Math.round((segLen-f0win)/2));
+    const f0r=autocorrF0(x,rate,f0start,f0win);
+    if(f0r){
+      m.f0=f0r.f0; m.f0Conf=f0r.conf;
+      const hp=await harmonicProfile(x,rate,segStart,segLen,f0r.f0);
+      if(hp){ m.richness=hp.richness; m.evenOdd=hp.evenOdd; m.harmonicsCount=hp.harmonics.length; }
+    }
+  }
+}
+
+function clearSlot(i){
+  loadSeq[i]++;
+  state.slots[i]=null;
+  cardUI[i]={mode:"empty"};
+  renderCard(i);
+  afterDataChange(true);
+}
+function setChannel(i,mode){
+  const s=state.slots[i];
+  if(!s||!s.audioBuf||s.channelMode===mode) return;
+  s.channelMode=mode; s._dispCache=null;
+  analyzeSlot(i,s);
+}
+
+// ---------- displayed curves & animation ----------
+function displayedDb(i){
+  const s=state.slots[i];
+  if(!s||!s.welch) return null;
+  const off=(i===1&&state.lm&&state.lmOffset!=null)?state.lmOffset:0;
+  const key=state.smooth+"|"+off.toFixed(3);
+  if(s._dispCache&&s._dispCache.key===key) return s._dispCache.db;
+  const {power,df}=s.welch;
+  const sm=smoothOct(power,df,state.smooth);
+  const db=new Float64Array(sm.length);
+  for(let k=0;k<sm.length;k++) db[k]=powerToDb(sm[k]);
+  const g=resampleToGrid(db,df,GRID);
+  if(off) for(let k=0;k<g.length;k++) g[k]+=off;
+  s._dispCache={key,db:g};
+  return g;
+}
+
+let dispTarget=[null,null];       // final (settled) curves
+let dispDb=[null,null];           // currently drawn (possibly mid-animation)
+let yRange={min:-85,max:-10};
+let diffYMax=9, diffBuf=null;
+const anim={from:[null,null],fromRange:null,toRange:yRange,buf:[null,null],start:0};
+let rafId=0;
+const specHits=[];
+
+function updateCurves(animate){
+  const to=[displayedDb(0),displayedDb(1)];
+  let mx=-Infinity;
+  for(const d of to) if(d) for(let k=0;k<d.length;k++) if(d[k]>mx) mx=d[k];
+  const tr=isFinite(mx)
+    ? (()=>{const top=Math.min(5,Math.ceil((mx+3)/5)*5); return {min:top-75,max:top};})()
+    : {min:-85,max:-10};
+  if(to[0]&&to[1]){
+    let ma=0;
+    for(let k=0;k<to[0].length;k++){ const v=Math.abs(to[0][k]-to[1][k]); if(v>ma) ma=v; }
+    diffYMax=Math.min(30,Math.max(6,Math.ceil((ma+1)/3)*3));
+  }
+  const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const canAnim=animate&&!reduced&&(dispDb[0]||dispDb[1]);
+  dispTarget=to; anim.toRange=tr;
+  if(canAnim){
+    anim.from=[dispDb[0],dispDb[1]];
+    anim.fromRange={min:yRange.min,max:yRange.max};
+    anim.buf=[to[0]?new Float64Array(to[0].length):null,
+              to[1]?new Float64Array(to[1].length):null];
+    anim.start=performance.now();
+    startAnimLoop();
+  }else{
+    anim.from=[null,null]; anim.fromRange=null;
+    dispDb=to.slice(); yRange=tr;
+    requestDraw();
+  }
+}
+function startAnimLoop(){ if(!rafId) rafId=requestAnimationFrame(animTick); }
+function animTick(ts){
+  rafId=0;
+  const t=Math.min(1,(ts-anim.start)/220);
+  const k=1-Math.pow(1-t,3); // easeOutCubic
+  for(let i=0;i<2;i++){
+    const to=dispTarget[i];
+    if(!to){ dispDb[i]=null; continue; }
+    const from=anim.from[i];
+    if(!from||t>=1){ dispDb[i]=to; continue; }
+    const buf=anim.buf[i];
+    for(let j=0;j<to.length;j++) buf[j]=from[j]+(to[j]-from[j])*k;
+    dispDb[i]=buf;
+  }
+  const fr=anim.fromRange, tr=anim.toRange;
+  yRange=(fr&&t<1)
+    ? {min:fr.min+(tr.min-fr.min)*k, max:fr.max+(tr.max-fr.max)*k}
+    : tr;
+  drawAll();
+  if(t<1) startAnimLoop();
+  else { anim.from=[null,null]; anim.fromRange=null; }
+}
+function requestDraw(){
+  if(rafId) return;
+  rafId=requestAnimationFrame(()=>{ rafId=0; drawAll(); });
+}
+
+function statusText(){
+  let t=state.smooth?("1/"+state.smooth+"-oct smoothing"):"smoothing off";
+  if(state.lm&&state.lmOffset!=null&&bothLoaded()) t+=" · level-match "+fmtDb(state.lmOffset,1)+" on B";
+  return t;
+}
+function tuningMarkers(){
+  return tuningMidi(state.tuning,state.customOffset).map(mi=>{
+    const f=midiToFreq(mi,state.a4);
+    return {f,name:noteInfo(f,state.a4).name};
+  });
+}
+function annotationsFor(slot,i){
+  const m=slot.metrics||{}, anns=[], a4=state.a4;
+  let peaks=(m.peaks||[]).slice();
+  if(state.mode==="acoustic"){
+    if(m.air){
+      anns.push({f:m.air.f,term:"helmholtz",labelUp:i===0,
+        labelText:"Air "+Math.round(m.air.f)+" Hz · "+noteInfo(m.air.f,a4).name});
+      peaks=peaks.filter(p=>Math.abs(Math.log2(p.f/m.air.f))>1/6);
+    }
+    if(m.top){
+      anns.push({f:m.top.f,term:"top-resonance",labelUp:i===0,
+        labelText:"Top "+Math.round(m.top.f)+" Hz · "+noteInfo(m.top.f,a4).name});
+      peaks=peaks.filter(p=>Math.abs(Math.log2(p.f/m.top.f))>1/6);
+    }
+  }
+  const byProm=peaks.slice().sort((a,b)=>b.prom-a.prom);
+  const labeled=new Set(byProm.slice(0,3));
+  for(const p of peaks){
+    anns.push({f:p.f,term:"resonance-peak",labelUp:i===0,
+      labelText:labeled.has(p)?(fmtHz(p.f,1)+" · "+noteInfo(p.f,a4).name):null});
+  }
+  return anns;
+}
+function buildSpecModel(forExport){
+  const curves=[];
+  for(let i=0;i<2;i++){
+    const s=state.slots[i];
+    const db=forExport?dispTarget[i]:dispDb[i];
+    if(!s||!db) continue;
+    curves.push({db,color:COLORS[i],
+      label:SLOT_LETTER[i]+" · "+shortName(s.name,26),
+      annotations:annotationsFor(s,i)});
+  }
+  const r=forExport?anim.toRange:yRange;
+  return { exportBg:!!forExport, bands:bandsFor(state.mode),
+           yMin:r.min, yMax:r.max, markers:tuningMarkers(), grid:GRID,
+           curves, statusText:statusText() };
+}
+function diffVisible(){ return bothLoaded()&&state.diff; }
+function drawAll(){
+  const {ctx,w,h}=setupCanvas(specCanvas);
+  specHits.length=0;
+  drawSpectrumScene(ctx,w,h,buildSpecModel(false),specHits);
+  if(diffVisible()&&dispDb[0]&&dispDb[1]){
+    const d=setupCanvas(diffCanvas);
+    if(!diffBuf) diffBuf=new Float64Array(GRID.length);
+    for(let k=0;k<GRID.length;k++) diffBuf[k]=dispDb[0][k]-dispDb[1][k];
+    drawDiffScene(d.ctx,d.w,d.h,{grid:GRID,diff:diffBuf,yMax:diffYMax,
+      colorA:COLORS[0],colorB:COLORS[1],
+      nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)});
+  }
+}
+
+// ---------- crosshair readouts ----------
+function attachCrosshair(wrap,canvas,xline,readout,isDiff){
+  wrap.addEventListener("mousemove",e=>{
+    const rect=canvas.getBoundingClientRect();
+    const x=e.clientX-rect.left, y=e.clientY-rect.top, w=rect.width;
+    if(!isDiff){
+      const hot=specHits.some(hh=>x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h);
+      canvas.style.cursor=hot?"pointer":"crosshair";
+    }
+    if(x<PLOT.mL||x>w-PLOT.mR||!anyLoaded()){
+      xline.style.display="none"; readout.style.display="none"; return;
+    }
+    const f=fOfX(x,w);
+    const wrapRect=wrap.getBoundingClientRect();
+    const wx=e.clientX-wrapRect.left;
+    xline.style.display="block"; xline.style.left=wx+"px";
+    const gi=Math.max(0,Math.min(GRID.length-1,
+      Math.round(Math.log(f/FMIN)/LOGSPAN*(GRID.length-1))));
+    let html='<div class="rf">'+fmtHz(f)+'</div><div class="rn">'+esc(noteStr(f,state.a4))+'</div>';
+    if(isDiff){
+      if(dispTarget[0]&&dispTarget[1]){
+        const v=dispTarget[0][gi]-dispTarget[1][gi];
+        const wi=v>=0?0:1;
+        html+='<div class="row"><span class="dot" style="background:'+COLORS[wi]+'"></span>'+
+              '<span class="nm">'+esc(shortName(state.slots[wi].name,14))+' louder</span>'+
+              '<span class="db">'+fmtDb(Math.abs(v),1)+'</span></div>';
+      }
+    }else{
+      for(let i=0;i<2;i++){
+        const s=state.slots[i];
+        if(!s||!dispTarget[i]) continue;
+        html+='<div class="row"><span class="dot" style="background:'+COLORS[i]+'"></span>'+
+              '<span class="nm">'+esc(shortName(s.name,16))+'</span>'+
+              '<span class="db">'+dispTarget[i][gi].toFixed(1)+' dB</span></div>';
+      }
+    }
+    readout.innerHTML=html;
+    readout.style.display="block";
+    const rw=readout.offsetWidth;
+    readout.style.left=((wx+16+rw>wrapRect.width)?(wx-14-rw):(wx+14))+"px";
+    readout.style.top="12px";
+  });
+  wrap.addEventListener("mouseleave",()=>{
+    xline.style.display="none"; readout.style.display="none";
+  });
+}
+
+// ---------- band table ----------
+function rangeStr(f0,f1){
+  if(f1<1000) return f0+"–"+f1+" Hz";
+  if(f0>=1000) return (f0/1000)+"–"+(f1/1000)+" kHz";
+  return f0+" Hz–"+(f1/1000)+" kHz";
+}
+function renderBandsTable(){
+  const s0=state.slots[0], s1=state.slots[1];
+  if(!s0&&!s1) return;
+  const both=!!(s0&&s1);
+  const tot=[s0?bandPower(s0.welch.power,s0.welch.df,60,20000):null,
+             s1?bandPower(s1.welch.power,s1.welch.df,60,20000):null];
+  let html='<thead><tr><th>Band</th><th>Range</th>'+
+    '<th>'+(s0?esc(shortName(s0.name,16)):"A")+'</th>'+
+    '<th>'+(s1?esc(shortName(s1.name,16)):"B")+'</th>'+
+    '<th>Δ (A − B)</th></tr></thead><tbody>';
+  for(const b of bandsFor(state.mode)){
+    const pa=s0?bandPower(s0.welch.power,s0.welch.df,b.f0,b.f1):null;
+    const pb=s1?bandPower(s1.welch.power,s1.welch.df,b.f0,b.f1):null;
+    const shA=pa!=null?fmtPct(pa/Math.max(tot[0],1e-30)):"—";
+    const shB=pb!=null?fmtPct(pb/Math.max(tot[1],1e-30)):"—";
+    let dCell='<td class="delta-0">—</td>';
+    if(both){
+      const d=10*Math.log10(Math.max(pa,1e-30)/Math.max(pb,1e-30))-(state.lm&&state.lmOffset!=null?state.lmOffset:0);
+      const cls=d>0.75?"delta-a":(d<-0.75?"delta-b":"delta-0");
+      dCell='<td class="'+cls+'">'+fmtDb(d,1)+'</td>';
+    }
+    html+='<tr><td>'+b.termsHtml+'</td><td class="rng">'+rangeStr(b.f0,b.f1)+'</td>'+
+          '<td>'+shA+'</td><td>'+shB+'</td>'+dCell+'</tr>';
+  }
+  bandsTable.innerHTML=html+"</tbody>";
+  let foot="Shares are of each recording's own 60 Hz–20 kHz energy — level-independent, and they won't sum to 100 % (the unshaded 1.2–2 kHz region is analyzed but deliberately unnamed).";
+  if(both) foot+=state.lm&&state.lmOffset!=null
+    ? " Δ is band level A − B after the "+fmtDb(state.lmOffset,2)+" level-match on B."
+    : " Δ is raw band level A − B (level-match off).";
+  bandsFoot.innerHTML=foot;
+}
+
+// ---------- tone character ----------
+function toneDefs(){
+  return [
+    {term:"brightness", name:"Brightness", unit:"spectral centroid, 60 Hz–20 kHz",
+     lo:400, hi:6000, log:true, ticks:["400 Hz","6 kHz"],
+     val:s=>s.metrics.centroid,
+     fmt:v=>fmtHz(v)+"<small>"+esc(noteStr(v,state.a4))+"</small>"},
+    {term:"warmth", name:"Warmth", unit:"energy share, 200–500 Hz",
+     lo:0, hi:0.6, ticks:["0 %","60 %"],
+     val:s=>bandPower(s.welch.power,s.welch.df,200,500)/Math.max(bandPower(s.welch.power,s.welch.df,60,20000),1e-30),
+     fmt:v=>fmtPct(v)},
+    {term:"low-end", name:"Fullness", unit:"energy share, 60–200 Hz",
+     lo:0, hi:0.6, ticks:["0 %","60 %"],
+     val:s=>bandPower(s.welch.power,s.welch.df,60,200)/Math.max(bandPower(s.welch.power,s.welch.df,60,20000),1e-30),
+     fmt:v=>fmtPct(v)},
+    {term:"spectral-tilt", name:"Spectral tilt", unit:"dB per octave, 100 Hz–10 kHz fit",
+     lo:-14, hi:0, ticks:["−14","0 dB/oct"],
+     val:s=>s.metrics.tilt,
+     fmt:v=>v.toFixed(1)+" dB/oct"},
+    {term:"harmonic-richness", name:"Harmonic richness", unit:"harmonics 2–10 vs fundamental",
+     lo:-6, hi:24, ticks:["−6 dB","+24 dB"],
+     val:s=>s.metrics.richness,
+     fmt:v=>fmtDb(v,1)},
+    {term:"even-odd", name:"Even / odd balance", unit:"even ÷ odd harmonic energy",
+     lo:-12, hi:12, zero:0, ticks:["odd −12","+12 even"],
+     val:s=>s.metrics.evenOdd,
+     fmt:v=>fmtDb(v,1)+"<small>"+(v>0.5?"even-leaning":(v<-0.5?"odd-leaning":"balanced"))+"</small>"},
+    {term:"attack", name:"Attack", unit:"median 10→90 % rise",
+     lo:0.002, hi:0.12, log:true, ticks:["2 ms","120 ms"],
+     val:s=>s.metrics.attack,
+     fmt:v=>fmtMs(v)},
+    {term:"tightness", name:"Tightness", unit:"60–200 Hz decay to −20 dB",
+     lo:0.06, hi:3, log:true, ticks:["60 ms","3 s"],
+     val:s=>s.metrics.decays?s.metrics.decays[0]:null,
+     fmt:v=>fmtMs(v)},
+    {term:"sustain", name:"Sustain", unit:"200–1200 Hz decay to −20 dB",
+     lo:0.06, hi:3, log:true, ticks:["60 ms","3 s"],
+     val:s=>s.metrics.decays?s.metrics.decays[1]:null,
+     fmt:v=>fmtMs(v)},
+    {term:"dynamic-range", name:"Dynamic range", unit:"active-frame P95 − P10",
+     lo:4, hi:30, ticks:["4 dB","30 dB"],
+     val:s=>s.metrics.dr,
+     fmt:v=>v.toFixed(1)+" dB"},
+  ];
+}
+function toneRowHtml(d){
+  const vals=[0,1].map(i=>{
+    const s=state.slots[i];
+    if(!s||!s.metrics) return null;
+    let v=null;
+    try{ v=d.val(s); }catch(_e){}
+    if(v==null||!isFinite(v)) return null;
+    if(d.log&&v<=0) return null;
+    return v;
+  });
+  const pos=v=>{
+    const p=d.log?Math.log(v/d.lo)/Math.log(d.hi/d.lo):(v-d.lo)/(d.hi-d.lo);
+    return (Math.max(0,Math.min(1,p))*100).toFixed(1);
+  };
+  const pts=[0,1].map(i=>vals[i]!=null
+    ?'<span class="pt '+(i?"b":"a")+'" style="left:'+pos(vals[i])+'%"></span>':"").join("");
+  const zero=d.zero!=null?'<span class="zero" style="left:'+pos(d.zero)+'%"></span>':"";
+  const ticks='<span class="tick" style="left:0;transform:none">'+d.ticks[0]+'</span>'+
+              '<span class="tick" style="left:auto;right:0;transform:none">'+d.ticks[1]+'</span>';
+  const cell=i=>vals[i]!=null?d.fmt(vals[i]):'<span class="none">—</span>';
+  return '<div class="tonerow"><div class="tonename">'+termHtml(d.term,d.name)+
+         '<small>'+d.unit+'</small></div><div class="toneval va">'+cell(0)+
+         '</div><div class="track">'+zero+pts+ticks+'</div><div class="toneval vb">'+cell(1)+'</div></div>';
+}
+function renderToneRows(){
+  if(!anyLoaded()) return;
+  toneRows.innerHTML=toneDefs().map(toneRowHtml).join("");
+}
+
+function renderProse(){
+  const s0=state.slots[0], s1=state.slots[1];
+  if(!s0||!s1){ prosePara.style.display="none"; return; }
+  const m=[s0.metrics||{},s1.metrics||{}];
+  const nm=i=>"<b>"+esc(shortName(state.slots[i].name,20))+"</b>";
+  const pair=(a,b)=>(a!=null&&b!=null&&isFinite(a)&&isFinite(b))?[a,b]:null;
+  const cands=[];
+  let p=pair(m[0].centroid,m[1].centroid);
+  if(p&&p[0]>0&&p[1]>0){
+    const hi=p[0]>=p[1]?0:1, r=p[hi]/p[1-hi];
+    if(r>=1.06){
+      const oct=Math.log2(r);
+      cands.push({score:(r-1)*8, html:nm(hi)+" is "+(r>=1.15?"measurably":"slightly")+" "+
+        termHtml("brightness","brighter")+" — its spectral centroid sits at "+fmtHz(p[hi])+
+        " against "+fmtHz(p[1-hi])+", about "+oct.toFixed(1)+" octave"+(oct>=1.5?"s":"")+" higher."});
+    }
+  }
+  const sh=(s,f0,f1)=>bandPower(s.welch.power,s.welch.df,f0,f1)/Math.max(bandPower(s.welch.power,s.welch.df,60,20000),1e-30);
+  const w=[sh(s0,200,500),sh(s1,200,500)];
+  if(w[0]>0&&w[1]>0){
+    const hi=w[0]>=w[1]?0:1, r=w[hi]/w[1-hi];
+    if(r>=1.25) cands.push({score:(r-1)*4, html:nm(hi)+" carries more "+
+      termHtml("warmth","low-mid warmth")+" — "+fmtPct(w[hi])+" of its energy sits in 200–500 Hz, against "+fmtPct(w[1-hi])+"."});
+  }
+  const fl=[sh(s0,60,200),sh(s1,60,200)];
+  if(fl[0]>0&&fl[1]>0){
+    const hi=fl[0]>=fl[1]?0:1, r=fl[hi]/fl[1-hi];
+    if(r>=1.3) cands.push({score:(r-1)*3.5, html:nm(hi)+" has the fuller "+
+      termHtml("low-end","low end")+", with "+fmtPct(fl[hi])+" of its energy below 200 Hz against "+fmtPct(fl[1-hi])+"."});
+  }
+  p=pair(m[0].tilt,m[1].tilt);
+  if(p){
+    const d=Math.abs(p[0]-p[1]);
+    if(d>=1.2){
+      const st=p[0]<=p[1]?0:1;
+      cands.push({score:d/1.5, html:nm(st)+"'s "+termHtml("spectral-tilt","spectral tilt")+
+        " falls more steeply — "+p[st].toFixed(1)+" dB/oct against "+p[1-st].toFixed(1)+
+        " — which reads as a darker overall balance."});
+    }
+  }
+  p=pair(m[0].richness,m[1].richness);
+  if(p){
+    const hi=p[0]>=p[1]?0:1, d=p[hi]-p[1-hi];
+    if(d>=3) cands.push({score:d/3, html:nm(hi)+" shows more "+
+      termHtml("harmonic-richness","harmonic richness")+" in its sustained notes — its overtones sit "+
+      fmtDb(d,1)+" higher relative to the fundamental."});
+  }
+  p=pair(m[0].evenOdd,m[1].evenOdd);
+  if(p){
+    const hi=p[0]>=p[1]?0:1, d=p[hi]-p[1-hi];
+    if(d>=4) cands.push({score:d/5, html:nm(hi)+" leans further toward "+
+      termHtml("even-odd","even harmonics")+" ("+fmtDb(p[hi],1)+" against "+fmtDb(p[1-hi],1)+
+      ") — a balance often heard as sweeter."});
+  }
+  p=pair(m[0].attack,m[1].attack);
+  if(p&&p[0]>0&&p[1]>0){
+    const fast=p[0]<=p[1]?0:1, r=p[1-fast]/p[fast];
+    if(r>=1.4) cands.push({score:(r-1)*2, html:nm(fast)+" speaks faster — a median "+
+      termHtml("attack","attack")+" of "+fmtMs(p[fast])+" against "+fmtMs(p[1-fast])+"."});
+  }
+  const dget=(i,k)=>(m[i].decays&&m[i].decays[k]!=null&&isFinite(m[i].decays[k]))?m[i].decays[k]:null;
+  p=pair(dget(0,1),dget(1,1));
+  if(p&&p[0]>0&&p[1]>0){
+    const hi=p[0]>=p[1]?0:1, r=p[hi]/p[1-hi];
+    if(r>=1.35) cands.push({score:(r-1)*2, html:nm(hi)+" "+termHtml("sustain","sustains")+
+      " longer in the mids — "+fmtMs(p[hi])+" to fall 20 dB against "+fmtMs(p[1-hi])+"."});
+  }
+  p=pair(dget(0,0),dget(1,0));
+  if(p&&p[0]>0&&p[1]>0){
+    const tight=p[0]<=p[1]?0:1, r=p[1-tight]/p[tight];
+    if(r>=1.35) cands.push({score:(r-1)*1.8, html:nm(tight)+"'s low end is "+
+      termHtml("tightness","tighter")+" — low notes decay in "+fmtMs(p[tight])+" against "+fmtMs(p[1-tight])+"."});
+  }
+  p=pair(m[0].dr,m[1].dr);
+  if(p){
+    const hi=p[0]>=p[1]?0:1, d=p[hi]-p[1-hi];
+    if(d>=3) cands.push({score:d/4, html:nm(hi)+"'s performance was captured with more "+
+      termHtml("dynamic-range","dynamic range")+" — "+p[hi].toFixed(1)+" dB against "+p[1-hi].toFixed(1)+" dB."});
+  }
+  cands.sort((a,b)=>b.score-a.score);
+  const text=cands.length
+    ? cands.slice(0,4).map(c=>c.html).join(" ")
+    : "These two spectra are closely matched — no difference clears GuitarScope's reporting thresholds. Try turning smoothing off, or the difference view with "+termHtml("level-match","level-match")+" on, to hunt for finer detail.";
+  prosePara.style.display="";
+  prosePara.innerHTML='<span class="lead">Reading the measurements</span>'+text;
+}
+
+function renderToneNote(){
+  if(!anyLoaded()){ toneNote.textContent=""; return; }
+  const bits=[]; let snap=false;
+  for(let i=0;i<2;i++){
+    const s=state.slots[i];
+    if(!s) continue;
+    if(s.kind==="snapshot") snap=true;
+    const m=s.metrics||{};
+    let b=SLOT_LETTER[i]+": "+(m.onsetCount!=null?m.onsetCount+" onsets":"no onset data");
+    if(m.f0!=null&&isFinite(m.f0)){
+      b+=", sustained note "+fmtHz(m.f0)+" ("+noteStr(m.f0,state.a4)+
+         (m.f0Conf!=null?", "+(m.f0Conf*100).toFixed(0)+" % confidence":"")+")";
+    }else b+=", no stable pitch found";
+    bits.push(b);
+  }
+  toneNote.innerHTML="Attack, sustain, tightness and harmonic figures come from detected note onsets and the longest sustained note — "+
+    esc(bits.join(" · "))+". Level-matching never changes the numbers on this panel."+
+    (snap?" Snapshot slots reuse the timing metrics stored at export.":"");
+}
+
+// ---------- footer & subtitles ----------
+function renderFooter(){
+  const parts=[termHtml("ltas","Welch LTAS")+": 8192-pt Hann, 50 % overlap"];
+  for(let i=0;i<2;i++){
+    const s=state.slots[i];
+    if(s&&s.welch) parts.push(SLOT_LETTER[i]+": "+s.welch.frames+" frame"+(s.welch.frames===1?"":"s")+
+      " · Δf "+s.welch.df.toFixed(2)+" Hz @ "+rateK(s.info.sampleRate));
+  }
+  parts.push(termHtml("dbfs","dB re full-scale sine"));
+  parts.push(termHtml("octave-smoothing","smoothing")+" "+(state.smooth?"1/"+state.smooth+" octave":"off"));
+  if(bothLoaded()) parts.push(termHtml("level-match","level-match")+" "+
+    (state.lm&&state.lmOffset!=null?fmtDb(state.lmOffset,2)+" on B":"off"));
+  paramsLine.innerHTML=parts.join('<span class="sep">·</span>');
+}
+function updateDiffSub(){
+  diffSub.textContent=bothLoaded()
+    ? shortName(state.slots[0].name,18)+" − "+shortName(state.slots[1].name,18)+", dB"+
+      (state.lm?" · after level-match":"")
+    : "A − B, dB";
+}
+
+// ---------- master update ----------
+function updateVisibility(){
+  const n=(state.slots[0]?1:0)+(state.slots[1]?1:0), both=n===2;
+  specEmpty.style.display=n?"none":"";
+  pngBtn.disabled=csvBtn.disabled=jsonBtn.disabled=!n;
+  lmToggle.disabled=diffToggle.disabled=!both;
+  lmSwitch.classList.toggle("disabled",!both);
+  diffSwitch.classList.toggle("disabled",!both);
+  diffCard.style.display=(both&&state.diff)?"":"none";
+  bandsCard.style.display=n?"":"none";
+  toneCard.style.display=n?"":"none";
+}
+function renderAnalysis(){
+  renderBandsTable(); renderToneRows(); renderProse(); renderToneNote();
+  renderFooter(); updateDiffSub();
+}
+function afterDataChange(animate){
+  const s0=state.slots[0], s1=state.slots[1];
+  if(s0&&s1&&s0.welch&&s1.welch){
+    const pa=bandPower(s0.welch.power,s0.welch.df,60,20000);
+    const pb=bandPower(s1.welch.power,s1.welch.df,60,20000);
+    state.lmOffset=10*Math.log10(Math.max(pa,1e-20)/Math.max(pb,1e-20));
+  }else state.lmOffset=null;
+  if(s1) s1._dispCache=null; // lmOffset may have moved
+  updateVisibility();
+  updateCurves(animate);
+  renderAnalysis();
+}
+
+// ---------- file cards ----------
+function renderCard(i){
+  const card=cards[i], ui=cardUI[i], letter=SLOT_LETTER[i];
+  card.classList.toggle("empty",ui.mode==="empty");
+  card.classList.toggle("error",ui.mode==="error");
+  if(ui.mode==="empty"){
+    card.innerHTML='<div class="emptyinner"><div class="big">Drop <b>guitar '+letter+
+      '</b> here —<br>or click to choose a file</div>'+
+      '<div class="fmts">WAV · AIFF · FLAC · MP3 · M4A · snapshot JSON</div></div>';
+    return;
+  }
+  if(ui.mode==="loading"){
+    card.innerHTML='<div class="filehead"><span class="slotchip">'+letter+'</span>'+
+      '<span class="filename" title="'+esc(ui.name)+'">'+esc(ui.name)+'</span></div>'+
+      '<div class="progresswrap"><div class="progressbar"><i style="width:'+
+      Math.round((ui.frac||0)*100)+'%"></i></div>'+
+      '<div class="progresslabel">'+esc(ui.label||"Working…")+'</div></div>';
+    return;
+  }
+  if(ui.mode==="error"){
+    card.innerHTML='<div class="filehead"><span class="slotchip">'+letter+'</span>'+
+      '<span class="filename" title="'+esc(ui.name||"")+'">'+esc(ui.name||"")+'</span>'+
+      '<span class="fileacts"><button class="iconbtn" data-act="replace" title="Choose another file">⟳</button>'+
+      '<button class="iconbtn" data-act="clear" title="Dismiss">✕</button></span></div>'+
+      '<div class="errbox">'+esc(ui.message)+
+      (ui.hint?'<span class="hint">'+esc(ui.hint)+'</span>':"")+'</div>';
+    return;
+  }
+  // loaded
+  const s=state.slots[i], info=s.info, m=s.metrics||{};
+  const parts=[esc(String(info.container))];
+  parts.push(termHtml("sample-rate",rateK(info.sampleRate)));
+  if(info.bitDepth!=null) parts.push(esc(typeof info.bitDepth==="number"?info.bitDepth+"-bit":String(info.bitDepth)));
+  if(info.channels!=null) parts.push(info.channels===1?"mono":(info.channels===2?"stereo":info.channels+" ch"));
+  if(s.duration!=null&&isFinite(s.duration))
+    parts.push(s.duration>=10?Math.round(s.duration)+" s":s.duration.toFixed(1)+" s");
+  const chips=[];
+  if(s.kind==="demo") chips.push('<span class="chip"><span class="k">synthetic</span>Karplus–Strong demo</span>');
+  if(s.kind==="snapshot") chips.push('<span class="chip"><span class="k">snapshot</span>stored curve — audio not included</span>');
+  if(m.noiseFloor!=null&&isFinite(m.noiseFloor))
+    chips.push('<span class="chip"><span class="k">'+termHtml("noise-floor","floor")+'</span>'+m.noiseFloor.toFixed(0)+' dB</span>');
+  if(m.snr!=null&&isFinite(m.snr))
+    chips.push('<span class="chip"><span class="k">SNR</span>'+m.snr.toFixed(0)+' dB</span>');
+  if(m.clipped) chips.push('<span class="chip err">clipping — '+m.clipCount+' samples at full scale</span>');
+  if(m.rumble&&m.rumble.advise)
+    chips.push('<span class="chip warn">'+(m.rumble.ratio*100).toFixed(0)+
+      ' % of energy below 60 Hz — a high-pass at capture would help</span>');
+  let chseg="";
+  if(s.audioBuf&&s.audioBuf.numberOfChannels>=2){
+    const b=(mo,lb)=>'<button data-ch="'+mo+'" class="'+(s.channelMode===mo?"on":"")+'">'+lb+'</button>';
+    chseg='<div class="seg" title="Channel used for analysis">'+b("mid","Mid")+b("left","L")+b("right","R")+'</div>';
+  }
+  card.innerHTML='<div class="filehead"><span class="slotchip">'+letter+'</span>'+
+    '<span class="filename" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'+
+    '<span class="fileacts"><button class="iconbtn" data-act="replace" title="Replace file">⟳</button>'+
+    '<button class="iconbtn" data-act="clear" title="Clear slot">✕</button></span></div>'+
+    '<div class="fileinfo">'+parts.join('<span class="sep">·</span>')+'</div>'+
+    '<div class="filemeta">'+chseg+chips.join("")+'</div>';
+}
+
+// ---------- glossary & popover ----------
+function termSections(t){
+  let vals=[];
+  try{ vals=t.values(state)||[]; }catch(_e){ vals=[]; }
+  const valHtml=vals.length
+    ? '<div class="pop-vals">'+vals.map(v=>{
+        const bg=v.slot===0?"var(--slot-a)":(v.slot===1?"var(--slot-b)":"var(--dim)");
+        return '<div class="pop-val"><span class="dot" style="background:'+bg+'"></span>'+
+               '<span class="l">'+esc(v.slot>=0?shortName(v.label,20):v.label)+'</span>'+
+               '<span class="v">'+esc(v.value)+'</span></div>';
+      }).join("")+'</div>'
+    : '<div class="pop-none">'+(anyLoaded()?"No measured value for the loaded audio.":"Load audio to see live values here.")+'</div>';
+  return '<div class="pop-sec"><div class="pop-label">Musician’s ear</div><p>'+t.musician+'</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">The physics</div><p>'+t.science+'</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">How GuitarScope measures it</div><div class="pop-formula">'+t.measure+'</div></div>'+
+    '<div class="pop-sec"><div class="pop-label">Current values</div>'+valHtml+'</div>';
+}
+function termContentHtml(key){
+  const t=GLOSSARY_BY_KEY.get(key);
+  if(!t) return "";
+  return '<div class="pop-term">'+esc(t.name)+'</div><div class="pop-cat">'+esc(t.cat)+'</div>'+termSections(t);
+}
+function openPopover(key,anchor){
+  const html=termContentHtml(key);
+  if(!html) return;
+  popover.innerHTML=html;
+  popover.classList.add("open");
+  const pw=popover.offsetWidth, ph=popover.offsetHeight;
+  const vw=window.innerWidth, vh=window.innerHeight;
+  let left=(anchor.left+anchor.right)/2-pw/2;
+  left=Math.max(12,Math.min(vw-pw-12,left));
+  let top=anchor.bottom+10;
+  if(top+ph>vh-12) top=anchor.top-ph-10;
+  if(top<12) top=12;
+  popover.style.left=left+"px";
+  popover.style.top=top+"px";
+}
+function closePopover(){ popover.classList.remove("open"); }
+
+const GLOSS_CATS=["Frequency regions","Tone descriptors","Physics","Method"];
+function buildGlossList(q){
+  const needle=(q||"").trim().toLowerCase();
+  let html="";
+  for(const cat of GLOSS_CATS){
+    const terms=GLOSSARY.filter(t=>t.cat===cat&&(!needle||
+      (t.name+" "+t.hook+" "+t.musician+" "+t.science).toLowerCase().includes(needle)));
+    if(!terms.length) continue;
+    html+='<div class="glosscat">'+esc(cat)+'</div>';
+    for(const t of terms){
+      html+='<div class="glossitem" data-key="'+t.key+'"><button>'+
+        '<span class="gname">'+esc(t.name)+'</span><span class="ghook">'+esc(t.hook)+'</span>'+
+        '</button><div class="glossdetail"></div></div>';
+    }
+  }
+  glossList.innerHTML=html||'<div class="glossempty">No terms match “'+esc(q)+'”.</div>';
+}
+function setGloss(open){
+  glossPanel.classList.toggle("open",open);
+  glossBackdrop.classList.toggle("open",open);
+  if(open){ buildGlossList(glossSearch.value); glossSearch.focus(); }
+}
+
+// ---------- toast & download ----------
+let toastTimer=0;
+function toast(msg,isErr){
+  toastEl.textContent=msg;
+  toastEl.classList.toggle("err",!!isErr);
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toastEl.classList.remove("show"),3800);
+}
+function download(blob,name){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+function sanitizeName(x){
+  return String(x).replace(/\.[a-z0-9]{2,5}$/i,"").replace(/[^\w.\-]+/g,"-")
+    .replace(/-{2,}/g,"-").replace(/^-|-$/g,"").slice(0,32)||"guitar";
+}
+function exportBaseName(){
+  const n=i=>state.slots[i]?sanitizeName(state.slots[i].name):null;
+  const a=n(0), b=n(1);
+  return a&&b?a+"-vs-"+b:(a||b||"export");
+}
+
+// ---------- exports ----------
+function plainParams(){
+  const parts=["Welch LTAS: 8192-pt Hann, 50 % overlap"];
+  for(let i=0;i<2;i++){
+    const s=state.slots[i];
+    if(s&&s.welch) parts.push(SLOT_LETTER[i]+": "+s.welch.frames+" frames · Δf "+
+      s.welch.df.toFixed(2)+" Hz @ "+rateK(s.info.sampleRate));
+  }
+  parts.push("dB re full-scale sine");
+  parts.push("smoothing "+(state.smooth?"1/"+state.smooth+" oct":"off"));
+  if(state.lm&&state.lmOffset!=null) parts.push("level-match "+fmtDb(state.lmOffset,2)+" on B");
+  return parts.join("   ·   ");
+}
+function tuningLabel(){
+  return TUNINGS[state.tuning]
+    ? TUNINGS[state.tuning].name
+    : "custom "+(state.customOffset>=0?"+":"")+state.customOffset+" st";
+}
+function exportPNG(){
+  if(!anyLoaded()) return;
+  const W=1240, H=830, SC=2;
+  const FS='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  const cv=document.createElement("canvas");
+  cv.width=W*SC; cv.height=H*SC;
+  const ctx=cv.getContext("2d");
+  ctx.scale(SC,SC);
+  ctx.fillStyle=cssColor("panel");
+  ctx.fillRect(0,0,W,H);
+  ctx.textBaseline="alphabetic";
+  ctx.fillStyle=cssColor("ink");
+  ctx.font="600 19px "+FS;
+  ctx.fillText("GuitarScope",40,46);
+  const bw=ctx.measureText("GuitarScope").width;
+  ctx.font="13px "+FS;
+  ctx.fillStyle=cssColor("mut");
+  ctx.fillText("· long-term average spectrum",40+bw+10,46);
+  ctx.textAlign="right";
+  ctx.fillText(new Date().toISOString().slice(0,10)+" · "+state.mode+" mode · "+tuningLabel()+
+    " · A4 = "+state.a4+" Hz",W-40,46);
+  ctx.textAlign="left";
+  let y=74;
+  ctx.font="12.5px "+FS;
+  for(let i=0;i<2;i++){
+    const s=state.slots[i];
+    if(!s) continue;
+    ctx.fillStyle=COLORS[i];
+    ctx.beginPath(); ctx.arc(46,y-4,4,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle=cssColor("ink");
+    ctx.fillText(SLOT_LETTER[i]+" — "+s.name+"   ·   "+rateK(s.info.sampleRate)+
+      " · "+s.welch.frames+" frames",58,y);
+    y+=18;
+  }
+  ctx.save();
+  ctx.translate(0,116);
+  drawSpectrumScene(ctx,W,H-116-56,buildSpecModel(true),[]);
+  ctx.restore();
+  ctx.fillStyle=cssColor("dim");
+  ctx.font="11.5px "+FS;
+  ctx.fillText(plainParams(),40,H-24);
+  ctx.textAlign="right";
+  ctx.fillText("made with GuitarScope",W-40,H-24);
+  ctx.textAlign="left";
+  cv.toBlob(b=>{ if(b) download(b,"guitarscope_"+exportBaseName()+".png"); },"image/png");
+}
+function exportCSV(){
+  if(!anyLoaded()) return;
+  const a=dispTarget[0], b=dispTarget[1];
+  const L=["# GuitarScope long-term average spectrum export",
+           "# created: "+new Date().toISOString()];
+  for(let i=0;i<2;i++){
+    const s=state.slots[i];
+    if(s) L.push("# "+SLOT_LETTER[i]+": "+s.name+" · "+s.info.sampleRate+" Hz · "+
+      s.welch.frames+" frames · df "+s.welch.df.toFixed(4)+" Hz");
+  }
+  L.push("# analysis: Welch LTAS, 8192-point Hann, 50% overlap, dB re full-scale sine");
+  L.push("# smoothing: "+(state.smooth?"1/"+state.smooth+" octave":"off")+" (values are as displayed)");
+  L.push("# level-match: "+(state.lm&&state.lmOffset!=null?state.lmOffset.toFixed(2)+" dB applied to B":"off"));
+  L.push("frequency_hz,a_db,b_db,a_minus_b_db");
+  for(let k=0;k<GRID.length;k++){
+    L.push(GRID[k].toFixed(2)+","+(a?a[k].toFixed(2):"")+","+(b?b[k].toFixed(2):"")+","+
+      (a&&b?(a[k]-b[k]).toFixed(2):""));
+  }
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope_"+exportBaseName()+".csv");
+}
+function sanitizeMetrics(m){
+  return JSON.parse(JSON.stringify(m,(k,v)=>(typeof v==="number"&&!isFinite(v))?null:v));
+}
+function exportJSON(){
+  if(!anyLoaded()) return;
+  const files=[];
+  for(let i=0;i<2;i++){
+    const s=state.slots[i];
+    if(!s) continue;
+    const p=s.welch.power, db=new Array(p.length);
+    for(let k=0;k<p.length;k++) db[k]=Math.round(powerToDb(p[k])*100)/100;
+    files.push({ slot:i, name:s.name, kind:s.kind, info:s.info, duration:s.duration,
+      channelMode:s.channelMode,
+      welch:{df:s.welch.df, frames:s.welch.frames, powerDb:db},
+      metrics:sanitizeMetrics(s.metrics) });
+  }
+  const snap={ app:"GuitarScope", type:"snapshot", version:1,
+    created:new Date().toISOString(),
+    settings:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
+               a4:state.a4, smooth:state.smooth, lm:state.lm },
+    files };
+  download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
+    "guitarscope_"+exportBaseName()+".json");
+  toast("Snapshot saved — drop the .json back onto the page to restore it.");
+}
+
+// ---------- snapshot restore ----------
+async function loadSnapshotFile(file){
+  const txt=await file.text();
+  let snap;
+  try{ snap=JSON.parse(txt); }
+  catch(_e){ throw new Error("this file is not valid JSON."); }
+  if(!snap||snap.app!=="GuitarScope"||snap.type!=="snapshot"||!Array.isArray(snap.files)||!snap.files.length)
+    throw new Error("this JSON is not a GuitarScope snapshot.");
+  applySnapshot(snap);
+}
+function setSmoothUI(v){
+  state.smooth=v;
+  smoothSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.sm===v));
+}
+function applySnapshot(snap){
+  const st=snap.settings||{};
+  if(st.mode==="electric"||st.mode==="acoustic"){
+    state.mode=st.mode;
+    modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===st.mode));
+  }
+  if(typeof st.tuning==="string"&&(TUNINGS[st.tuning]||st.tuning==="custom")){
+    state.tuning=st.tuning; tuningSel.value=st.tuning;
+  }
+  state.customOffset=(st.customOffset|0)||0;
+  customOffsetEl.value=state.customOffset;
+  customOffsetWrap.style.display=state.tuning==="custom"?"":"none";
+  if(isFinite(st.a4)&&st.a4>=415&&st.a4<=466){ state.a4=+st.a4; a4Input.value=state.a4; }
+  if([0,12,6,3].includes(st.smooth)) setSmoothUI(st.smooth);
+  state.lm=!!st.lm; lmToggle.checked=state.lm;
+  loadSeq[0]++; loadSeq[1]++;
+  state.slots=[null,null];
+  for(const f of snap.files.slice(0,2)){
+    const i=f.slot===1?1:0;
+    if(!f.welch||!Array.isArray(f.welch.powerDb)||!isFinite(f.welch.df)||f.welch.df<=0) continue;
+    const power=new Float64Array(f.welch.powerDb.length);
+    for(let k=0;k<power.length;k++){
+      const dbv=f.welch.powerDb[k];
+      power[k]=(dbv==null||!isFinite(dbv))?0:Math.pow(10,dbv/10);
+    }
+    const slot={ name:String(f.name||"snapshot"), kind:"snapshot",
+      info:(f.info&&typeof f.info==="object")?f.info:
+        {container:"snapshot", sampleRate:Math.round(f.welch.df*(power.length-1)*2)},
+      duration:isFinite(f.duration)?f.duration:null,
+      samples:null, audioBuf:null, channelMode:f.channelMode||"mid",
+      welch:{power, df:f.welch.df, frames:f.welch.frames|0},
+      metrics:(f.metrics&&typeof f.metrics==="object")?f.metrics:{} };
+    computeSpectralExtras(slot);
+    state.slots[i]=slot;
+    cardUI[i]={mode:"loaded"};
+    renderCard(i);
+  }
+  for(let i=0;i<2;i++){
+    if(!state.slots[i]&&cardUI[i].mode!=="empty"){ cardUI[i]={mode:"empty"}; renderCard(i); }
+  }
+  afterDataChange(true);
+  toast("Snapshot restored — spectra and metrics as saved; the audio itself is not stored.");
+}
+
+// ---------- demo pair (deterministic Karplus–Strong) ----------
+function lcg(seed){
+  let s=seed>>>0;
+  return ()=>{ s=(Math.imul(s,1664525)+1013904223)>>>0; return s/2147483648-1; };
+}
+function karplusNote(rate,f0,dur,damping,lpExc,rand){
+  const N=Math.max(2,Math.round(rate/f0));
+  const d=new Float64Array(N);
+  let y=0;
+  for(let i=0;i<N;i++){
+    let v=rand();
+    if(lpExc){ y+=0.35*(v-y); v=y; } // darker pluck: low-passed excitation
+    d[i]=v;
+  }
+  const n=Math.round(dur*rate);
+  const out=new Float64Array(n);
+  let k=0;
+  for(let i=0;i<n;i++){
+    const v=d[k];
+    out[i]=v;
+    d[k]=damping*0.5*(v+d[(k+1)%N]);
+    k=(k+1)%N;
+  }
+  // Cosine fade over the final 60 ms: a truncated ring is a step
+  // discontinuity, and the click registers as a (false) onset.
+  const nf=Math.min(n,Math.round(0.06*rate));
+  for(let i=0;i<nf;i++) out[n-nf+i]*=0.5*(1+Math.cos(Math.PI*i/nf));
+  return out;
+}
+function makeDemoSamples(rate,damping,lpExc,seed,gain){
+  const notes=[82.41,110.0,146.83,196.0,246.94,329.63]; // open strings, E std
+  const durs=[0.55,0.55,0.55,0.55,0.55,2.3];
+  const ring=0.35, lead=0.12; // lead-in silence so the first onset is detectable
+  let t=lead; const starts=[];
+  for(let i=0;i<notes.length;i++){ starts.push(t); t+=durs[i]; }
+  const total=Math.round((t+ring)*rate);
+  const out=new Float64Array(total);
+  const rand=lcg(seed);
+  for(let i=0;i<notes.length;i++){
+    const nt=karplusNote(rate,notes[i],durs[i]+ring,damping,lpExc,rand);
+    const off=Math.round(starts[i]*rate);
+    for(let j=0;j<nt.length&&off+j<total;j++) out[off+j]+=nt[j];
+  }
+  let peak=0;
+  for(let i=0;i<total;i++){ const a=Math.abs(out[i]); if(a>peak) peak=a; }
+  const g=peak>0?gain/peak:1;
+  for(let i=0;i<total;i++) out[i]*=g;
+  return out;
+}
+function loadDemo(){
+  const specs=[
+    {name:"Demo — Bright", rate:44100, damping:0.9962, lp:false, seed:42424243, gain:0.8},
+    {name:"Demo — Warm",   rate:48000, damping:0.9900, lp:true,  seed:20260820, gain:0.55},
+  ];
+  return Promise.all(specs.map((sp,i)=>{
+    const samples=makeDemoSamples(sp.rate,sp.damping,sp.lp,sp.seed,sp.gain);
+    const slot={ name:sp.name, kind:"demo",
+      info:{container:"Karplus–Strong synth", sampleRate:sp.rate, channels:1, bitDepth:"64-bit float"},
+      duration:samples.length/sp.rate, samples, audioBuf:null,
+      channelMode:"mid", metrics:{} };
+    return analyzeSlot(i,slot);
+  }));
+}
+
+// ---------- drag & drop ----------
+let dragDepth=0;
+function hideDropOverlay(){ dragDepth=0; dropOverlay.classList.remove("show"); }
+function pickDropSlot(x){
+  const e0=!state.slots[0], e1=!state.slots[1];
+  if(e0!==e1) return e0?0:1;
+  return x<window.innerWidth/2?0:1;
+}
+function updateDropTitle(e){
+  const items=Array.from(e.dataTransfer.items||[]).filter(it=>it.kind==="file");
+  if(items.length>=2) dropTitle.textContent="Drop to load guitars A + B";
+  else if(items.length===1&&items[0].type==="application/json")
+    dropTitle.textContent="Drop to restore a snapshot";
+  else dropTitle.textContent="Drop to load guitar "+SLOT_LETTER[pickDropSlot(e.clientX)];
+}
+function handleDrop(files,x){
+  const json=files.find(f=>/\.json$/i.test(f.name)||f.type==="application/json");
+  if(json){
+    loadSnapshotFile(json).catch(err=>toast("Snapshot: "+(err.message||"could not be read."),true));
+    return;
+  }
+  const audio=files.slice(0,2);
+  if(!audio.length) return;
+  if(audio.length===2){ loadFileIntoSlot(0,audio[0]); loadFileIntoSlot(1,audio[1]); }
+  else loadFileIntoSlot(pickDropSlot(x),audio[0]);
+}
+
+// ---------- controls ----------
+function setMode(mode){
+  if(state.mode===mode) return;
+  state.mode=mode;
+  modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===mode));
+  requestDraw();
+  renderBandsTable();
+}
+function setSmooth(v){
+  if(state.smooth===v) return;
+  setSmoothUI(v);
+  updateCurves(true);
+  renderFooter();
+}
+function escCascade(){
+  if(popover.classList.contains("open")) return closePopover();
+  if(glossPanel.classList.contains("open")) return setGloss(false);
+  if(shortcutsModal.classList.contains("open")) return shortcutsModal.classList.remove("open");
+  if(dropOverlay.classList.contains("show")) hideDropOverlay();
+}
+
+// ---------- boot ----------
+function boot(){
+  COLORS=[cssColor("slot-a"),cssColor("slot-b")];
+
+  modeSeg.addEventListener("click",e=>{
+    const b=e.target.closest("button[data-mode]");
+    if(b) setMode(b.dataset.mode);
+  });
+  smoothSeg.addEventListener("click",e=>{
+    const b=e.target.closest("button[data-sm]");
+    if(b) setSmooth(+b.dataset.sm);
+  });
+  tuningSel.addEventListener("change",()=>{
+    state.tuning=tuningSel.value;
+    customOffsetWrap.style.display=state.tuning==="custom"?"":"none";
+    requestDraw();
+  });
+  customOffsetEl.addEventListener("input",()=>{
+    state.customOffset=parseInt(customOffsetEl.value,10)||0;
+    requestDraw();
+  });
+  a4Input.addEventListener("change",()=>{
+    let v=parseFloat(a4Input.value);
+    if(!isFinite(v)) v=440;
+    v=Math.max(415,Math.min(466,v));
+    a4Input.value=v; state.a4=v;
+    requestDraw(); renderAnalysis();
+  });
+  lmToggle.addEventListener("change",()=>{
+    state.lm=lmToggle.checked;
+    updateCurves(true);
+    renderBandsTable(); renderFooter(); updateDiffSub();
+  });
+  diffToggle.addEventListener("change",()=>{
+    state.diff=diffToggle.checked;
+    updateVisibility();
+    requestDraw();
+  });
+  pngBtn.addEventListener("click",exportPNG);
+  csvBtn.addEventListener("click",exportCSV);
+  jsonBtn.addEventListener("click",exportJSON);
+  demoBtn.addEventListener("click",loadDemo);
+
+  glossaryBtn.addEventListener("click",()=>setGloss(true));
+  glossClose.addEventListener("click",()=>setGloss(false));
+  glossBackdrop.addEventListener("click",()=>setGloss(false));
+  glossSearch.addEventListener("input",()=>buildGlossList(glossSearch.value));
+  glossList.addEventListener("click",e=>{
+    if(e.target.closest(".glossdetail")) return;
+    const item=e.target.closest(".glossitem");
+    if(!item||!e.target.closest("button")) return;
+    const opening=!item.classList.contains("open");
+    if(opening){
+      const t=GLOSSARY_BY_KEY.get(item.dataset.key);
+      if(t) item.querySelector(".glossdetail").innerHTML=termSections(t);
+    }
+    item.classList.toggle("open");
+  });
+
+  shortcutsBtn.addEventListener("click",()=>shortcutsModal.classList.add("open"));
+  shortcutsModal.addEventListener("click",e=>{
+    if(e.target===shortcutsModal) shortcutsModal.classList.remove("open");
+  });
+
+  // term popovers: canvas hits are handled first, then document-level .term buttons
+  specCanvas.addEventListener("click",e=>{
+    const rect=specCanvas.getBoundingClientRect();
+    const x=e.clientX-rect.left, y=e.clientY-rect.top;
+    for(const hh of specHits){
+      if(x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h){
+        e._gsTermHandled=true;
+        openPopover(hh.term,{left:rect.left+hh.x, right:rect.left+hh.x+hh.w,
+                             top:rect.top+hh.y, bottom:rect.top+hh.y+hh.h});
+        return;
+      }
+    }
+  });
+  document.addEventListener("click",e=>{
+    if(e._gsTermHandled) return;
+    const t=e.target.closest?e.target.closest(".term"):null;
+    if(t){ e._gsTermHandled=true; openPopover(t.dataset.term,t.getBoundingClientRect()); return; }
+    if(popover.classList.contains("open")&&!popover.contains(e.target)) closePopover();
+  });
+  document.addEventListener("keydown",e=>{
+    if(e.metaKey||e.ctrlKey||e.altKey) return;
+    const a=document.activeElement;
+    if(a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)){
+      if(e.key==="Escape") a.blur();
+      return;
+    }
+    switch(e.key){
+      case "1": setSmooth(0); break;
+      case "2": setSmooth(12); break;
+      case "3": setSmooth(6); break;
+      case "4": setSmooth(3); break;
+      case "d": case "D":
+        if(!diffToggle.disabled){ diffToggle.checked=!diffToggle.checked;
+          diffToggle.dispatchEvent(new Event("change")); }
+        break;
+      case "l": case "L":
+        if(!lmToggle.disabled){ lmToggle.checked=!lmToggle.checked;
+          lmToggle.dispatchEvent(new Event("change")); }
+        break;
+      case "m": case "M":
+        setMode(state.mode==="electric"?"acoustic":"electric"); break;
+      case "g": case "G":
+        setGloss(!glossPanel.classList.contains("open")); break;
+      case "e": case "E":
+        if(!pngBtn.disabled) exportPNG(); break;
+      case "?": shortcutsModal.classList.toggle("open"); break;
+      case "Escape": escCascade(); break;
+    }
+  });
+  window.addEventListener("resize",()=>{ closePopover(); requestDraw(); });
+  window.addEventListener("scroll",closePopover,{passive:true});
+
+  attachCrosshair(specWrap,specCanvas,specXline,specReadout,false);
+  attachCrosshair(diffWrap,diffCanvas,diffXline,diffReadout,true);
+
+  cards.forEach((card,i)=>{
+    card.addEventListener("click",e=>{
+      if(e.target.closest(".term")) return;
+      const act=e.target.closest("[data-act]");
+      if(act){
+        if(act.dataset.act==="replace") fileInputs[i].click();
+        else clearSlot(i);
+        return;
+      }
+      const ch=e.target.closest("[data-ch]");
+      if(ch){ setChannel(i,ch.dataset.ch); return; }
+      if(cardUI[i].mode==="empty"||cardUI[i].mode==="error") fileInputs[i].click();
+    });
+    card.addEventListener("keydown",e=>{
+      if((e.key==="Enter"||e.key===" ")&&(cardUI[i].mode==="empty"||cardUI[i].mode==="error")){
+        e.preventDefault();
+        fileInputs[i].click();
+      }
+    });
+    fileInputs[i].addEventListener("change",()=>{
+      const f=fileInputs[i].files[0];
+      if(f) loadFileIntoSlot(i,f);
+      fileInputs[i].value="";
+    });
+  });
+
+  window.addEventListener("dragenter",e=>{
+    if(!e.dataTransfer||!Array.from(e.dataTransfer.types||[]).includes("Files")) return;
+    e.preventDefault();
+    dragDepth++;
+    dropOverlay.classList.add("show");
+  });
+  window.addEventListener("dragover",e=>{
+    if(!dropOverlay.classList.contains("show")) return;
+    e.preventDefault();
+    updateDropTitle(e);
+  });
+  window.addEventListener("dragleave",()=>{
+    if(!dropOverlay.classList.contains("show")) return;
+    dragDepth=Math.max(0,dragDepth-1);
+    if(dragDepth===0) dropOverlay.classList.remove("show");
+  });
+  window.addEventListener("drop",e=>{
+    e.preventDefault();
+    hideDropOverlay();
+    const files=Array.from(e.dataTransfer.files||[]);
+    if(files.length) handleDrop(files,e.clientX);
+  });
+
+  renderCard(0); renderCard(1);
+  buildGlossList("");
+  updateVisibility();
+  renderFooter();
+  requestDraw();
+  if(/[?&]demo\b/.test(location.search)) loadDemo();
+}
+boot();
+</script>
+</body>
+</html>

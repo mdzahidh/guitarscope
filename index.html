@@ -257,6 +257,11 @@ table.datatable td{
 }
 table.datatable tr:last-child td{ border-bottom:0; }
 table.datatable td.rng{ font-size:11.5px; }
+table.datatable tr.grp td{
+  padding-top:18px; padding-bottom:5px; font-size:10.5px; font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--dim);
+  border-bottom:1px solid var(--hair);
+}
 .tablefoot{ font-size:11px; color:var(--dim); margin-top:10px; }
 .delta-a{ color:var(--slot-a); }
 .delta-b{ color:var(--slot-b); }
@@ -523,9 +528,9 @@ kbd{
           <div class="xline" id="specXline"></div>
           <div class="readout" id="specReadout"></div>
           <div class="plotempty" id="specEmpty">
-            <div class="t1">Two guitars, one picture</div>
-            <div class="t2">Drop two recordings above — the same riff on different guitars —
-              and their average spectra will be drawn here for comparison.</div>
+            <div class="t1">One guitar to study, two to compare</div>
+            <div class="t2">Drop recordings above — a single guitar gets the full analysis;
+              add a second playing the same riff and the comparison views unlock.</div>
             <button class="btn" id="demoBtn">Load demo pair</button>
           </div>
         </div>
@@ -554,7 +559,7 @@ kbd{
       <div class="cardhead">
         <div>
           <div class="cardtitle">Band energy</div>
-          <div class="cardsub">share of total 60 Hz–20 kHz energy · Δ in dB</div>
+          <div class="cardsub" id="bandsSub">share of total 60 Hz–20 kHz energy · Δ in dB</div>
         </div>
       </div>
       <div class="cardbody">
@@ -654,7 +659,7 @@ kbd{
       <div class="cardhead">
         <div>
           <div class="cardtitle">Envelope</div>
-          <div class="cardsub">amplitude envelope in dB re full scale, A/B aligned at each file's first onset · tick marks show detected onsets</div>
+          <div class="cardsub" id="envSub">amplitude envelope in dB re full scale, A/B aligned at each file's first onset · tick marks show detected onsets</div>
         </div>
       </div>
       <div class="cardbody">
@@ -3128,7 +3133,8 @@ const specWrap=el("specWrap"), specCanvas=el("specCanvas"),
       specEmpty=el("specEmpty"), demoBtn=el("demoBtn");
 const diffCard=el("diffCard"), diffSub=el("diffSub"), diffWrap=el("diffWrap"),
       diffCanvas=el("diffCanvas"), diffXline=el("diffXline"), diffReadout=el("diffReadout");
-const bandsCard=el("bandsCard"), bandsTable=el("bandsTable"), bandsFoot=el("bandsFoot");
+const bandsCard=el("bandsCard"), bandsSub=el("bandsSub"),
+      bandsTable=el("bandsTable"), bandsFoot=el("bandsFoot");
 const toneCard=el("toneCard"), toneRows=el("toneRows"),
       prosePara=el("prosePara"), toneNote=el("toneNote");
 const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"), sgramSub=el("sgramSub"),
@@ -3140,7 +3146,7 @@ const sgLmSwitch=el("sgLmSwitch"), sgLmToggle=el("sgLmToggle"),
       sgDiffSwitch=el("sgDiffSwitch"), sgDiffToggle=el("sgDiffToggle"),
       sgramWrapD=el("sgramWrapD"), sgramCanvasD=el("sgramCanvasD"),
       sgramXlineD=el("sgramXlineD"), sgramReadoutD=el("sgramReadoutD");
-const envCard=el("envCard"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
+const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
 const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSeg=el("eqDevSeg"),
       eqFaceCanvas=el("eqFaceCanvas"), eqRespCanvas=el("eqRespCanvas"), eqNote=el("eqNote");
@@ -3551,7 +3557,8 @@ function buildEnvModel(){
     tMax=Math.max(tMax,s.duration-tv.firstOnset);
   }
   if(!curves.length) return null;
-  return {curves, tMin, tMax, statusText:"aligned at first onset · 0 dB = full scale"};
+  return {curves, tMin, tMax, statusText:(curves.length>1
+    ?"aligned at first onset · ":"t = 0 at first onset · ")+"0 dB = full scale"};
 }
 
 // ---------- EQ match (M2.5) ----------
@@ -3808,28 +3815,35 @@ function renderBandsTable(){
   const s0=state.slots[0], s1=state.slots[1];
   if(!s0&&!s1) return;
   const both=!!(s0&&s1);
+  const slots=[0,1].filter(i=>state.slots[i]); // columns only for loaded guitars
   const tot=[s0?bandPower(s0.welch.power,s0.welch.df,60,20000):null,
              s1?bandPower(s1.welch.power,s1.welch.df,60,20000):null];
+  const nCols=2+slots.length+(both?1:0);
   let html='<thead><tr><th>Band</th><th>Range</th>'+
-    '<th>'+(s0?esc(shortName(s0.name,16)):"A")+'</th>'+
-    '<th>'+(s1?esc(shortName(s1.name,16)):"B")+'</th>'+
-    '<th>Δ (A − B)</th></tr></thead><tbody>';
-  for(const b of bandsFor(state.mode)){
-    const pa=s0?bandPower(s0.welch.power,s0.welch.df,b.f0,b.f1):null;
-    const pb=s1?bandPower(s1.welch.power,s1.welch.df,b.f0,b.f1):null;
-    const shA=pa!=null?fmtPct(pa/Math.max(tot[0],1e-30)):"—";
-    const shB=pb!=null?fmtPct(pb/Math.max(tot[1],1e-30)):"—";
-    let dCell='<td class="delta-0">—</td>';
+    slots.map(i=>'<th>'+esc(shortName(state.slots[i].name,16))+'</th>').join('')+
+    (both?'<th>Δ (A − B)</th>':'')+'</tr></thead><tbody>';
+  const row=(termsHtml,f0,f1)=>{
+    const p=[0,1].map(i=>state.slots[i]
+      ?bandPower(state.slots[i].welch.power,state.slots[i].welch.df,f0,f1):null);
+    let cells="";
+    for(const i of slots) cells+='<td>'+fmtPct(p[i]/Math.max(tot[i],1e-30))+'</td>';
     if(both){
-      const d=10*Math.log10(Math.max(pa,1e-30)/Math.max(pb,1e-30))-(state.lm&&state.lmOffset!=null?state.lmOffset:0);
+      const d=10*Math.log10(Math.max(p[0],1e-30)/Math.max(p[1],1e-30))-(state.lm&&state.lmOffset!=null?state.lmOffset:0);
       const cls=d>0.75?"delta-a":(d<-0.75?"delta-b":"delta-0");
-      dCell='<td class="'+cls+'">'+fmtDb(d,1)+'</td>';
+      cells+='<td class="'+cls+'">'+fmtDb(d,1)+'</td>';
     }
-    html+='<tr><td>'+b.termsHtml+'</td><td class="rng">'+rangeStr(b.f0,b.f1)+'</td>'+
-          '<td>'+shA+'</td><td>'+shB+'</td>'+dCell+'</tr>';
+    return '<tr><td>'+termsHtml+'</td><td class="rng">'+rangeStr(f0,f1)+'</td>'+cells+'</tr>';
+  };
+  for(const b of bandsFor(state.mode)) html+=row(b.termsHtml,b.f0,b.f1);
+  html+='<tr class="grp"><td colspan="'+nCols+'">EQ vocabulary — the regions guitarists name when tuning EQ</td></tr>';
+  for(const r of EQ_REGIONS){
+    const label=r.label.charAt(0)+r.label.slice(1).toLowerCase();
+    html+=row(termHtml(r.key,label),r.f0,r.f1);
   }
   bandsTable.innerHTML=html+"</tbody>";
-  let foot="Shares are of each recording's own 60 Hz–20 kHz energy — level-independent, and they won't sum to 100 % (the unshaded 1.2–2 kHz region is analyzed but deliberately unnamed).";
+  let foot="Shares are of each recording's own 60 Hz–20 kHz energy — level-independent. "+
+    "The named bands deliberately leave 1.2–2 kHz unnamed, so their shares won't sum to 100 %; "+
+    "the EQ-vocabulary regions tile the whole range, so theirs do (≈100 %).";
   if(both) foot+=state.lm&&state.lmOffset!=null
     ? " Δ is band level A − B after the "+fmtDb(state.lmOffset,2)+" level-match on B."
     : " Δ is raw band level A − B (level-match off).";
@@ -3900,7 +3914,10 @@ function toneRowHtml(d){
   const zero=d.zero!=null?'<span class="zero" style="left:'+pos(d.zero)+'%"></span>':"";
   const ticks='<span class="tick" style="left:0;transform:none">'+d.ticks[0]+'</span>'+
               '<span class="tick" style="left:auto;right:0;transform:none">'+d.ticks[1]+'</span>';
-  const cell=i=>vals[i]!=null?d.fmt(vals[i]):'<span class="none">—</span>';
+  // an empty slot gets a blank cell (single-guitar mode); a loaded slot with no
+  // usable value gets an explicit em-dash
+  const cell=i=>state.slots[i]
+    ?(vals[i]!=null?d.fmt(vals[i]):'<span class="none">—</span>'):"";
   return '<div class="tonerow"><div class="tonename">'+termHtml(d.term,d.name)+
          '<small>'+d.unit+'</small></div><div class="toneval va">'+cell(0)+
          '</div><div class="track">'+zero+pts+ticks+'</div><div class="toneval vb">'+cell(1)+'</div></div>';
@@ -4044,8 +4061,10 @@ function updateDiffSub(){
     : "A − B, dB";
 }
 function updateSgramSub(){
-  sgramSub.textContent="time–frequency energy, shared color scale across A and B"+
-    (sgLmDb()?" · level-match applied to B":"")+" · magma colormap";
+  sgramSub.textContent=bothLoaded()
+    ? "time–frequency energy, shared color scale across A and B"+
+      (sgLmDb()?" · level-match applied to B":"")+" · magma colormap"
+    : "time–frequency energy · magma colormap";
 }
 function updateEqSub(){
   if(!bothLoaded()){
@@ -4088,6 +4107,12 @@ function updateVisibility(){
   bandsCard.style.display=n?"":"none";
   toneCard.style.display=n?"":"none";
   eqCard.style.display=both?"":"none";
+  bandsSub.textContent=both
+    ? "share of total 60 Hz–20 kHz energy · Δ in dB"
+    : "share of total 60 Hz–20 kHz energy";
+  envSub.textContent=both
+    ? "amplitude envelope in dB re full scale, A/B aligned at each file's first onset · tick marks show detected onsets"
+    : "amplitude envelope in dB re full scale · tick marks show detected onsets";
   const hasT=[0,1].map(i=>!!(state.slots[i]&&state.slots[i].tvis&&state.slots[i].tvis.sg));
   const missT=[0,1].filter(i=>state.slots[i]&&!hasT[i]);
   sgramCard.style.display=n?"":"none";
@@ -4508,12 +4533,15 @@ function makeDemoSamples(rate,damping,lpExc,seed,gain){
   for(let i=0;i<total;i++) out[i]*=g;
   return out;
 }
-function loadDemo(){
+function loadDemo(only){
+  // only: "a"/"b" loads a single demo guitar (exercises single-guitar mode)
   const specs=[
     {name:"Demo — Bright", rate:44100, damping:0.9962, lp:false, seed:42424243, gain:0.8},
     {name:"Demo — Warm",   rate:48000, damping:0.9900, lp:true,  seed:20260820, gain:0.55},
   ];
-  return Promise.all(specs.map((sp,i)=>{
+  const idxs=only==="a"?[0]:only==="b"?[1]:[0,1];
+  return Promise.all(idxs.map(i=>{
+    const sp=specs[i];
     const samples=makeDemoSamples(sp.rate,sp.damping,sp.lp,sp.seed,sp.gain);
     const slot={ name:sp.name, kind:"demo",
       info:{container:"Karplus–Strong synth", sampleRate:sp.rate, channels:1, bitDepth:"64-bit float"},
@@ -4636,7 +4664,7 @@ function boot(){
   pngBtn.addEventListener("click",exportPNG);
   csvBtn.addEventListener("click",exportCSV);
   jsonBtn.addEventListener("click",exportJSON);
-  demoBtn.addEventListener("click",loadDemo);
+  demoBtn.addEventListener("click",()=>loadDemo());
 
   glossaryBtn.addEventListener("click",()=>setGloss(true));
   glossClose.addEventListener("click",()=>setGloss(false));
@@ -4771,7 +4799,8 @@ function boot(){
   updateVisibility();
   renderFooter();
   requestDraw();
-  if(/[?&]demo\b/.test(location.search)) loadDemo();
+  const dm=location.search.match(/[?&]demo(?:=(a|b))?(?:&|$)/i);
+  if(dm) loadDemo(dm[1]&&dm[1].toLowerCase());
 }
 boot();
 </script>

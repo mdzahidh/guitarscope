@@ -212,7 +212,7 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .plotwrap canvas{ display:block; width:100%; }
 #specCanvas{ height:440px; }
 #diffCanvas{ height:216px; }
-#sgramCanvasA, #sgramCanvasB{ height:230px; }
+#sgramCanvasA, #sgramCanvasB, #sgramCanvasD{ height:230px; }
 #envCanvas{ height:280px; }
 .sgramstack{ display:flex; flex-direction:column; gap:14px; }
 .plotwrap.hoverable{ cursor:crosshair; }
@@ -581,7 +581,11 @@ kbd{
       <div class="cardhead">
         <div>
           <div class="cardtitle">Spectrogram</div>
-          <div class="cardsub">time–frequency energy, shared color scale across A and B (level-match not applied) · magma colormap</div>
+          <div class="cardsub" id="sgramSub">time–frequency energy, shared color scale across A and B · magma colormap</div>
+        </div>
+        <div class="controls">
+          <label class="switch" id="sgLmSwitch"><input type="checkbox" id="sgLmToggle"><span class="tk"></span><span class="lbl">Level-match</span></label>
+          <label class="switch" id="sgDiffSwitch"><input type="checkbox" id="sgDiffToggle"><span class="tk"></span><span class="lbl">Difference</span></label>
         </div>
       </div>
       <div class="cardbody">
@@ -595,6 +599,11 @@ kbd{
             <canvas id="sgramCanvasB"></canvas>
             <div class="xline" id="sgramXlineB"></div>
             <div class="readout" id="sgramReadoutB"></div>
+          </div>
+          <div class="plotwrap" id="sgramWrapD" style="display:none">
+            <canvas id="sgramCanvasD"></canvas>
+            <div class="xline" id="sgramXlineD"></div>
+            <div class="readout" id="sgramReadoutD"></div>
           </div>
           <div class="tablefoot" id="sgramNote" style="display:none"></div>
         </div>
@@ -2375,13 +2384,42 @@ function tTickLabel(t, step){
   return /^-0(\.0+)?$/.test(v) ? v.slice(1) : v;
 }
 
+// ---------- string-frequency markers (M2.5) ----------
+// Open-string fundamentals of the selected tuning, dashed across the
+// time–frequency image in drawTuning's idiom. Labels hug the right inside
+// edge; one is skipped when it would land within 11 px of the previous
+// (low strings crowd together on a log axis).
+function drawStringMarkers(ctx, pW, pH, markers, yOfF){
+  if(!markers || !markers.length) return;
+  const sorted=markers.slice().sort((a,b)=>b.f-a.f);   // top of plot first
+  ctx.save();
+  ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
+  ctx.font=FONT_XS;
+  let lastY=-1e9;
+  for(const m of sorted){
+    if(!(m.f>FMIN && m.f<FMAX)) continue;
+    const y=Math.round(yOfF(m.f));
+    ctx.strokeStyle="rgba(232,229,222,0.28)"; ctx.lineWidth=1; ctx.setLineDash([1,3]);
+    ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y+0.5); ctx.lineTo(SGPLOT.mL+pW,y+0.5); ctx.stroke();
+    ctx.setLineDash([]);
+    if(y-lastY>=11){
+      ctx.fillStyle="rgba(232,229,222,0.66)";
+      ctx.textAlign="right"; ctx.textBaseline="bottom";
+      ctx.fillText(m.name, SGPLOT.mL+pW-5, y-1);
+      lastY=y;
+    }
+  }
+  ctx.restore();
+}
+
 // ---------- spectrogram image (M2) ----------
 // Renders a spectrogramLog result into an offscreen canvas, one pixel per
 // (frame, log-grid cell). Cached per slot: the live canvas just stretches this
 // bitmap, so hover/resize never re-touches the FFT data. NaN cells (above the
 // file's Nyquist) stay transparent — unmeasured is drawn as nothing.
-function sgramImage(sg, dbMax, dbMin){
+function sgramImage(sg, dbMax, dbMin, dbOffset){
   const {frames, nFrames, gridN}=sg;
+  const off=dbOffset||0;                       // sgram level-match: shifts B's cells
   const cnv=document.createElement("canvas");
   cnv.width=nFrames; cnv.height=gridN;
   const c=cnv.getContext("2d");
@@ -2393,7 +2431,7 @@ function sgramImage(sg, dbMax, dbMin){
       const p=frames[row+i];
       const k=((gridN-1-i)*nFrames+f)*4;      // row 0 = top = highest frequency
       if(!(p>=0)){ px[k+3]=0; continue; }
-      const db=10*Math.log10(p+1e-30);
+      const db=10*Math.log10(p+1e-30)+off;
       const rgb=magmaColor((db-dbMin)/span);
       px[k]=rgb[0]; px[k+1]=rgb[1]; px[k+2]=rgb[2]; px[k+3]=255;
     }
@@ -2476,6 +2514,9 @@ function drawSpectrogramScene(ctx, w, h, model){
     ctx.fillText("above fs/2 = "+fLabel(Math.round(sg.nyquist))+"Hz — not measured", SGPLOT.mL+8, y-4);
   }
 
+  // open-string fundamentals for the selected tuning (M2.5)
+  drawStringMarkers(ctx, pW, pH, model.markers, yOfF);
+
   // colorbar: the exact magma → dB mapping the image used
   const cbX=w-SGPLOT.mR+14, cbW=10;
   for(let yy=0; yy<pH; yy++){
@@ -2496,6 +2537,161 @@ function drawSpectrogramScene(ctx, w, h, model){
   ctx.fillStyle=cssColor("mut"); ctx.textAlign="left";
   const nm=name.length>44 ? name.slice(0,42)+"…" : name;
   ctx.fillText(nm, SGPLOT.mL+13, 15.5);
+  if(model.statusText){
+    ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint"); ctx.textAlign="right";
+    ctx.fillText(model.statusText, w-SGPLOT.mR-6, 15.5);
+  }
+  ctx.restore();
+}
+
+// ---------- spectrogram difference scene (M2.5) ----------
+// Paints sgramDifference output: amber where A is louder, teal where B is
+// louder, near-background neutral at 0. Cells unmeasured on either side
+// (above a Nyquist, outside a file's aligned span, or silent) stay
+// transparent — no data must not look like equal level.
+function sgramDiffImage(dsg, S){
+  const {frames, nFrames, gridN}=dsg;
+  const cnv=document.createElement("canvas");
+  cnv.width=nFrames; cnv.height=gridN;
+  const c=cnv.getContext("2d");
+  const img=c.createImageData(nFrames, gridN);
+  const px=img.data;
+  for(let f=0; f<nFrames; f++){
+    const row=f*gridN;
+    for(let i=0;i<gridN;i++){
+      const v=frames[row+i];
+      const k=((gridN-1-i)*nFrames+f)*4;      // row 0 = top = highest frequency
+      if(!isFinite(v)){ px[k+3]=0; continue; }
+      const rgb=divergeColor(v/S);
+      px[k]=rgb[0]; px[k+1]=rgb[1]; px[k+2]=rgb[2]; px[k+3]=255;
+    }
+  }
+  c.putImageData(img,0,0);
+  return cnv;
+}
+
+function drawSgramDiffScene(ctx, w, h, model){
+  const {dsg, image, S}=model;
+  const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
+  const dur=dsg.duration, t0=dsg.t0;
+  const xOfT=tau=>SGPLOT.mL+((tau-t0)/dur)*pW;
+  const yOfF=f=>SGPLOT.mT+(1-Math.log(f/FMIN)/LOGSPAN)*pH;
+  ctx.clearRect(0,0,w,h);
+  if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
+  ctx.save();
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(image, SGPLOT.mL, SGPLOT.mT, pW, pH);
+  ctx.restore();
+  ctx.strokeStyle=cssColor("hair"); ctx.lineWidth=1;
+  ctx.strokeRect(SGPLOT.mL+0.5, SGPLOT.mT+0.5, pW-1, pH-1);
+
+  // frequency ticks (same axis as the A/B panes)
+  ctx.font=FONT_S; ctx.textAlign="right"; ctx.textBaseline="middle";
+  for(const f of X_MAJOR){
+    const y=yOfF(f);
+    ctx.strokeStyle="rgba(255,255,255,0.25)";
+    ctx.beginPath(); ctx.moveTo(SGPLOT.mL-4,y); ctx.lineTo(SGPLOT.mL,y); ctx.stroke();
+    ctx.fillStyle=cssColor("dim");
+    ctx.fillText(fLabel(f), SGPLOT.mL-8, y);
+  }
+
+  // time ticks — t = 0 is each file's own first onset, so t can be negative
+  const step=timeTickStep(dur);
+  ctx.textAlign="center"; ctx.textBaseline="top";
+  for(let k=Math.ceil((t0-1e-9)/step); k*step<=t0+dur+1e-9; k++){
+    const t=k*step, x=xOfT(t);
+    ctx.strokeStyle="rgba(255,255,255,0.25)";
+    ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT+pH); ctx.lineTo(x,SGPLOT.mT+pH+4); ctx.stroke();
+    ctx.fillStyle=cssColor("dim");
+    ctx.fillText(tTickLabel(t,step), x, SGPLOT.mT+pH+7);
+  }
+
+  // axis units
+  ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint");
+  ctx.textAlign="left"; ctx.textBaseline="bottom";
+  ctx.fillText("s", SGPLOT.mL+pW+3, SGPLOT.mT+pH+18);
+  ctx.save();
+  ctx.translate(12, SGPLOT.mT+2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign="right"; ctx.textBaseline="middle";
+  ctx.fillText("Hz", 0, 0);
+  ctx.restore();
+
+  // t = 0, the alignment anchor (both files' first onset)
+  const x0=xOfT(0);
+  if(x0>SGPLOT.mL+1 && x0<SGPLOT.mL+pW-1){
+    ctx.strokeStyle="rgba(232,229,222,0.30)"; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(x0,SGPLOT.mT); ctx.lineTo(x0,SGPLOT.mT+pH); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // each file's own onsets: A ticks down from the top edge, B up from the bottom
+  ctx.lineWidth=1.5;
+  if(model.onsetsA){
+    ctx.strokeStyle=model.colorA;
+    for(const t of model.onsetsA){
+      const x=xOfT(t);
+      if(x<SGPLOT.mL||x>SGPLOT.mL+pW) continue;
+      ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT); ctx.lineTo(x,SGPLOT.mT+7); ctx.stroke();
+    }
+  }
+  if(model.onsetsB){
+    ctx.strokeStyle=model.colorB;
+    for(const t of model.onsetsB){
+      const x=xOfT(t);
+      if(x<SGPLOT.mL||x>SGPLOT.mL+pW) continue;
+      ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT+pH-7); ctx.lineTo(x,SGPLOT.mT+pH); ctx.stroke();
+    }
+  }
+
+  // honest boundary at the lower of the two Nyquists
+  if(model.nyquistMin<FMAX){
+    const y=yOfF(model.nyquistMin);
+    ctx.strokeStyle="rgba(232,229,222,0.35)"; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=cssColor("dim"); ctx.font=FONT_XS;
+    ctx.textAlign="left"; ctx.textBaseline="bottom";
+    ctx.fillText("above min fs/2 = "+fLabel(Math.round(model.nyquistMin))+"Hz — not measured", SGPLOT.mL+8, y-4);
+  }
+
+  // open-string fundamentals for the selected tuning (M2.5)
+  drawStringMarkers(ctx, pW, pH, model.markers, yOfF);
+
+  // diverging colorbar: amber = A louder, teal = B louder, 0 = equal
+  const cbX=w-SGPLOT.mR+14, cbW=10;
+  for(let yy=0; yy<pH; yy++){
+    const rgb=divergeColor(1-2*yy/(pH-1));
+    ctx.fillStyle="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
+    ctx.fillRect(cbX, SGPLOT.mT+yy, cbW, 1);
+  }
+  ctx.strokeStyle=cssColor("hair2");
+  ctx.strokeRect(cbX+0.5, SGPLOT.mT+0.5, cbW-1, pH-1);
+  ctx.font=FONT_XS; ctx.fillStyle=cssColor("dim"); ctx.textAlign="left";
+  ctx.textBaseline="bottom"; ctx.fillText("+"+S+" dB", cbX-2, SGPLOT.mT-4);
+  ctx.textBaseline="top";    ctx.fillText("-"+S+" dB", cbX-2, SGPLOT.mT+pH+4);
+  ctx.textBaseline="middle"; ctx.fillText("0", cbX+cbW+3, SGPLOT.mT+pH/2);
+  ctx.save();
+  ctx.translate(cbX+cbW+13, SGPLOT.mT+pH*0.25); ctx.rotate(-Math.PI/2);
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillStyle=withAlpha(model.colorA,0.85); ctx.fillText("A louder", 0, 0);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(cbX+cbW+13, SGPLOT.mT+pH*0.75); ctx.rotate(-Math.PI/2);
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillStyle=withAlpha(model.colorB,0.85); ctx.fillText("B louder", 0, 0);
+  ctx.restore();
+
+  // header
+  ctx.font=FONT_S; ctx.textBaseline="middle";
+  ctx.fillStyle=model.colorA;
+  ctx.beginPath(); ctx.arc(SGPLOT.mL+4, 15, 3.5, 0, 2*Math.PI); ctx.fill();
+  ctx.fillStyle=model.colorB;
+  ctx.beginPath(); ctx.arc(SGPLOT.mL+13, 15, 3.5, 0, 2*Math.PI); ctx.fill();
+  ctx.fillStyle=cssColor("mut"); ctx.textAlign="left";
+  ctx.fillText("A − B · aligned at first onset (t = 0)"+(model.lmText?" · "+model.lmText:""), SGPLOT.mL+22, 15.5);
   if(model.statusText){
     ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint"); ctx.textAlign="right";
     ctx.fillText(model.statusText, w-SGPLOT.mR-6, 15.5);
@@ -2611,7 +2807,8 @@ const GRID=makeLogGrid(700,60,20000);
 
 // ---------- state (contract shared with the glossary) ----------
 const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
-              a4:440, smooth:6, lm:false, lmOffset:null, diff:false };
+              a4:440, smooth:6, lm:false, lmOffset:null, diff:false,
+              sgLm:false, sgDiff:false };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
 
@@ -2636,11 +2833,15 @@ const diffCard=el("diffCard"), diffSub=el("diffSub"), diffWrap=el("diffWrap"),
 const bandsCard=el("bandsCard"), bandsTable=el("bandsTable"), bandsFoot=el("bandsFoot");
 const toneCard=el("toneCard"), toneRows=el("toneRows"),
       prosePara=el("prosePara"), toneNote=el("toneNote");
-const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"),
+const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"), sgramSub=el("sgramSub"),
       sgramWraps=[el("sgramWrapA"),el("sgramWrapB")],
       sgramCanvases=[el("sgramCanvasA"),el("sgramCanvasB")],
       sgramXlines=[el("sgramXlineA"),el("sgramXlineB")],
       sgramReadouts=[el("sgramReadoutA"),el("sgramReadoutB")];
+const sgLmSwitch=el("sgLmSwitch"), sgLmToggle=el("sgLmToggle"),
+      sgDiffSwitch=el("sgDiffSwitch"), sgDiffToggle=el("sgDiffToggle"),
+      sgramWrapD=el("sgramWrapD"), sgramCanvasD=el("sgramCanvasD"),
+      sgramXlineD=el("sgramXlineD"), sgramReadoutD=el("sgramReadoutD");
 const envCard=el("envCard"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
 const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
@@ -2976,12 +3177,24 @@ function buildSpecModel(forExport){
            curves, statusText:statusText() };
 }
 function diffVisible(){ return bothLoaded()&&state.diff; }
+function bothSgLoaded(){
+  return !!(state.slots[0]&&state.slots[0].tvis&&state.slots[0].tvis.sg&&
+            state.slots[1]&&state.slots[1].tvis&&state.slots[1].tvis.sg);
+}
+function sgDiffVisible(){ return bothSgLoaded()&&state.sgDiff; }
+function sgLmDb(){
+  // spectrogram level-match: same broadband offset as the spectrum toggle,
+  // applied to B's cells only (and to B's side of the difference)
+  return (state.sgLm&&state.lmOffset!=null&&bothSgLoaded())?state.lmOffset:0;
+}
 function sgramScale(){
   // one color scale shared by A and B, anchored to the louder file's hottest cell
   let top=-Infinity;
   for(let i=0;i<2;i++){
     const s=state.slots[i];
-    if(s&&s.tvis&&s.tvis.sg&&s.tvis.sg.maxDb>top) top=s.tvis.sg.maxDb;
+    if(!(s&&s.tvis&&s.tvis.sg)) continue;
+    const m=s.tvis.sg.maxDb+(i===1?sgLmDb():0);
+    if(m>top) top=m;
   }
   if(top===-Infinity) return null;
   const dbMax=Math.ceil(top/5)*5;
@@ -2990,13 +3203,42 @@ function sgramScale(){
 function sgramModelFor(i,scale){
   const s=state.slots[i], tv=s&&s.tvis;
   if(!tv||!tv.sg) return null;
-  const key=scale.dbMax+"|"+scale.dbMin;
+  const off=i===1?sgLmDb():0;
+  const key=scale.dbMax+"|"+scale.dbMin+"|"+off.toFixed(4);
   if(!s._sgImage||s._sgImage.key!==key)
-    s._sgImage={key, canvas:sgramImage(tv.sg,scale.dbMax,scale.dbMin)};
+    s._sgImage={key, canvas:sgramImage(tv.sg,scale.dbMax,scale.dbMin,off)};
   return { sg:tv.sg, image:s._sgImage.canvas,
     name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
-    dbMax:scale.dbMax, dbMin:scale.dbMin,
-    statusText:tv.sg.win+"-pt Hann · max per log cell" };
+    dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(),
+    statusText:tv.sg.win+"-pt Hann · max per log cell"
+      +(off?" · level-match "+fmtDb(off,1):"") };
+}
+function sgramDiffData(){
+  // cached A−B cell difference + its rendered image; key = the only input
+  // that can change without a slot reload (the level-match offset)
+  if(!bothSgLoaded()) return null;
+  const off=sgLmDb(), key=off.toFixed(4);
+  if(!state._sgDiff||state._sgDiff.key!==key){
+    const t0=state.slots[0].tvis, t1=state.slots[1].tvis;
+    const dsg=sgramDifference(t0.sg,t0.firstOnset,t1.sg,t1.firstOnset,off);
+    // display scale from the 98th percentile of |Δ| so one hot cell can't
+    // wash the picture out; snapped to 3 dB steps, floor 6, cap 30
+    const S=Math.max(6,Math.min(30,Math.ceil(dsg.p98/3)*3));
+    state._sgDiff={key, dsg, S, image:sgramDiffImage(dsg,S)};
+  }
+  return state._sgDiff;
+}
+function buildSgramDiffModel(){
+  const d=sgramDiffData();
+  if(!d) return null;
+  const t0=state.slots[0].tvis, t1=state.slots[1].tvis, off=sgLmDb();
+  return { dsg:d.dsg, image:d.image, S:d.S,
+    colorA:COLORS[0], colorB:COLORS[1], markers:tuningMarkers(),
+    onsetsA:t0.onsets.map(t=>t-t0.firstOnset),
+    onsetsB:t1.onsets.map(t=>t-t1.firstOnset),
+    nyquistMin:Math.min(t0.sg.nyquist,t1.sg.nyquist),
+    lmText:off?"level-match "+fmtDb(off,1)+" on B":null,
+    statusText:"scale = 98th percentile of |Δ|" };
 }
 function buildEnvModel(){
   const curves=[]; let tMin=0, tMax=0;
@@ -3029,6 +3271,13 @@ function drawAll(){
     if(!model) continue;
     const c=setupCanvas(sgramCanvases[i]);
     drawSpectrogramScene(c.ctx,c.w,c.h,model);
+  }
+  if(sgDiffVisible()){
+    const model=buildSgramDiffModel();
+    if(model){
+      const c=setupCanvas(sgramCanvasD);
+      drawSgramDiffScene(c.ctx,c.w,c.h,model);
+    }
   }
   const em=buildEnvModel();
   if(em){
@@ -3104,14 +3353,15 @@ function attachSgramCrosshair(i){
       Math.round(Math.log(fr/FMIN)/LOGSPAN*(sg.gridN-1))));
     const p=sg.frames[f*sg.gridN+gi];
     const measured=!isNaN(p);
+    const off=i===1?sgLmDb():0;   // readout must match what the color encodes
     const wrapRect=wrap.getBoundingClientRect();
     const wx=e.clientX-wrapRect.left;
     xline.style.display="block"; xline.style.left=wx+"px";
     let html='<div class="rf">'+t.toFixed(3)+' s</div>'+
              '<div class="rn">'+fmtHz(fr)+' · '+esc(noteStr(fr,state.a4))+'</div>';
     html+='<div class="row"><span class="dot" style="background:'+COLORS[i]+'"></span>'+
-          '<span class="nm">'+(measured?'cell max':'above fs/2')+'</span>'+
-          '<span class="db">'+(measured?(10*Math.log10(p+1e-30)).toFixed(1)+' dB':'—')+'</span></div>';
+          '<span class="nm">'+(measured?(off?'cell max, LM':'cell max'):'above fs/2')+'</span>'+
+          '<span class="db">'+(measured?(10*Math.log10(p+1e-30)+off).toFixed(1)+' dB':'—')+'</span></div>';
     readout.innerHTML=html;
     readout.style.display="block";
     const rw=readout.offsetWidth;
@@ -3119,6 +3369,46 @@ function attachSgramCrosshair(i){
     readout.style.top="12px";
   });
   wrap.addEventListener("mouseleave",hide);
+}
+function attachSgramDiffCrosshair(){
+  const hide=()=>{ sgramXlineD.style.display="none"; sgramReadoutD.style.display="none"; };
+  sgramWrapD.addEventListener("mousemove",e=>{
+    const d=sgDiffVisible()?sgramDiffData():null;
+    if(!d){ hide(); return; }
+    const dsg=d.dsg;
+    const rect=sgramCanvasD.getBoundingClientRect();
+    const x=e.clientX-rect.left, y=e.clientY-rect.top;
+    const w=rect.width, h=rect.height;
+    const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
+    if(x<SGPLOT.mL||x>w-SGPLOT.mR||y<SGPLOT.mT||y>h-SGPLOT.mB){ hide(); return; }
+    const t=dsg.t0+(x-SGPLOT.mL)/pW*dsg.duration;
+    const fr=Math.exp((1-(y-SGPLOT.mT)/pH)*LOGSPAN)*FMIN;
+    const f=Math.max(0,Math.min(dsg.nFrames-1,Math.round((t-dsg.t0)*dsg.frameRate)));
+    const gi=Math.max(0,Math.min(dsg.gridN-1,
+      Math.round(Math.log(fr/FMIN)/LOGSPAN*(dsg.gridN-1))));
+    const v=dsg.frames[f*dsg.gridN+gi];
+    const measured=isFinite(v);
+    const wrapRect=sgramWrapD.getBoundingClientRect();
+    const wx=e.clientX-wrapRect.left;
+    sgramXlineD.style.display="block"; sgramXlineD.style.left=wx+"px";
+    let html='<div class="rf">'+(t>=0?"+":"")+t.toFixed(3)+' s</div>'+
+             '<div class="rn">'+fmtHz(fr)+' · '+esc(noteStr(fr,state.a4))+'</div>';
+    if(measured){
+      const ci=v>=0?0:1;
+      html+='<div class="row"><span class="dot" style="background:'+COLORS[ci]+'"></span>'+
+            '<span class="nm">'+SLOT_LETTER[ci]+' louder</span>'+
+            '<span class="db">'+Math.abs(v).toFixed(1)+' dB</span></div>';
+    }else{
+      html+='<div class="row"><span class="dot" style="background:'+cssColor("hair2")+'"></span>'+
+            '<span class="nm">not measured</span><span class="db">—</span></div>';
+    }
+    sgramReadoutD.innerHTML=html;
+    sgramReadoutD.style.display="block";
+    const rw=sgramReadoutD.offsetWidth;
+    sgramReadoutD.style.left=((wx+16+rw>wrapRect.width)?(wx-14-rw):(wx+14))+"px";
+    sgramReadoutD.style.top="12px";
+  });
+  sgramWrapD.addEventListener("mouseleave",hide);
 }
 function attachEnvCrosshair(){
   const hide=()=>{ envXline.style.display="none"; envReadout.style.display="none"; };
@@ -3384,7 +3674,8 @@ function renderFooter(){
     (state.lm&&state.lmOffset!=null?fmtDb(state.lmOffset,2)+" on B":"off"));
   const sgS=state.slots.find(s=>s&&s.tvis&&s.tvis.sg);
   if(sgS) parts.push(termHtml("spectrogram","spectrogram")+": "+sgS.tvis.sg.win+
-    "-pt Hann · "+sgS.tvis.sg.gridN+" log cells · max power per cell");
+    "-pt Hann · "+sgS.tvis.sg.gridN+" log cells · max power per cell"+
+    (sgLmDb()?" · level-match "+fmtDb(sgLmDb(),2)+" on B":""));
   paramsLine.innerHTML=parts.join('<span class="sep">·</span>');
 }
 function updateDiffSub(){
@@ -3392,6 +3683,10 @@ function updateDiffSub(){
     ? shortName(state.slots[0].name,18)+" − "+shortName(state.slots[1].name,18)+", dB"+
       (state.lm?" · after level-match":"")
     : "A − B, dB";
+}
+function updateSgramSub(){
+  sgramSub.textContent="time–frequency energy, shared color scale across A and B"+
+    (sgLmDb()?" · level-match applied to B":"")+" · magma colormap";
 }
 
 // ---------- master update ----------
@@ -3411,6 +3706,12 @@ function updateVisibility(){
   envCard.style.display=n?"":"none";
   sgramWraps[0].style.display=hasT[0]?"":"none";
   sgramWraps[1].style.display=hasT[1]?"":"none";
+  const bothT=hasT[0]&&hasT[1];
+  sgLmToggle.disabled=sgDiffToggle.disabled=!bothT;
+  sgLmSwitch.classList.toggle("disabled",!bothT);
+  sgDiffSwitch.classList.toggle("disabled",!bothT);
+  sgramWrapD.style.display=(bothT&&state.sgDiff)?"":"none";
+  updateSgramSub();
   envWrap.style.display=(hasT[0]||hasT[1])?"":"none";
   sgramNote.style.display=missT.length?"":"none";
   envNote.style.display=missT.length?"":"none";
@@ -3433,6 +3734,7 @@ function afterDataChange(animate){
     state.lmOffset=10*Math.log10(Math.max(pa,1e-20)/Math.max(pb,1e-20));
   }else state.lmOffset=null;
   if(s1) s1._dispCache=null; // lmOffset may have moved
+  state._sgDiff=null; // diff image depends on both slots' spectrograms + lmOffset
   updateVisibility();
   updateCurves(animate);
   renderAnalysis();
@@ -3691,7 +3993,8 @@ function exportJSON(){
   const snap={ app:"GuitarScope", type:"snapshot", version:1,
     created:new Date().toISOString(),
     settings:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
-               a4:state.a4, smooth:state.smooth, lm:state.lm },
+               a4:state.a4, smooth:state.smooth, lm:state.lm,
+               sgLm:state.sgLm, sgDiff:state.sgDiff },
     files };
   download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
     "guitarscope_"+exportBaseName()+".json");
@@ -3727,6 +4030,8 @@ function applySnapshot(snap){
   if(isFinite(st.a4)&&st.a4>=415&&st.a4<=466){ state.a4=+st.a4; a4Input.value=state.a4; }
   if([0,12,6,3].includes(st.smooth)) setSmoothUI(st.smooth);
   state.lm=!!st.lm; lmToggle.checked=state.lm;
+  state.sgLm=!!st.sgLm; sgLmToggle.checked=state.sgLm;
+  state.sgDiff=!!st.sgDiff; sgDiffToggle.checked=state.sgDiff;
   loadSeq[0]++; loadSeq[1]++;
   state.slots=[null,null];
   for(const f of snap.files.slice(0,2)){
@@ -3906,6 +4211,16 @@ function boot(){
     updateVisibility();
     requestDraw();
   });
+  sgLmToggle.addEventListener("change",()=>{
+    state.sgLm=sgLmToggle.checked;
+    updateSgramSub(); renderFooter();
+    requestDraw();
+  });
+  sgDiffToggle.addEventListener("change",()=>{
+    state.sgDiff=sgDiffToggle.checked;
+    updateVisibility();
+    requestDraw();
+  });
   pngBtn.addEventListener("click",exportPNG);
   csvBtn.addEventListener("click",exportCSV);
   jsonBtn.addEventListener("click",exportJSON);
@@ -3987,6 +4302,7 @@ function boot(){
   attachCrosshair(specWrap,specCanvas,specXline,specReadout,false);
   attachCrosshair(diffWrap,diffCanvas,diffXline,diffReadout,true);
   attachSgramCrosshair(0); attachSgramCrosshair(1);
+  attachSgramDiffCrosshair();
   attachEnvCrosshair();
 
   cards.forEach((card,i)=>{

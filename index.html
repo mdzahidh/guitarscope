@@ -1410,6 +1410,328 @@ function decimateEnvelope(env, targetLen){
   return { env: out, factor };
 }
 
+// ---------- M2.5: EQ section responses (RBJ analog prototypes) ----------
+// Magnitude-only responses in dB, evaluated on the analog s-plane prototype,
+// Ω = f/fc. Cascaded sections multiply |H|, so summing per-band dB curves is
+// EXACT for the cascade topology modeled here; only "real pedal gyrator stage
+// vs RBJ section" is an approximation (stated in the UI footnote).
+// Peaking: |H(jΩ)|² = ((1−Ω²)² + Ω²(A/Q)²) / ((1−Ω²)² + Ω²/(AQ)²), A = 10^(g/40).
+// Exactly g dB at fc, 0 dB at both extremes, boost/cut exactly reciprocal.
+function eqPeakingDb(f, fc, gainDb, Q){
+  if(!gainDb) return 0;
+  const A = Math.pow(10, gainDb/40);
+  const om2 = (f/fc)*(f/fc), d = 1 - om2;
+  const num = d*d + om2*(A/Q)*(A/Q);
+  const den = d*d + om2/((A*Q)*(A*Q));
+  return 10*Math.log10(num/den);
+}
+// Shelves: g dB on the shelf side, 0 dB on the other, g/2 dB at fc (Q = 1/√2).
+function eqLowShelfDb(f, fc, gainDb, Q){
+  if(!gainDb) return 0;
+  const A = Math.pow(10, gainDb/40), q = Q || Math.SQRT1_2;
+  const om2 = (f/fc)*(f/fc), kk = (A/(q*q))*om2;
+  const num = (A - om2)*(A - om2) + kk;
+  const den = (1 - A*om2)*(1 - A*om2) + kk;
+  return 10*Math.log10((A*A*num)/den);
+}
+function eqHighShelfDb(f, fc, gainDb, Q){
+  if(!gainDb) return 0;
+  const A = Math.pow(10, gainDb/40), q = Q || Math.SQRT1_2;
+  const om2 = (f/fc)*(f/fc), kk = (A/(q*q))*om2;
+  const num = (1 - A*om2)*(1 - A*om2) + kk;
+  const den = (A - om2)*(A - om2) + kk;
+  return 10*Math.log10((A*A*num)/den);
+}
+function eqShapeDb(type, f, fc, gainDb, q){
+  if(type === "lowshelf")  return eqLowShelfDb(f, fc, gainDb, q);
+  if(type === "highshelf") return eqHighShelfDb(f, fc, gainDb, q);
+  return eqPeakingDb(f, fc, gainDb, q);
+}
+
+// ---------- M2.5: EQ device models ----------
+// Graphic sliders and MXR bands: Q 1.41 ≈ 1-octave bandwidth (Q = 1/(2^½ − 2^−½)).
+// Empress ParaEQ Q values model its 3-position Q switch; Logic's list samples its
+// continuous Q control. All model choices are restated in the UI footnote.
+const EQ_DEVICES = [
+  { id:"ge7", name:"Boss GE-7", kind:"graphic",
+    freqs:[100,200,400,800,1600,3200,6400], gainMax:15, q:1.41,
+    trim:{ label:"LEVEL", min:-15, max:15 } },
+  { id:"m108s", name:"MXR M108S Ten Band EQ", kind:"graphic",
+    freqs:[31.25,62.5,125,250,500,1000,2000,4000,8000,16000], gainMax:12, q:1.41,
+    trim:{ label:"VOLUME", min:-12, max:12 } },
+  { id:"paraeq", name:"Empress ParaEQ MkII Deluxe", kind:"parametric",
+    bands:[
+      { label:"LOW",  type:"peak", fMin:35,   fMax:500 },
+      { label:"MID",  type:"peak", fMin:250,  fMax:5000 },
+      { label:"HIGH", type:"peak", fMin:1000, fMax:20000 },
+    ],
+    gainMax:15, qChoices:[0.7,1.4,2.8],
+    trim:{ label:"BOOST", min:0, max:30 } },
+  { id:"logicChEq", name:"Logic Pro Channel EQ", kind:"parametric",
+    bands:[
+      { label:"LO SHELF", type:"lowshelf",  fMin:20,   fMax:600,   qFixed:0.71 },
+      { label:"PEAK 1",   type:"peak",      fMin:40,   fMax:1000 },
+      { label:"PEAK 2",   type:"peak",      fMin:120,  fMax:4000 },
+      { label:"PEAK 3",   type:"peak",      fMin:400,  fMax:10000 },
+      { label:"PEAK 4",   type:"peak",      fMin:1000, fMax:18000 },
+      { label:"HI SHELF", type:"highshelf", fMin:1500, fMax:20000, qFixed:0.71 },
+    ],
+    gainMax:24, qChoices:[0.4,0.71,1.1,1.8,2.9,4.6],
+    trim:{ label:"GAIN", min:-24, max:24 } },
+];
+const EQ_DEVICE_BY_ID = {};
+for(const d of EQ_DEVICES) EQ_DEVICE_BY_ID[d.id] = d;
+
+// ---------- M2.5: least-squares helper ----------
+// Solve min‖Ax − b‖ via normal equations with a tiny ridge (1e-9) and Gaussian
+// elimination with partial pivoting. cols = array of column vectors of A.
+function lsqSolve(cols, b){
+  const m = cols.length, n = b.length;
+  const G = [], x = new Float64Array(m);
+  for(let i=0;i<m;i++){
+    G.push(new Float64Array(m));
+    let s = 0;
+    for(let k=0;k<n;k++) s += cols[i][k]*b[k];
+    x[i] = s;
+    for(let j=0;j<=i;j++){
+      let g = 0;
+      for(let k=0;k<n;k++) g += cols[i][k]*cols[j][k];
+      G[i][j] = g; G[j][i] = g;
+    }
+    G[i][i] += 1e-9;
+  }
+  for(let c=0;c<m;c++){
+    let p = c;
+    for(let r=c+1;r<m;r++) if(Math.abs(G[r][c]) > Math.abs(G[p][c])) p = r;
+    if(p !== c){
+      const tr = G[p]; G[p] = G[c]; G[c] = tr;
+      const tx = x[p]; x[p] = x[c]; x[c] = tx;
+    }
+    const piv = G[c][c];
+    if(!piv) continue;
+    for(let r=c+1;r<m;r++){
+      const fct = G[r][c]/piv;
+      if(!fct) continue;
+      for(let j=c;j<m;j++) G[r][j] -= fct*G[c][j];
+      x[r] -= fct*x[c];
+    }
+  }
+  for(let c=m-1;c>=0;c--){
+    let s = x[c];
+    for(let j=c+1;j<m;j++) s -= G[c][j]*x[j];
+    x[c] = G[c][c] ? s/G[c][c] : 0;
+  }
+  return x;
+}
+
+// ---------- M2.5: EQ fitting ----------
+// Both fitters minimize Σ(target − (Σ band responses + trim))² on the given
+// frequency grid. Deterministic: no randomness, fixed iteration counts.
+// Returned settings: { deviceId, kind, bands:[{type,f,gainDb,q,label}],
+//                      trimDb, residualRms }.
+function fitGraphicEq(freqs, targetDb, device){
+  const n = freqs.length, nb = device.freqs.length, q = device.q, gRef = 6;
+  // LS init in dB with per-dB unit shapes (dB-additive approximation), plus
+  // a constant column for the trim; then clamp and refine on the exact model.
+  const colsInit = [];
+  for(let i=0;i<nb;i++){
+    const col = new Float64Array(n);
+    for(let k=0;k<n;k++) col[k] = eqPeakingDb(freqs[k], device.freqs[i], gRef, q)/gRef;
+    colsInit.push(col);
+  }
+  colsInit.push(new Float64Array(n).fill(1));
+  const sol = lsqSolve(colsInit, targetDb);
+  const gains = new Float64Array(nb);
+  for(let i=0;i<nb;i++) gains[i] = Math.max(-device.gainMax, Math.min(device.gainMax, sol[i]));
+  const bandCur = [], total = new Float64Array(n);
+  for(let i=0;i<nb;i++){
+    const cur = new Float64Array(n);
+    for(let k=0;k<n;k++){ cur[k] = eqPeakingDb(freqs[k], device.freqs[i], gains[i], q); total[k] += cur[k]; }
+    bandCur.push(cur);
+  }
+  let trim = 0;
+  const setTrim = ()=>{
+    let s = 0;
+    for(let k=0;k<n;k++) s += targetDb[k] - total[k];
+    trim = Math.max(device.trim.min, Math.min(device.trim.max, s/n));
+  };
+  setTrim();
+  // Coordinate descent: per band, ternary-search the gain on the exact
+  // response (24 iterations → gain resolved to ~0.002 dB), trim closed-form.
+  for(let sweep=0; sweep<3; sweep++){
+    for(let i=0;i<nb;i++){
+      for(let k=0;k<n;k++) total[k] -= bandCur[i][k];
+      const fc = device.freqs[i];
+      const evalG = (g)=>{
+        let s = 0;
+        for(let k=0;k<n;k++){
+          const e = targetDb[k] - (total[k] + eqPeakingDb(freqs[k], fc, g, q) + trim);
+          s += e*e;
+        }
+        return s;
+      };
+      let lo = -device.gainMax, hi = device.gainMax;
+      for(let it=0; it<24; it++){
+        const g1 = lo + (hi-lo)/3, g2 = hi - (hi-lo)/3;
+        if(evalG(g1) <= evalG(g2)) hi = g2; else lo = g1;
+      }
+      gains[i] = (lo+hi)/2;
+      for(let k=0;k<n;k++){
+        bandCur[i][k] = eqPeakingDb(freqs[k], fc, gains[i], q);
+        total[k] += bandCur[i][k];
+      }
+      setTrim();
+    }
+  }
+  let s2 = 0;
+  for(let k=0;k<n;k++){ const e = targetDb[k] - (total[k] + trim); s2 += e*e; }
+  const bands = [];
+  for(let i=0;i<nb;i++) bands.push({ type:"peak", f:device.freqs[i], gainDb:gains[i], q, label:null });
+  return { deviceId:device.id, kind:"graphic", bands, trimDb:trim, residualRms:Math.sqrt(s2/n) };
+}
+
+function fitParametricEq(freqs, targetDb, device){
+  const n = freqs.length, nb = device.bands.length, gMax = device.gainMax, gRef = 6;
+  const state = device.bands.map(b => ({
+    type:b.type, label:b.label, f:Math.sqrt(b.fMin*b.fMax), gainDb:0,
+    q: b.qFixed || device.qChoices[Math.floor(device.qChoices.length/2)] }));
+  const bandCur = state.map(()=> new Float64Array(n));
+  const total = new Float64Array(n);
+  let trim = 0;
+  const setTrim = ()=>{
+    let s = 0;
+    for(let k=0;k<n;k++) s += targetDb[k] - total[k];
+    trim = Math.max(device.trim.min, Math.min(device.trim.max, s/n));
+  };
+  const sseWith = (type, fc, g, q)=>{
+    let s = 0;
+    for(let k=0;k<n;k++){
+      const e = targetDb[k] - (total[k] + eqShapeDb(type, freqs[k], fc, g, q) + trim);
+      s += e*e;
+    }
+    return s;
+  };
+  setTrim();
+  // Greedy per-band scan: 25 log-spaced center candidates × the device's Q
+  // choices; per candidate the gain is a clamped least-squares projection of
+  // the residual onto the unit shape, scored on the exact model; the winner's
+  // gain is then ternary-refined. One init sweep + two refinement sweeps.
+  for(let sweep=0; sweep<3; sweep++){
+    for(let i=0;i<nb;i++){
+      const spec = device.bands[i], st = state[i];
+      for(let k=0;k<n;k++) total[k] -= bandCur[i][k];
+      setTrim();
+      const qList = spec.qFixed ? [spec.qFixed] : device.qChoices;
+      const NF = 25, lr = Math.log(spec.fMax/spec.fMin);
+      let best = { sse:Infinity, f:st.f, g:0, q:st.q };
+      for(let fi=0; fi<NF; fi++){
+        const fc = spec.fMin*Math.exp(lr*fi/(NF-1));
+        for(const qc of qList){
+          let num = 0, den = 0;
+          for(let k=0;k<n;k++){
+            const u = eqShapeDb(spec.type, freqs[k], fc, gRef, qc)/gRef;
+            num += u*(targetDb[k] - (total[k] + trim));
+            den += u*u;
+          }
+          let g = den > 1e-12 ? num/den : 0;
+          g = Math.max(-gMax, Math.min(gMax, g));
+          const s = sseWith(spec.type, fc, g, qc);
+          if(s < best.sse) best = { sse:s, f:fc, g, q:qc };
+        }
+      }
+      let lo = -gMax, hi = gMax;
+      for(let it=0; it<24; it++){
+        const g1 = lo + (hi-lo)/3, g2 = hi - (hi-lo)/3;
+        if(sseWith(spec.type, best.f, g1, best.q) <= sseWith(spec.type, best.f, g2, best.q)) hi = g2;
+        else lo = g1;
+      }
+      const gT = (lo+hi)/2;
+      if(sseWith(spec.type, best.f, gT, best.q) < best.sse) best.g = gT;
+      st.f = best.f; st.gainDb = best.g; st.q = best.q;
+      for(let k=0;k<n;k++){
+        bandCur[i][k] = eqShapeDb(st.type, freqs[k], st.f, st.gainDb, st.q);
+        total[k] += bandCur[i][k];
+      }
+      setTrim();
+    }
+  }
+  let s2 = 0;
+  for(let k=0;k<n;k++){ const e = targetDb[k] - (total[k] + trim); s2 += e*e; }
+  const bands = state.map(st => ({ type:st.type, f:st.f, gainDb:st.gainDb, q:st.q, label:st.label }));
+  return { deviceId:device.id, kind:"parametric", bands, trimDb:trim, residualRms:Math.sqrt(s2/n) };
+}
+
+// Composite response of a normalized settings object on a frequency grid.
+function eqSettingsResponseDb(freqs, settings){
+  const out = new Float64Array(freqs.length);
+  for(const b of settings.bands){
+    if(!b.gainDb) continue;
+    for(let k=0;k<freqs.length;k++) out[k] += eqShapeDb(b.type, freqs[k], b.f, b.gainDb, b.q);
+  }
+  const t = settings.trimDb || 0;
+  if(t) for(let k=0;k<freqs.length;k++) out[k] += t;
+  return out;
+}
+
+// ---------- M2.5: spectrogram difference ----------
+// A − B in dB per log cell, both spectrograms aligned at their own first
+// onsets (t0A/t0B in seconds). dbOffsetB is added to B before subtracting
+// (pass the level-match offset when it is enabled). Cells are NaN when either
+// side is NaN (above its Nyquist) or below the measurement floor (p ≤ 1e-20),
+// so absence of data never reads as a level difference. p98 (98th percentile
+// of |Δ|) is returned for a defensible display scale.
+function sgramDifference(sgA, t0A, sgB, t0B, dbOffsetB){
+  dbOffsetB = dbOffsetB || 0;
+  const gridN = Math.min(sgA.gridN, sgB.gridN);
+  const frameRate = Math.min(sgA.frameRate, sgB.frameRate);
+  const tPre  = Math.min(t0A, t0B);
+  const tPost = Math.min(sgA.duration - t0A, sgB.duration - t0B);
+  const nFrames = Math.max(1, Math.floor((tPre + tPost)*frameRate));
+  const t0 = -tPre;                    // time of column 0, relative to first onset
+  const frames = new Float64Array(nFrames*gridN);
+  const colOf = (sg, tAbs)=>{
+    const rate = sg.frameRate*sg.hop;  // frame center time = (f·hop + win/2)/rate
+    const f = Math.round((tAbs*rate - sg.win/2)/sg.hop);
+    return Math.max(0, Math.min(sg.nFrames - 1, f));
+  };
+  const absVals = [];
+  let maxAbs = 0;
+  for(let f=0; f<nFrames; f++){
+    const tau = t0 + f/frameRate;
+    const rowA = colOf(sgA, tau + t0A)*sgA.gridN;
+    const rowB = colOf(sgB, tau + t0B)*sgB.gridN;
+    const row = f*gridN;
+    for(let i=0;i<gridN;i++){
+      const pA = sgA.frames[rowA+i], pB = sgB.frames[rowB+i];
+      if(!(pA > 1e-20) || !(pB > 1e-20)){ frames[row+i] = NaN; continue; }
+      const d = 10*Math.log10(pA) - (10*Math.log10(pB) + dbOffsetB);
+      frames[row+i] = d;
+      const a = Math.abs(d);
+      if(a > maxAbs) maxAbs = a;
+      absVals.push(a);
+    }
+  }
+  absVals.sort((x,y)=>x-y);
+  const p98 = absVals.length ? absVals[Math.min(absVals.length-1, Math.floor(absVals.length*0.98))] : 0;
+  return { frames, nFrames, gridN, grid:sgA.grid, frameRate, t0,
+           duration: tPre + tPost, maxAbs, p98 };
+}
+
+// Diverging color for signed dB differences: t ∈ [−1, 1] lerps from the
+// near-background neutral to slot A's amber (t > 0, A louder) or slot B's
+// teal (t < 0, B louder). Endpoints are exactly the slot accents.
+const DIVERGE_NEUTRAL = [14,16,20];
+const DIVERGE_POS = [217,163,91];
+const DIVERGE_NEG = [94,179,171];
+function divergeColor(t){
+  if(!isFinite(t)) t = 0;
+  t = Math.max(-1, Math.min(1, t));
+  const c = t >= 0 ? DIVERGE_POS : DIVERGE_NEG, a = Math.abs(t);
+  return [ Math.round(DIVERGE_NEUTRAL[0] + (c[0]-DIVERGE_NEUTRAL[0])*a),
+           Math.round(DIVERGE_NEUTRAL[1] + (c[1]-DIVERGE_NEUTRAL[1])*a),
+           Math.round(DIVERGE_NEUTRAL[2] + (c[2]-DIVERGE_NEUTRAL[2])*a) ];
+}
+
 // ==== [NODE-TEST BOUNDARY] ==== everything below touches DOM / Web Audio ====
 </script>
 <script>

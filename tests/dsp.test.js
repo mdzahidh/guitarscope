@@ -18,7 +18,10 @@ fs.writeFileSync(modFile, dspSrc + `
 module.exports = { welch, powerToDb, smoothOct, bandPower, spectralCentroid,
   spectralTilt, detectPeaks, makeLogGrid, resampleToGrid, noteInfo, midiToFreq,
   TUNINGS, tuningMidi, autocorrF0, sniffAudioInfo, dynamicsMetrics, attackTimes,
-  spectrogramLog, decimateEnvelope, magmaColor, MAGMA };
+  spectrogramLog, decimateEnvelope, magmaColor, MAGMA,
+  eqPeakingDb, eqLowShelfDb, eqHighShelfDb, eqShapeDb, EQ_DEVICES, EQ_DEVICE_BY_ID,
+  lsqSolve, fitGraphicEq, fitParametricEq, eqSettingsResponseDb,
+  sgramDifference, divergeColor };
 `);
 const D = require(modFile);
 
@@ -402,6 +405,237 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
       `range ${lum[0].toFixed(1)} → ${lum[255].toFixed(1)}`);
     const clamped = D.magmaColor(-3), clamped2 = D.magmaColor(7);
     ok(clamped[2] === 4 && clamped2[0] === 0xfc, "magmaColor clamps out-of-range t");
+  }
+
+  // ---- M2.5 EQ sections: RBJ magnitude identities ----
+  {
+    const g = 6, q = 1.41;
+    const atFc = D.eqPeakingDb(1000, 1000, g, q);
+    ok(approx(atFc, g, 1e-9), "peaking: exactly g dB at fc", atFc.toFixed(9));
+    ok(Math.abs(D.eqPeakingDb(1, 1000, g, q)) < 1e-3 &&
+       Math.abs(D.eqPeakingDb(2e7, 1000, g, q)) < 1e-3,
+      "peaking: ~0 dB far from fc");
+    let recip = true;
+    for (const f of [80, 500, 1000, 1234, 8000])
+      if (Math.abs(D.eqPeakingDb(f, 1000, 9, 2) + D.eqPeakingDb(f, 1000, -9, 2)) > 1e-9)
+        recip = false;
+    ok(recip, "peaking: boost and cut are exactly reciprocal");
+    ok(D.eqPeakingDb(500, 1000, 0, q) === 0, "peaking: zero gain is a hard 0 (bypassed)");
+  }
+
+  // ---- M2.5 shelves: asymptotes, midpoint, reciprocity ----
+  {
+    const g = 8;
+    ok(approx(D.eqLowShelfDb(1e-3, 1000, g), g, 1e-3), "low shelf: g dB on the low side",
+      D.eqLowShelfDb(1e-3, 1000, g).toFixed(4));
+    ok(Math.abs(D.eqLowShelfDb(1e9, 1000, g)) < 1e-3, "low shelf: 0 dB on the high side");
+    ok(approx(D.eqLowShelfDb(1000, 1000, g), g / 2, 1e-9),
+      "low shelf: exactly g/2 at fc (default Q = 1/√2)",
+      D.eqLowShelfDb(1000, 1000, g).toFixed(9));
+    ok(approx(D.eqHighShelfDb(1e9, 1000, g), g, 1e-3) &&
+       Math.abs(D.eqHighShelfDb(1e-3, 1000, g)) < 1e-3 &&
+       approx(D.eqHighShelfDb(1000, 1000, g), g / 2, 1e-9),
+      "high shelf mirrors the low shelf");
+    let recip = true;
+    for (const f of [100, 900, 1000, 1100, 12000])
+      if (Math.abs(D.eqLowShelfDb(f, 1000, 7, 0.71) + D.eqLowShelfDb(f, 1000, -7, 0.71)) > 1e-9 ||
+          Math.abs(D.eqHighShelfDb(f, 1000, 7, 0.71) + D.eqHighShelfDb(f, 1000, -7, 0.71)) > 1e-9)
+        recip = false;
+    ok(recip, "shelves: boost and cut are exactly reciprocal");
+    ok(D.eqShapeDb("lowshelf", 500, 1000, 8, 0.71) === D.eqLowShelfDb(500, 1000, 8, 0.71) &&
+       D.eqShapeDb("highshelf", 500, 1000, 8, 0.71) === D.eqHighShelfDb(500, 1000, 8, 0.71) &&
+       D.eqShapeDb("peak", 500, 1000, 8, 2) === D.eqPeakingDb(500, 1000, 8, 2),
+      "eqShapeDb dispatches by type");
+  }
+
+  // ---- M2.5 eqSettingsResponseDb: composite = Σ band dB + trim ----
+  {
+    const s = { bands: [
+      { type: "peak",     f: 1000, gainDb: 6,  q: 2 },
+      { type: "lowshelf", f: 200,  gainDb: -4, q: 0.71 },
+      { type: "peak",     f: 5000, gainDb: 0,  q: 1.41 }, // bypassed
+    ], trimDb: 1.5 };
+    const freqs = [100, 1000, 8000];
+    const r = D.eqSettingsResponseDb(freqs, s);
+    let mx = 0;
+    for (let k = 0; k < freqs.length; k++) {
+      const want = D.eqPeakingDb(freqs[k], 1000, 6, 2)
+                 + D.eqLowShelfDb(freqs[k], 200, -4, 0.71) + 1.5;
+      mx = Math.max(mx, Math.abs(r[k] - want));
+    }
+    ok(mx < 1e-9, "composite sums active bands plus trim, skips zero-gain bands",
+      mx.toExponential(2));
+  }
+
+  // ---- M2.5 lsqSolve: recovers an exact linear model ----
+  {
+    const x = [0, 1, 2, 3, 4];
+    const cols = [Float64Array.from(x), new Float64Array(5).fill(1)];
+    const b = x.map(v => 2 * v + 3);
+    const sol = D.lsqSolve(cols, b);
+    ok(approx(sol[0], 2, 1e-6) && approx(sol[1], 3, 1e-6),
+      "least squares solves slope 2, intercept 3", `${sol[0].toFixed(4)}, ${sol[1].toFixed(4)}`);
+  }
+
+  // ---- M2.5 EQ device table sanity ----
+  {
+    ok(D.EQ_DEVICES.length === 4 &&
+       D.EQ_DEVICE_BY_ID.ge7.freqs.length === 7 &&
+       D.EQ_DEVICE_BY_ID.m108s.freqs.length === 10 &&
+       D.EQ_DEVICE_BY_ID.paraeq.bands.length === 3 &&
+       D.EQ_DEVICE_BY_ID.logicChEq.bands.length === 6,
+      "device table: GE-7 ×7, MXR ×10, Empress ×3, Logic ×6");
+    ok(D.EQ_DEVICE_BY_ID.paraeq.trim.min === 0 &&
+       D.EQ_DEVICE_BY_ID.logicChEq.bands[0].qFixed === 0.71,
+      "Empress BOOST is boost-only; Logic shelves carry fixed Q");
+  }
+
+  // ---- M2.5 fitGraphicEq: recovers known GE-7 settings from an in-model target ----
+  {
+    const dev = D.EQ_DEVICE_BY_ID.ge7;
+    const grid = D.makeLogGrid(160, 60, 20000);
+    const trueGains = [4, -3, 6, 0, -5, 2.5, -1.5], trueTrim = 2;
+    const target = new Float64Array(grid.length);
+    for (let k = 0; k < grid.length; k++) {
+      let s = trueTrim;
+      for (let i = 0; i < dev.freqs.length; i++)
+        s += D.eqPeakingDb(grid[k], dev.freqs[i], trueGains[i], dev.q);
+      target[k] = s;
+    }
+    const fit = D.fitGraphicEq(grid, target, dev);
+    ok(fit.deviceId === "ge7" && fit.kind === "graphic" && fit.bands.length === 7,
+      "graphic fit returns normalized settings shape");
+    let maxErr = 0;
+    for (let i = 0; i < 7; i++)
+      maxErr = Math.max(maxErr, Math.abs(fit.bands[i].gainDb - trueGains[i]));
+    ok(maxErr < 0.15, "recovers all 7 slider gains within 0.15 dB",
+      maxErr.toFixed(4) + " dB max err");
+    ok(Math.abs(fit.trimDb - trueTrim) < 0.15, "recovers the LEVEL trim",
+      fit.trimDb.toFixed(3) + " dB");
+    ok(fit.residualRms < 0.05, "residual ≈ 0 for an exactly representable target",
+      fit.residualRms.toFixed(4) + " dB rms");
+    const fit2 = D.fitGraphicEq(grid, target, dev);
+    ok(JSON.stringify(fit) === JSON.stringify(fit2), "graphic fit is deterministic");
+    // achieved response also matches on a denser grid the fit never saw
+    const dense = D.makeLogGrid(700, 60, 20000);
+    const resp = D.eqSettingsResponseDb(dense, fit);
+    let mx = 0;
+    for (let k = 0; k < dense.length; k++) {
+      let want = trueTrim;
+      for (let i = 0; i < 7; i++) want += D.eqPeakingDb(dense[k], dev.freqs[i], trueGains[i], dev.q);
+      mx = Math.max(mx, Math.abs(resp[k] - want));
+    }
+    ok(mx < 0.2, "achieved response matches the target off the fit grid too",
+      mx.toFixed(4) + " dB max");
+  }
+
+  // ---- M2.5 fitParametricEq: single-peak recovery ----
+  {
+    const grid = D.makeLogGrid(160, 60, 20000);
+    const target = new Float64Array(grid.length);
+    for (let k = 0; k < grid.length; k++) target[k] = D.eqPeakingDb(grid[k], 1000, 6, 1.4);
+    const dev = D.EQ_DEVICE_BY_ID.paraeq;
+    const fit = D.fitParametricEq(grid, target, dev);
+    ok(fit.kind === "parametric" && fit.bands.length === 3,
+      "parametric fit returns normalized settings shape");
+    ok(fit.residualRms < 0.35, "Empress model fits a +6 dB / 1 kHz / Q 1.4 bump",
+      fit.residualRms.toFixed(3) + " dB rms");
+    const resp = D.eqSettingsResponseDb(grid, fit);
+    let mx = 0;
+    for (let k = 0; k < grid.length; k++) mx = Math.max(mx, Math.abs(resp[k] - target[k]));
+    ok(mx < 1.0, "max deviation from the bump target bounded", mx.toFixed(3) + " dB");
+    let bi = 0;
+    for (let i = 1; i < 3; i++)
+      if (Math.abs(fit.bands[i].gainDb) > Math.abs(fit.bands[bi].gainDb)) bi = i;
+    const b = fit.bands[bi];
+    ok(Math.abs(Math.log(b.f / 1000)) < 0.1, "dominant band centers near 1 kHz",
+      b.f.toFixed(0) + " Hz");
+    ok(Math.abs(b.gainDb - 6) < 1.5, "dominant band gain near +6 dB", b.gainDb.toFixed(2));
+    ok(dev.qChoices.indexOf(b.q) >= 0, "Q snaps to a 3-position switch value", b.q);
+    ok(fit.trimDb >= 0 && fit.trimDb <= 30, "BOOST trim stays in device range",
+      fit.trimDb.toFixed(2));
+    const fitL = D.fitParametricEq(grid, target, D.EQ_DEVICE_BY_ID.logicChEq);
+    ok(fitL.bands[0].q === 0.71 && fitL.bands[5].q === 0.71,
+      "Logic shelves keep their fixed Q 0.71");
+    ok(fitL.residualRms < 0.35, "Logic model fits the bump too",
+      fitL.residualRms.toFixed(3) + " dB rms");
+    const fitP2 = D.fitParametricEq(grid, target, dev);
+    ok(JSON.stringify(fit) === JSON.stringify(fitP2), "parametric fit is deterministic");
+  }
+
+  // ---- M2.5 sgramDifference: onset-aligned A−B, level offset, NaN rules ----
+  {
+    const rate = 44100, win = 2048, df = rate / win, f = 46 * df; // ≈ 990.5 Hz on-bin
+    const mk = async (amp, tOn, tOff, totalSec, r) => {
+      const rr = r || rate;
+      const x = new Float64Array(Math.round(totalSec * rr));
+      for (let i = Math.round(tOn * rr); i < Math.round(tOff * rr); i++)
+        x[i] = amp * Math.sin(2 * Math.PI * f * i / rr);
+      return await D.spectrogramLog(x, rr);
+    };
+    // A: full-scale burst 0.5–1.5 s of a 2 s file; B: half amplitude, 0.8–1.8 s of 2.5 s
+    const sgA = await mk(1.0, 0.5, 1.5, 2.0);
+    const sgB = await mk(0.5, 0.8, 1.8, 2.5);
+    const dsg = D.sgramDifference(sgA, 0.5, sgB, 0.8, 0);
+    ok(approx(dsg.t0, -0.5, 1e-9) && approx(dsg.duration, 2.0, 0.02),
+      "span: min pre-onset lead, min post-onset tail",
+      `t0 ${dsg.t0.toFixed(2)} s, dur ${dsg.duration.toFixed(2)} s`);
+    let ci = 0;
+    for (let i = 1; i < dsg.gridN; i++)
+      if (Math.abs(Math.log(dsg.grid[i] / f)) < Math.abs(Math.log(dsg.grid[ci] / f))) ci = i;
+    const at = tau => dsg.frames[
+      Math.max(0, Math.min(dsg.nFrames - 1, Math.round((tau - dsg.t0) * dsg.frameRate)))
+      * dsg.gridN + ci];
+    const twice = 20 * Math.log10(2); // 6.0206 dB
+    ok(approx(at(0.5), twice, 0.3), "A at 2× amplitude reads +6.02 dB in the tone cell",
+      at(0.5).toFixed(2) + " dB");
+    // τ = 0.25 s after onset: in-burst on BOTH sides only under onset alignment
+    // (absolute time 0.25 s is silence in both files)
+    ok(approx(at(0.25), twice, 0.3), "columns align at each file's own first onset",
+      at(0.25).toFixed(2) + " dB");
+    ok(Number.isNaN(at(-0.3)), "pre-onset silence is NaN, not a fake level difference");
+    ok(dsg.p98 >= 0 && dsg.p98 <= dsg.maxAbs && dsg.p98 > 3,
+      "p98 scale statistic is sane", `p98 ${dsg.p98.toFixed(2)}, max ${dsg.maxAbs.toFixed(2)}`);
+    const dlm = D.sgramDifference(sgA, 0.5, sgB, 0.8, twice);
+    const atLm = dlm.frames[Math.round((0.5 - dlm.t0) * dlm.frameRate) * dlm.gridN + ci];
+    ok(approx(atLm, 0, 0.3), "level-match offset on B cancels the difference",
+      atLm.toFixed(3) + " dB");
+    const dsame = D.sgramDifference(sgA, 0.5, sgA, 0.5, 0);
+    let mxs = 0;
+    for (let k = 0; k < dsame.frames.length; k++) {
+      const v = dsame.frames[k];
+      if (!Number.isNaN(v)) mxs = Math.max(mxs, Math.abs(v));
+    }
+    ok(mxs < 1e-12, "identical signal differences to exactly 0", mxs.toExponential(2));
+    // B at 32 kHz: its NaN above 16 kHz must propagate even where A is loud
+    const f2 = 836 * df; // ≈ 18.0 kHz — above B's Nyquist, below A's
+    const n3 = Math.round(2.0 * rate);
+    const x3 = new Float64Array(n3);
+    for (let i = Math.round(0.5 * rate); i < Math.round(1.5 * rate); i++)
+      x3[i] = 0.5 * Math.sin(2 * Math.PI * f * i / rate)
+            + 0.5 * Math.sin(2 * Math.PI * f2 * i / rate);
+    const sgA3 = await D.spectrogramLog(x3, rate);
+    const sgB3 = await mk(0.5, 0.8, 1.8, 2.5, 32000);
+    const d3 = D.sgramDifference(sgA3, 0.5, sgB3, 0.8, 0);
+    let c2 = 0;
+    for (let i = 1; i < d3.gridN; i++)
+      if (Math.abs(Math.log(d3.grid[i] / f2)) < Math.abs(Math.log(d3.grid[c2] / f2))) c2 = i;
+    const col3 = Math.round((0.5 - d3.t0) * d3.frameRate) * d3.gridN;
+    ok(Number.isNaN(d3.frames[col3 + c2]),
+      "cell above B's Nyquist is NaN even though A is loud there");
+    ok(!Number.isNaN(d3.frames[col3 + ci]),
+      "tone cell below both Nyquists stays measured", d3.frames[col3 + ci].toFixed(2) + " dB");
+  }
+
+  // ---- M2.5 divergeColor: endpoints are the slot accents ----
+  {
+    const p = D.divergeColor(1), z = D.divergeColor(0), m = D.divergeColor(-1);
+    ok(p[0] === 217 && p[1] === 163 && p[2] === 91, "t=+1 → slot A amber", p.join(","));
+    ok(m[0] === 94 && m[1] === 179 && m[2] === 171, "t=−1 → slot B teal", m.join(","));
+    ok(z[0] === 14 && z[1] === 16 && z[2] === 20, "t=0 → near-background neutral", z.join(","));
+    const hi = D.divergeColor(5), lo = D.divergeColor(-5), nn = D.divergeColor(NaN);
+    ok(hi[0] === 217 && lo[2] === 171 && nn[0] === 14 && nn[1] === 16 && nn[2] === 20,
+      "clamps out-of-range t and maps NaN to neutral");
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

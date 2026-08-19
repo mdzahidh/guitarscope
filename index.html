@@ -214,6 +214,8 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 #diffCanvas{ height:232px; }
 #sgramCanvasA, #sgramCanvasB, #sgramCanvasD{ height:230px; }
 #envCanvas{ height:280px; }
+#eqFaceCanvas{ height:216px; }
+#eqRespCanvas{ height:236px; }
 .sgramstack{ display:flex; flex-direction:column; gap:14px; }
 .plotwrap.hoverable{ cursor:crosshair; }
 .xline{
@@ -573,6 +575,43 @@ kbd{
         <div class="tonerows" id="toneRows"></div>
         <div class="prose" id="prosePara" style="display:none"></div>
         <div class="tonenote" id="toneNote"></div>
+      </div>
+    </section>
+
+    <!-- EQ match (M2.5) -->
+    <section class="card reveal" id="eqCard" style="display:none">
+      <div class="cardhead">
+        <div>
+          <div class="cardtitle">EQ match</div>
+          <div class="cardsub" id="eqSub">settings that reshape one guitar's spectrum toward the other's</div>
+        </div>
+        <div class="controls">
+          <div class="ctlgroup">
+            <span>Direction</span>
+            <div class="seg" id="eqDirSeg" role="group" aria-label="EQ match direction">
+              <button data-dir="0" class="on">A → B</button>
+              <button data-dir="1">B → A</button>
+            </div>
+          </div>
+          <div class="ctlgroup">
+            <span>Device</span>
+            <div class="seg" id="eqDevSeg" role="group" aria-label="EQ device">
+              <button data-dev="ge7" class="on">GE-7</button>
+              <button data-dev="m108s">M108S</button>
+              <button data-dev="paraeq">ParaEQ</button>
+              <button data-dev="logicChEq">Logic EQ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cardbody">
+        <div class="plotwrap">
+          <canvas id="eqFaceCanvas"></canvas>
+        </div>
+        <div class="plotwrap">
+          <canvas id="eqRespCanvas"></canvas>
+        </div>
+        <div class="tablefoot" id="eqNote"></div>
       </div>
     </section>
 
@@ -2858,6 +2897,189 @@ function drawEnvelopeScene(ctx, w, h, model){
   drawStatusChip(ctx, w, model.statusText);
   ctx.restore();
 }
+
+// ---------- EQ device face (M2.5) ----------
+// A schematic front panel in house style — sliders for graphic EQs, knobs for
+// the ParaEQ, numeric fields for Logic's Channel EQ. The controls show the
+// fitted settings; this is a rendering of the fit, not a brand illustration.
+function eqFaceHeader(ctx, w, device){
+  ctx.font=FONT_S; ctx.textAlign="left"; ctx.textBaseline="middle";
+  ctx.fillStyle=cssColor("mut");
+  ctx.fillText(device.name.toUpperCase(), 16, 16);
+  ctx.font=FONT_XS; ctx.textAlign="right"; ctx.fillStyle=cssColor("faint");
+  ctx.fillText("modeled panel — controls show the fitted settings", w-16, 16);
+}
+function eqSliderLabel(f){ return f>=1000 ? (f/1000)+"k" : ""+(Math.round(f*100)/100); }
+function drawEqKnob(ctx, cx, cy, r, t, label, value){
+  const a0=-Math.PI*0.75, a1=Math.PI*0.75; // pointer sweep −135°…+135° (0 = up)
+  ctx.strokeStyle="rgba(232,229,222,0.22)"; ctx.lineWidth=1.2;
+  ctx.fillStyle="rgba(255,255,255,0.035)";
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI); ctx.fill(); ctx.stroke();
+  for(const ae of [a0,a1]){ // end-stop dots
+    ctx.fillStyle="rgba(232,229,222,0.30)";
+    ctx.beginPath();
+    ctx.arc(cx+Math.sin(ae)*(r+4), cy-Math.cos(ae)*(r+4), 1.2, 0, 2*Math.PI);
+    ctx.fill();
+  }
+  const a=a0+(a1-a0)*Math.max(0,Math.min(1,t));
+  ctx.strokeStyle=cssColor("ink"); ctx.lineWidth=2; ctx.lineCap="round";
+  ctx.beginPath();
+  ctx.moveTo(cx+Math.sin(a)*r*0.30, cy-Math.cos(a)*r*0.30);
+  ctx.lineTo(cx+Math.sin(a)*(r-2.5), cy-Math.cos(a)*(r-2.5));
+  ctx.stroke(); ctx.lineCap="butt";
+  ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillStyle=cssColor("dim");  ctx.fillText(label, cx, cy-r-12);
+  ctx.fillStyle=cssColor("mut");  ctx.fillText(value, cx, cy+r+13);
+}
+function drawEqSlider(ctx, x, yTop, yBot, t, valueText, freqText){
+  ctx.strokeStyle="rgba(232,229,222,0.16)"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(x,yTop); ctx.lineTo(x,yBot); ctx.stroke();
+  const yMid=(yTop+yBot)/2; // 0-dB detent
+  ctx.strokeStyle="rgba(232,229,222,0.30)"; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x-6,yMid+0.5); ctx.lineTo(x+6,yMid+0.5); ctx.stroke();
+  const y=yBot+(yTop-yBot)*Math.max(0,Math.min(1,t));
+  ctx.fillStyle=cssColor("ink");
+  ctx.strokeStyle="rgba(0,0,0,0.45)"; ctx.lineWidth=1;
+  roundRect(ctx, x-9, y-4, 18, 8, 3); ctx.fill(); ctx.stroke();
+  ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillStyle=cssColor("mut"); ctx.fillText(valueText, x, yTop-11);
+  ctx.fillStyle=cssColor("dim"); ctx.fillText(freqText, x, yBot+13);
+}
+function drawEqShapeGlyph(ctx, cx, cy, type, up){
+  // 26×14 miniature of the band shape, sign-aware
+  const x0=cx-13, x1=cx+13, y0=cy+(up?4:-4), dy=up?-8:8;
+  ctx.strokeStyle="rgba(232,229,222,0.55)"; ctx.lineWidth=1.2; ctx.lineJoin="round";
+  ctx.beginPath();
+  if(type==="peak"){
+    ctx.moveTo(x0,y0);
+    ctx.bezierCurveTo(cx-5,y0, cx-5,y0+dy, cx,y0+dy);
+    ctx.bezierCurveTo(cx+5,y0+dy, cx+5,y0, x1,y0);
+  }else if(type==="lowshelf"){
+    ctx.moveTo(x0,y0+dy);
+    ctx.bezierCurveTo(cx-3,y0+dy, cx+3,y0, x1,y0);
+  }else{ // highshelf
+    ctx.moveTo(x0,y0);
+    ctx.bezierCurveTo(cx-3,y0, cx+3,y0+dy, x1,y0+dy);
+  }
+  ctx.stroke();
+}
+function drawEqFaceScene(ctx, w, h, model){
+  ctx.clearRect(0,0,w,h);
+  const {device, settings}=model;
+  eqFaceHeader(ctx, w, device);
+  if(device.kind==="graphic"){
+    // band sliders left of a hairline divider, the trim slider to its right
+    const yTop=48, yBot=h-32, nb=device.freqs.length;
+    const trimZone=84, xDiv=w-16-trimZone;
+    const x0=50, x1=xDiv-30;
+    for(let i=0;i<nb;i++){
+      const x=Math.round(x0+(x1-x0)*(nb===1?0.5:i/(nb-1)))+0.5;
+      const g=settings.bands[i].gainDb;
+      drawEqSlider(ctx, x, yTop, yBot, (g+device.gainMax)/(2*device.gainMax),
+        fmtDb(g,1).replace(" dB",""), eqSliderLabel(device.freqs[i]));
+    }
+    // gain scale on the far left
+    ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.fillStyle=cssColor("faint");
+    ctx.fillText("+"+device.gainMax, 16, yTop);
+    ctx.fillText("0", 16, (yTop+yBot)/2);
+    ctx.fillText("−"+device.gainMax, 16, yBot);
+    ctx.strokeStyle="rgba(232,229,222,0.10)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(xDiv+0.5,yTop-14); ctx.lineTo(xDiv+0.5,yBot+16); ctx.stroke();
+    const tr=device.trim;
+    drawEqSlider(ctx, Math.round(xDiv+trimZone/2)+0.5, yTop, yBot,
+      (settings.trimDb-tr.min)/(tr.max-tr.min),
+      fmtDb(settings.trimDb,1).replace(" dB",""), tr.label);
+  }else if(device.id==="paraeq"){
+    // three FREQ/GAIN/Q knob trios plus the BOOST knob behind a divider
+    const r=19, cy=h/2+16, trimZone=96, xDiv=w-16-trimZone;
+    const groupW=(xDiv-16)/device.bands.length;
+    device.bands.forEach((spec,i)=>{
+      const st=settings.bands[i], gx0=16+groupW*i;
+      ctx.font=FONT_S; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillStyle=cssColor("mut");
+      ctx.fillText(spec.label, gx0+groupW/2, 44);
+      const kxs=[0.22,0.5,0.78].map(t=>gx0+groupW*t);
+      drawEqKnob(ctx, kxs[0], cy, r,
+        Math.log(st.f/spec.fMin)/Math.log(spec.fMax/spec.fMin), "FREQ", fmtHz(st.f,2));
+      drawEqKnob(ctx, kxs[1], cy, r,
+        (st.gainDb+device.gainMax)/(2*device.gainMax), "GAIN", fmtDb(st.gainDb,1));
+      drawEqKnob(ctx, kxs[2], cy, r,
+        device.qChoices.indexOf(st.q)/(device.qChoices.length-1), "Q", ""+st.q);
+      if(i){ // hairline between band groups
+        ctx.strokeStyle="rgba(232,229,222,0.07)"; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(Math.round(gx0)+0.5,34); ctx.lineTo(Math.round(gx0)+0.5,h-24); ctx.stroke();
+      }
+    });
+    ctx.strokeStyle="rgba(232,229,222,0.10)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(xDiv+0.5,34); ctx.lineTo(xDiv+0.5,h-24); ctx.stroke();
+    const tr=device.trim;
+    drawEqKnob(ctx, xDiv+trimZone/2, cy, r,
+      (settings.trimDb-tr.min)/(tr.max-tr.min), tr.label, fmtDb(settings.trimDb,1));
+  }else{
+    // Logic Channel EQ: numeric field strip, one column per band + output gain
+    const rows=[{cap:"FREQ",y:h-96},{cap:"GAIN",y:h-64},{cap:"Q",y:h-32}];
+    const yLab=44, yGlyph=h-128;
+    const trimZone=96, xDiv=w-16-trimZone, capW=46;
+    ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.fillStyle=cssColor("faint");
+    for(const rr of rows) ctx.fillText(rr.cap, 16, rr.y);
+    const groupW=(xDiv-16-capW)/device.bands.length;
+    device.bands.forEach((spec,i)=>{
+      const st=settings.bands[i], cx=16+capW+groupW*(i+0.5);
+      ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillStyle=cssColor("mut"); ctx.fillText(spec.label, cx, yLab);
+      drawEqShapeGlyph(ctx, cx, yGlyph, spec.type, st.gainDb>=0);
+      ctx.fillStyle=cssColor("dim"); ctx.fillText(fmtHz(st.f, st.f>=1000?2:0), cx, rows[0].y);
+      ctx.fillStyle=cssColor("ink"); ctx.fillText(fmtDb(st.gainDb,1), cx, rows[1].y);
+      ctx.fillStyle=cssColor("dim"); ctx.fillText(st.q.toFixed(2), cx, rows[2].y);
+      if(i){
+        const gx=Math.round(16+capW+groupW*i)+0.5;
+        ctx.strokeStyle="rgba(232,229,222,0.07)"; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(gx,34); ctx.lineTo(gx,h-18); ctx.stroke();
+      }
+    });
+    ctx.strokeStyle="rgba(232,229,222,0.10)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(xDiv+0.5,34); ctx.lineTo(xDiv+0.5,h-18); ctx.stroke();
+    const tcx=xDiv+trimZone/2;
+    ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillStyle=cssColor("mut"); ctx.fillText(device.trim.label, tcx, yLab);
+    ctx.fillStyle=cssColor("ink"); ctx.fillText(fmtDb(settings.trimDb,1), tcx, rows[1].y);
+  }
+}
+
+// ---------- EQ response vs target (M2.5) ----------
+function drawEqRespScene(ctx, w, h, model){
+  ctx.clearRect(0,0,w,h);
+  const {grid, yMax}=model, yMin=-yMax, pH=h-PLOT.mT-PLOT.mB;
+  drawAxes(ctx, w, h, yMin, yMax, yMax>12?6:3);
+  const yOf=v=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,v))-yMin)/(yMax-yMin))*pH;
+  const stroke=(vals)=>{ // NaN-tolerant polyline
+    ctx.beginPath();
+    let pen=false;
+    for(let i=0;i<grid.length;i++){
+      const v=vals[i];
+      if(!isFinite(v)){ pen=false; continue; }
+      const x=xOfF(grid[i],w), y=yOf(v);
+      if(pen) ctx.lineTo(x,y); else { ctx.moveTo(x,y); pen=true; }
+    }
+    ctx.stroke();
+  };
+  ctx.save();
+  ctx.lineJoin="round";
+  ctx.setLineDash([5,4]);
+  ctx.strokeStyle="rgba(232,229,222,0.55)"; ctx.lineWidth=1.2;
+  stroke(model.target);
+  ctx.setLineDash([]);
+  ctx.strokeStyle=model.colorFit; ctx.lineWidth=1.7;
+  stroke(model.achieved);
+  ctx.restore();
+  drawLegend(ctx, w, [
+    {color:"rgba(232,229,222,0.55)", label:model.legendTarget},
+    {color:model.colorFit,           label:model.legendFit},
+  ]);
+  drawStatusChip(ctx, w, model.statusText);
+}
 </script>
 <script>
 "use strict";
@@ -2884,7 +3106,7 @@ const GRID=makeLogGrid(700,60,20000);
 // ---------- state (contract shared with the glossary) ----------
 const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
               a4:440, smooth:6, lm:false, lmOffset:null, diff:false,
-              sgLm:false, sgDiff:false };
+              sgLm:false, sgDiff:false, eqDir:0, eqDevice:"ge7" };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
 
@@ -2920,6 +3142,8 @@ const sgLmSwitch=el("sgLmSwitch"), sgLmToggle=el("sgLmToggle"),
       sgramXlineD=el("sgramXlineD"), sgramReadoutD=el("sgramReadoutD");
 const envCard=el("envCard"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
+const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSeg=el("eqDevSeg"),
+      eqFaceCanvas=el("eqFaceCanvas"), eqRespCanvas=el("eqRespCanvas"), eqNote=el("eqNote");
 const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
 const glossBackdrop=el("glossBackdrop"), glossPanel=el("glossPanel"),
       glossClose=el("glossClose"), glossSearch=el("glossSearch"), glossList=el("glossList");
@@ -3329,6 +3553,54 @@ function buildEnvModel(){
   if(!curves.length) return null;
   return {curves, tMin, tMax, statusText:"aligned at first onset · 0 dB = full scale"};
 }
+
+// ---------- EQ match (M2.5) ----------
+// Fit target is the gap between the two fixed 1/6-oct curves (raw curves would
+// make the fitter chase harmonic combs). Sampled every 5th grid point (~140 pts)
+// for the solve; evaluated on the full grid for display. The trim band absorbs
+// the broadband level difference — level match is not pre-applied.
+function eqFitData(){
+  const s0=state.slots[0], s1=state.slots[1];
+  if(!(s0&&s1&&s0.fixed6db&&s1.fixed6db)) return null;
+  const key=state.eqDevice+"|"+state.eqDir;
+  if(!state._eqFit||state._eqFit.key!==key){
+    const src=state.eqDir?1:0, dst=1-src;
+    const a=state.slots[src].fixed6db, b=state.slots[dst].fixed6db;
+    const freqs=[], target=[];
+    for(let k=0;k<GRID.length;k+=5){
+      const t=b[k]-a[k];
+      if(!isFinite(t)) continue;
+      freqs.push(GRID[k]); target.push(t);
+    }
+    const device=EQ_DEVICE_BY_ID[state.eqDevice];
+    const settings=device.kind==="graphic"
+      ? fitGraphicEq(freqs,target,device)
+      : fitParametricEq(freqs,target,device);
+    const targetFull=new Float64Array(GRID.length);
+    for(let k=0;k<GRID.length;k++) targetFull[k]=b[k]-a[k];
+    state._eqFit={key, device, settings, target:targetFull,
+                  achieved:eqSettingsResponseDb(GRID,settings), src, dst};
+  }
+  return state._eqFit;
+}
+function buildEqModels(){
+  const fit=eqFitData();
+  if(!fit) return null;
+  let maxAbs=3;
+  for(let k=0;k<GRID.length;k++){
+    if(isFinite(fit.target[k])) maxAbs=Math.max(maxAbs,Math.abs(fit.target[k]));
+    if(isFinite(fit.achieved[k])) maxAbs=Math.max(maxAbs,Math.abs(fit.achieved[k]));
+  }
+  return {
+    face:{device:fit.device, settings:fit.settings},
+    resp:{grid:GRID, target:fit.target, achieved:fit.achieved,
+      yMax:Math.ceil(maxAbs/3)*3,
+      colorFit:COLORS[fit.dst],
+      legendTarget:"target: "+SLOT_LETTER[fit.dst]+" − "+SLOT_LETTER[fit.src]+" (1/6 oct)",
+      legendFit:fit.device.name+" response",
+      statusText:"residual "+fit.settings.residualRms.toFixed(2)+" dB RMS"},
+  };
+}
 function drawAll(){
   const {ctx,w,h}=setupCanvas(specCanvas);
   specHits.length=0;
@@ -3359,6 +3631,15 @@ function drawAll(){
   if(em){
     const c=setupCanvas(envCanvas);
     drawEnvelopeScene(c.ctx,c.w,c.h,em);
+  }
+  if(bothLoaded()){
+    const eqm=buildEqModels();
+    if(eqm){
+      const f=setupCanvas(eqFaceCanvas);
+      drawEqFaceScene(f.ctx,f.w,f.h,eqm.face);
+      const r=setupCanvas(eqRespCanvas);
+      drawEqRespScene(r.ctx,r.w,r.h,eqm.resp);
+    }
   }
 }
 
@@ -3752,6 +4033,8 @@ function renderFooter(){
   if(sgS) parts.push(termHtml("spectrogram","spectrogram")+": "+sgS.tvis.sg.win+
     "-pt Hann · "+sgS.tvis.sg.gridN+" log cells · max power per cell"+
     (sgLmDb()?" · level-match "+fmtDb(sgLmDb(),2)+" on B":""));
+  if(bothLoaded()) parts.push("EQ match: "+EQ_DEVICE_BY_ID[state.eqDevice].name+
+    " · LS fit, 140-pt log grid");
   paramsLine.innerHTML=parts.join('<span class="sep">·</span>');
 }
 function updateDiffSub(){
@@ -3763,6 +4046,34 @@ function updateDiffSub(){
 function updateSgramSub(){
   sgramSub.textContent="time–frequency energy, shared color scale across A and B"+
     (sgLmDb()?" · level-match applied to B":"")+" · magma colormap";
+}
+function updateEqSub(){
+  if(!bothLoaded()){
+    eqSub.textContent="settings that reshape one guitar's spectrum toward the other's";
+    return;
+  }
+  const src=state.eqDir?1:0, dst=1-src;
+  eqSub.textContent=EQ_DEVICE_BY_ID[state.eqDevice].name+
+    " · reshape "+SLOT_LETTER[src]+" ("+shortName(state.slots[src].name,18)+")"+
+    " toward "+SLOT_LETTER[dst]+" ("+shortName(state.slots[dst].name,18)+")"+
+    " · least-squares on the 1/6-octave curves";
+}
+function renderEqNote(){
+  if(!bothLoaded()){ eqNote.textContent=""; return; }
+  const fit=eqFitData();
+  if(!fit){ eqNote.textContent=""; return; }
+  const d=fit.device;
+  let model;
+  if(d.id==="ge7"||d.id==="m108s")
+    model=d.freqs.length+" fixed bands, peaking Q 1.41 (≈ 1 octave), gain ±"+d.gainMax+" dB, plus "+d.trim.label+" trim";
+  else if(d.id==="paraeq")
+    model="3 sweepable peaking bands, Q from the pedal's 3-position switch (0.7 / 1.4 / 2.8), plus clean "+d.trim.label+" (0…+30 dB — it cannot cut)";
+  else
+    model="low shelf + 4 peaking bands + high shelf (shelves Q 0.71, peak Q sampled at "+d.qChoices.join(" / ")+"), plus output "+d.trim.label;
+  eqNote.textContent="Bands are modeled as RBJ analog-magnitude biquads: "+model+". "+
+    "Fit is least-squares against the 1/6-octave-smoothed difference on 140 log-spaced points, 60 Hz–20 kHz; "+
+    "the trim absorbs the broadband level difference. Residual is the RMS gap between the target and the modeled response. "+
+    "Real hardware differs from the model — treat the settings as a starting point, not gospel.";
 }
 
 // ---------- master update ----------
@@ -3776,6 +4087,7 @@ function updateVisibility(){
   diffCard.style.display=(both&&state.diff)?"":"none";
   bandsCard.style.display=n?"":"none";
   toneCard.style.display=n?"":"none";
+  eqCard.style.display=both?"":"none";
   const hasT=[0,1].map(i=>!!(state.slots[i]&&state.slots[i].tvis&&state.slots[i].tvis.sg));
   const missT=[0,1].filter(i=>state.slots[i]&&!hasT[i]);
   sgramCard.style.display=n?"":"none";
@@ -3800,7 +4112,7 @@ function updateVisibility(){
 }
 function renderAnalysis(){
   renderBandsTable(); renderToneRows(); renderProse(); renderToneNote();
-  renderFooter(); updateDiffSub();
+  renderFooter(); updateDiffSub(); updateEqSub(); renderEqNote();
 }
 function afterDataChange(animate){
   const s0=state.slots[0], s1=state.slots[1];
@@ -3811,6 +4123,7 @@ function afterDataChange(animate){
   }else state.lmOffset=null;
   if(s1) s1._dispCache=null; // lmOffset may have moved
   state._sgDiff=null; // diff image depends on both slots' spectrograms + lmOffset
+  state._eqFit=null;  // fit depends on both slots' fixed 1/6-oct curves
   updateVisibility();
   updateCurves(animate);
   renderAnalysis();
@@ -4070,7 +4383,8 @@ function exportJSON(){
     created:new Date().toISOString(),
     settings:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
                a4:state.a4, smooth:state.smooth, lm:state.lm,
-               sgLm:state.sgLm, sgDiff:state.sgDiff },
+               sgLm:state.sgLm, sgDiff:state.sgDiff,
+               eqDir:state.eqDir, eqDevice:state.eqDevice },
     files };
   download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
     "guitarscope_"+exportBaseName()+".json");
@@ -4108,6 +4422,14 @@ function applySnapshot(snap){
   state.lm=!!st.lm; lmToggle.checked=state.lm;
   state.sgLm=!!st.sgLm; sgLmToggle.checked=state.sgLm;
   state.sgDiff=!!st.sgDiff; sgDiffToggle.checked=state.sgDiff;
+  if(st.eqDir===0||st.eqDir===1){
+    state.eqDir=st.eqDir;
+    eqDirSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.dir===state.eqDir));
+  }
+  if(typeof st.eqDevice==="string"&&EQ_DEVICE_BY_ID[st.eqDevice]){
+    state.eqDevice=st.eqDevice;
+    eqDevSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.dev===state.eqDevice));
+  }
   loadSeq[0]++; loadSeq[1]++;
   state.slots=[null,null];
   for(const f of snap.files.slice(0,2)){
@@ -4296,6 +4618,20 @@ function boot(){
     state.sgDiff=sgDiffToggle.checked;
     updateVisibility();
     requestDraw();
+  });
+  eqDirSeg.addEventListener("click",e=>{
+    const b=e.target.closest("button[data-dir]");
+    if(!b) return;
+    state.eqDir=+b.dataset.dir;
+    eqDirSeg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    updateEqSub(); renderEqNote(); renderFooter(); requestDraw();
+  });
+  eqDevSeg.addEventListener("click",e=>{
+    const b=e.target.closest("button[data-dev]");
+    if(!b) return;
+    state.eqDevice=b.dataset.dev;
+    eqDevSeg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    updateEqSub(); renderEqNote(); renderFooter(); requestDraw();
   });
   pngBtn.addEventListener("click",exportPNG);
   csvBtn.addEventListener("click",exportCSV);

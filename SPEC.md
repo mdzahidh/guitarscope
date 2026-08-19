@@ -102,3 +102,33 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   rectangles first, and each peak label tries its preferred side of the dot, then flips and
   steps away until clear. Prevents label-on-legend pile-ups at the low-E/A resonances without
   culling any annotation.
+
+### 2026-08-19 — M2: spectrogram + envelope overlay (session 2)
+- **M2 built on explicit user request** ("implement M1.5 and M2" — M1.5 was already shipped, so the
+  standing "stop for user testing" gate applied only until this instruction). M2 deliverables per the
+  prompt: onset detection (was already computed for M1.5; now visualized), spectrogram, per-band
+  attack/decay (already in the tone panel; deepened by the envelope view), A/B envelope overlay.
+- **Spectrogram maps FFT bins to a 256-cell log-frequency grid (60 Hz–20 kHz) by MAX-pooling, not
+  averaging.** At high frequencies one log cell spans many FFT bins; a mean would dilute a pure sine
+  by 10·log10(binsPerCell) — up to ~15 dB — making the same tone read quieter the higher it sits.
+  Max preserves "a full-scale sine reads 0 dB anywhere on the grid," keeping the colorbar defensible.
+  Stated on the plot and in the footer as "max per log cell". 2048-pt Hann frames; hop auto-widens so
+  a file never produces more than ~1400 columns.
+- **The dB reference stays the full-scale-sine family across all views:** spectrogram cell dB uses the
+  same per-frame power convention as Welch; envelope dB is 20·log10 of the peak-follower amplitude.
+  One reference, stated once in the footer, no per-view recalibration.
+- **A and B share one spectrogram color scale, and level-match is deliberately NOT applied** — the
+  spectrogram shows what was recorded; the card subtitle says so. Scale top = joint hottest cell
+  rounded up to 5 dB, floor = top − 80 dB. Colormap is magma (per spec: never rainbow); each slot's
+  rendered image is cached and only re-rendered when the shared scale changes.
+- **Cells above a file's Nyquist are transparent, not black** — absence of measurement, not silence —
+  with a dashed line and "above fs/2 — not measured" label when Nyquist falls below 20 kHz. (Neither
+  demo file triggers it: 44.1 k and 48 k both have fs/2 above the 20 kHz plot ceiling.)
+- **Envelope overlay aligns each file at its own first detected onset (t = 0)**, so A/B decay shapes
+  compare directly even when lead-in silence differs. Fixed −60…0 dB axis; detected onsets drawn as
+  per-curve tick lanes; envelopes max-pooled to ≤4096 points for drawing (peaks never averaged away).
+- **Snapshot slots degrade honestly:** a reloaded snapshot has no audio, so the spectrogram/envelope
+  panes for that slot are replaced by a note saying the original audio was not stored — never a
+  recomputed-looking plot from stored aggregates.
+- **Glossary grew three Method entries** (spectrogram, onset, envelope) with live values, and the
+  bloom entry now points at the Envelope view where a bloom is directly visible.

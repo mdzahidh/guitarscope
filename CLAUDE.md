@@ -8,11 +8,12 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 
 ## Status
 
-- **M1 + M1.5 + acoustic support + glossary: BUILT, awaiting user testing.** Do not start
-  M2 (spectrogram/envelopes), M3 (live input), or M4 (chain measure) until the user has
+- **M1 + M1.5 + acoustic support + glossary + M2 (spectrogram, envelope overlay, onset
+  ticks): BUILT, awaiting user testing.** M2 was built on explicit user request
+  2026-08-19. Do not start M3 (live input) or M4 (chain measure) until the user has
   tested and said so.
-- 41/41 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end against
-  a numeric probe of the full pipeline.
+- 57/57 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end against
+  a numeric probe of the full pipeline; M2 views verified by headless `?demo` screenshot.
 
 ## File map
 
@@ -52,7 +53,9 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   150–250 ms non-bouncy transitions. Spectrogram (M2) must be magma, never rainbow.
 - **DSP params:** Welch LTAS 8192-pt Hann 50 % overlap; log grid 60 Hz–20 kHz (700 pts);
   metrics integrate 60 Hz–20 kHz only; octave smoothing off/1-12/1-6/1-3; peak detection
-  always on 1/6-oct curve.
+  always on 1/6-oct curve. Spectrogram 2048-pt Hann, 256 log cells 60 Hz–20 kHz,
+  **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale,
+  level-match not applied; envelope overlay aligned at each file's first onset.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

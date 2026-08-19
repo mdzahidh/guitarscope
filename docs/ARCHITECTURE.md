@@ -10,11 +10,11 @@ and their dates see SPEC.md's changelog; for the working brief see CLAUDE.md.
 
 | # | Role | Key contents |
 |---|------|-------------|
-| 0 | **DSP core** — pure functions, no DOM, node-safe | `welch`, `smoothOct`, `bandPower`, `spectralCentroid`, `spectralTilt`, `detectPeaks`, `makeLogGrid`, `resampleToGrid`, `noteInfo`, `TUNINGS`, `stftBands`, `detectOnsets`, `amplitudeEnvelope`, `attackTimes`, `bandDecays`, `autocorrF0`, `harmonicProfile`, `dynamicsMetrics`, `sniffAudioInfo` |
+| 0 | **DSP core** — pure functions, no DOM, node-safe | `welch`, `smoothOct`, `bandPower`, `spectralCentroid`, `spectralTilt`, `detectPeaks`, `makeLogGrid`, `resampleToGrid`, `noteInfo`, `TUNINGS`, `stftBands`, `detectOnsets`, `amplitudeEnvelope`, `attackTimes`, `bandDecays`, `autocorrF0`, `harmonicProfile`, `dynamicsMetrics`, `sniffAudioInfo`, `magmaColor`, `spectrogramLog`, `decimateEnvelope` |
 | 1 | **Audio ingestion** | File → ArrayBuffer → header sniff → `OfflineAudioContext` decode at the sniffed native rate → channel/mid selection |
 | 2 | **Glossary** | Term database (musician / scientific / formula registers), popover wiring, searchable panel |
-| 3 | **Rendering** | Canvas scenes (spectrum, difference), axes/bands/tuning markers, collision-aware peak labels, legend, status chip, hit-rects for glossary clicks, PNG export composition |
-| 4 | **App** | State, drag-drop, toggles, tone-character panel, comparison prose generator, demo synth, CSV/JSON snapshot exports, keyboard shortcuts |
+| 3 | **Rendering** | Canvas scenes (spectrum, difference, spectrogram, envelope), axes/bands/tuning markers, collision-aware peak labels, legend, status chip, hit-rects for glossary clicks, magma image renderer + colorbar, PNG export composition |
+| 4 | **App** | State, drag-drop, toggles, tone-character panel, comparison prose generator, spectrogram/envelope model builders + crosshairs, demo synth, CSV/JSON snapshot exports, keyboard shortcuts |
 
 `tests/dsp.test.js` extracts block 0 with a regex and `require`s it under node — block 0
 must stay free of DOM/window references. Blocks were authored as separate files in a
@@ -49,6 +49,32 @@ decode (native rate) → Welch LTAS → common log grid → smooth → render/me
   (T20 from dB-domain regression, reported as time-to−20 dB) → longest inter-onset gap
   becomes the sustained segment → `autocorrF0` at the segment's **temporal middle** →
   `harmonicProfile` over the whole segment.
+
+## Spectrogram pipeline (M2)
+
+`spectrogramLog` (block 0, async with yields like `welch`): 2048-pt Hann frames → per-frame
+power with the same full-scale-sine convention as Welch → resample each frame onto a
+256-cell log grid (60 Hz–20 kHz) by **taking the max of the FFT bins inside each cell**.
+
+- **Max, not mean.** High cells span many bins; averaging dilutes a sine by
+  10·log10(binsPerCell) (~15 dB at 20 kHz), making identical tones read quieter as they
+  rise. Max keeps "0 dBFS sine reads 0 dB anywhere," which is what the colorbar promises.
+- **Hop widens with file length** (`max(win/8, len/1400)`) so the frame count is bounded;
+  long files lose time resolution, never correctness.
+- **Cells above the file's Nyquist are NaN** → rendered transparent (alpha 0), with a
+  dashed boundary labeled "not measured" when fs/2 < 20 kHz. Absence of data must not look
+  like silence.
+- Rendering: `sgramImage` paints frames into an offscreen canvas at native resolution
+  (nFrames × 256), which `drawSpectrogramScene` stretches over the plot. The offscreen
+  image is cached on the slot keyed by the shared color scale (`_sgImage`), so redraws
+  (crosshair, resize) cost one `drawImage`. A and B share one scale — top = joint hottest
+  cell ceil'd to 5 dB, floor 80 dB below — and level-match is intentionally not applied.
+- Envelope overlay: each file's peak-follower envelope (~8 kHz) is max-pool-decimated to
+  ≤4096 points (`decimateEnvelope` — averaging would shave attack peaks), drawn on a fixed
+  −60…0 dB axis with each file's **own first onset at t = 0** so decay shapes align even
+  when lead-in silence differs. `slot.tvis` carries `{env, envRate, onsets (s),
+  firstOnset, sg}`; snapshot slots have `tvis = null` and both panes show an "audio not
+  stored" note instead.
 
 ## Hard-won correctness notes (dead ends — do not retry)
 
@@ -104,9 +130,12 @@ metrics) are carried as stored values and labeled as such.
 
 ## Testing strategy
 
-- `tests/dsp.test.js` (41 tests): physics identities (Hann gain/ENBW/scalloping),
+- `tests/dsp.test.js` (57 tests): physics identities (Hann gain/ENBW/scalloping),
   synthetic-signal metrics (band powers, centroid, tilt, decay slopes, dynamics),
-  sniffer byte-fixtures for every container, tuning/note math, attack regression cases.
+  sniffer byte-fixtures for every container, tuning/note math, attack regression cases,
+  spectrogram invariants (0 dB sine anywhere on the log grid, NaN above Nyquist, hop
+  bounding), magma colormap endpoints/monotonicity (within 8-bit quantization), and
+  envelope decimation peak preservation.
 - `tests/make_samples.js`: regenerates the demo WAVs and round-trips them through the
   app's own sniffer.
 - A numeric probe replicating `computeTimeMetrics` end-to-end was used to validate the

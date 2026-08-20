@@ -268,3 +268,31 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   (turns the difference pane on, since it defaults off). Verified by 100/100 DSP tests plus
   headless screenshots of all four zoomed plots (both themes) and the magnified overlay, and a
   pixel-regression compare against the previous commit (clean except the intended chip border).
+
+### 2026-08-19 — Frequency-vocabulary lanes (session 6)
+- **User request (b), decided after discussion:** of the four proposed vocabularies the user
+  chose options 1 (guitar anatomy), 2 (solo tone-shaping words) and 3 (band-mix zones; option
+  4, amp/cab layer, dropped for now), and added a simpler colloquial EQ vocabulary
+  (low end / low mids / mids / …) **as #1 and the default**. Option 3 was specified to label
+  each zone with the dominant instrument/component living there plus whether guitar typically
+  keeps or cuts it, so a semi-professional guitarist can roughly tune a signal chain and EQ
+  from the plot.
+- **Built as one selectable lane**, not stacked lanes: a "Regions" segmented control on the
+  spectrum card swaps the annotation lane between **EQ speak** (default; the former M2.5
+  EQ-region lane verbatim), **Anatomy** (open strings 82–330, fretted fundamentals to the
+  24th-fret E6 ≈1.32 kHz, pick attack 2–5k, string zing 5–10k, air, plus a second lane row for
+  the overlapping body & warmth 200–500 and the harmonics-only ≥1.32 kHz fact), **Solo EQ**
+  (rumble/mud/boxy/honk/harsh/bite/fizz/air with honest gaps where folklore has none), and
+  **Band mix** (kick CUT, bass THIN, mud pile-up CUT, guitar core KEEP, vocals CARVE, attack
+  KEEP, cymbals+air ROLL OFF — the KEEP zones print in ink rather than dim). The difference
+  pane and magnify overlay follow the same selection.
+- **Annotation only, same as the original EQ lane:** the M1 shaded bands still drive every
+  number; the Band Energy table's EQ rows stay tied to the EQ-speak set regardless of the
+  lane selection. All 22 new regions are click-to-glossary with entries (three new categories:
+  Guitar anatomy, Solo EQ words, Band-mix zones) that state boundary folklore honestly and
+  show a live measured band share for reference.
+- Selection persists to localStorage (`gsVocab`, written only on explicit clicks so test hooks
+  and snapshot restores don't overwrite the preference), rides snapshot JSONs, and has a
+  `?vocab=eq|anatomy|solo|mix` headless hook. Verified: 100/100 DSP tests (block 0 untouched),
+  headless screenshots of all four lanes (Bright + Dark), the two-row anatomy lane clear of
+  the tuning markers, magnify, and the difference pane following the selection.

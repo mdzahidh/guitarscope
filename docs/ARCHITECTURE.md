@@ -252,6 +252,48 @@ resampling them would misrepresent it — magnify covers "bigger").
   turns the difference pane on (it defaults off, which otherwise hides that pane from
   headless shots).
 
+## Frequency-vocabulary lanes (session 6)
+
+The single M2.5 EQ-region lane became four selectable vocabularies (user decision:
+options 1–3 of the proposal plus a colloquial EQ set added as #1/default; amp/cab
+layer dropped). One lane, swapped by a "Regions" segmented control — stacking all
+four at once was rejected as chartjunk, and the glossary carries the depth instead.
+
+- **Data:** `VOCABS[]` in block 3 — `{id, label, regions:[{key,label,f0,f1,row,strong?}]}`.
+  `EQ_REGIONS` survives as an alias to the `eq` set so the Band Energy table's EQ rows
+  (block 4) stay tied to EQ-speak regardless of the lane selection — the lane is
+  presentation, the table rows are a stable reference. `VOCAB_ACTIVE` is a block-3
+  global written only by block 4 (`setVocab`), same pattern as the theme globals.
+- **Two-row packing:** anatomy needs overlap (BODY & WARMTH 200–500 inside the
+  open-string/fretted spans; HARMONICS ONLY ≥1.32 kHz spanning three row-0 zones), so
+  `drawEqLane` packs `row:0` at yMid 7.5 and `row:1` at 21.5 when any region declares
+  row 1, else keeps the original single-row yMid 12.5. Both rows sit above the tuning
+  labels: tuning glyphs draw baseline-bottom at `mT−4` (≈y32–42) with hit rects from
+  y30, so the lane's lowest ink (y25.5) clears them. Don't add a third row — there is
+  no headroom left in the 46 px top margin.
+- **`strong:true` regions** (the Band-mix KEEPs — guitar core, attack) print their
+  label in `ink` instead of `dim`: the lane's one-glance message in mix mode is "these
+  are yours, defend them", and a two-level text hierarchy does that without color.
+- **Label-fit honesty:** the existing fallback (plain hairline when the label doesn't
+  fit the span minus 14 px) is why the Band-mix labels are terse ("KICK · CUT", not
+  "KICK + BASS · CUT" — the long form didn't fit 60–100 Hz at 1440 px and rendered as
+  an unlabeled line, defeating the vocabulary's purpose). Full occupant descriptions
+  live in the glossary entries, which every label click opens.
+- **Anatomy boundaries are computed facts, not folklore** (open-string fundamentals
+  E2 82.4 → E4 329.6 Hz; 24th-fret ceiling E6 ≈1319 Hz), so its glossary entries can
+  defend exact numbers; solo/mix boundaries are stated as folklore with honest gaps
+  (solo has no zone at 1.2–2 kHz because guitarists don't have a word there).
+- **Persistence:** localStorage `gsVocab` is written **only in the click handler**,
+  never in `setVocab` — snapshot restores and the `?vocab=` test hook change the lane
+  without silently overwriting the user's saved preference (mirrors the `gsTheme`
+  pattern). Boot order: storage read → first render → URL hook (URL wins, for
+  headless determinism). Snapshots carry `settings.vocab`, restored only if valid.
+- All 22 new glossary entries use the annotation-only boilerplate + `_bandVals` live
+  share, so "every visible number defensible" holds: the lane itself claims nothing
+  numeric, and each popover shows what the app actually measures over that span.
+  New categories must be appended to `GLOSS_CATS` (explicit ordered list — entries in
+  an unlisted category silently vanish from the panel).
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

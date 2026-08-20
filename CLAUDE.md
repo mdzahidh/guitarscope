@@ -13,17 +13,17 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   EQ match with device faces) + M2.5 follow-ups (spectrogram time-axis alignment,
   plot magnify, EQ-vocabulary rows in Band Energy, single-guitar mode, recording guide,
   Bright/Dark themes with Bright default) + interactive zoom on the four line plots
-  (box-select, shift-pan, ctrl/⌘-wheel, reset): BUILT, awaiting user testing.** All built
+  (box-select, shift-pan, ctrl/⌘-wheel, reset) + frequency-vocabulary lanes (user
+  request (b): EQ speak default / Anatomy / Solo EQ / Band mix, selector on the spectrum
+  card): BUILT, awaiting user testing.** All built
   on explicit user request 2026-08-19. Do not start M3 (live input) or M4 (chain measure)
   until the user has tested and said so.
-- **Next discussion queued:** frequency-vocabulary annotation lanes (user request (b),
-  2026-08-19) — guitar-POV default vocabularies for solo vs band/mix contexts. Discuss
-  first, do not build until the user decides.
 - 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; M2/M2.5 views verified by headless
   `?demo` screenshots (all four EQ device faces inspected; both themes, single-guitar
   and magnify views inspected); zoom verified on all four plots + magnify overlay plus
-  a pixel-regression compare against the prior commit.
+  a pixel-regression compare against the prior commit; all four vocabulary lanes
+  screenshot-inspected (both themes, magnify, difference pane).
 
 ## File map
 
@@ -45,7 +45,8 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 - Open `index.html` in a browser. `?demo` auto-loads the built-in demo pair
   (`?demo=a`/`=b` loads one side only). Other test hooks: `?theme=bright|dark`,
   `?sgalign=file|onset`, `?mag=<viewkey>`, `?guide`, `?diff` (difference pane on),
-  `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp; data units).
+  `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp; data units),
+  `?vocab=eq|anatomy|solo|mix` (annotation-lane vocabulary).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
@@ -77,8 +78,13 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   a Free / File-time / First-onset time-axis choice; envelope overlay
   aligned at each file's first onset. EQ match: least-squares fit of RBJ
   analog-magnitude band models against the **1/6-oct-smoothed** difference (never the
-  raw comb) on 140 log points; device trim absorbs the broadband level gap; the EQ-region
-  lane is colloquial annotation only — the M1 shaded bands still drive all numbers.
+  raw comb) on 140 log points; device trim absorbs the broadband level gap. The
+  annotation lane (`VOCABS` in block 3: EQ speak default / Anatomy / Solo EQ / Band mix,
+  persisted via localStorage `gsVocab` written only on explicit clicks) is colloquial
+  annotation only — the M1 shaded bands still drive all numbers, and the Band Energy
+  table's EQ rows stay tied to the EQ-speak set (`EQ_REGIONS` alias) regardless of the
+  lane selection. All lane regions are click-to-glossary; new glossary categories must
+  be appended to `GLOSS_CATS` or their entries won't render.
   Line-plot zoom is **display-only** (`ZOOMS{}` in data units, baked in by the model
   builders, shared with the magnify overlay): metrics/band table/tone panel never read
   it, and the active window is always printed in the plot's status chip.

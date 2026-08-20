@@ -44,6 +44,9 @@
   --scrim-rgb:   43,38,30;
   --err-rgb:     176,74,62;
   --sel-rgb:     168,105,15;
+  --role-cut-rgb:  178,62,54;
+  --role-keep-rgb: 34,122,62;
+  --role-room-rgb: 108,84,158;
   --radius:  12px;
   --radius-s:8px;
   --ease:    cubic-bezier(.25,.6,.3,1);
@@ -75,6 +78,9 @@ html[data-theme="dark"]{
   --scrim-rgb:   10,12,15;
   --err-rgb:     201,117,106;
   --sel-rgb:     217,163,91;
+  --role-cut-rgb:  222,118,106;
+  --role-keep-rgb: 118,190,132;
+  --role-room-rgb: 158,136,208;
 }
 *{ box-sizing:border-box; margin:0; padding:0; }
 html{ background:var(--bg); }
@@ -309,6 +315,10 @@ table.datatable tr.grp td{
   border-bottom:1px solid var(--hair);
 }
 .tablefoot{ font-size:11px; color:var(--dim); margin-top:10px; }
+.rolecell{ font-size:10.5px; letter-spacing:.06em; font-weight:600; }
+.role-cut{ color:rgb(var(--role-cut-rgb)); }
+.role-keep{ color:rgb(var(--role-keep-rgb)); }
+.role-thin,.role-carve,.role-rolloff{ color:rgb(var(--role-room-rgb)); }
 .delta-a{ color:var(--slot-a); }
 .delta-b{ color:var(--slot-b); }
 .delta-0{ color:var(--dim); }
@@ -2179,11 +2189,11 @@ const GLOSSARY=[
     values(state){ return _bandVals(state, 10000, 20000); } },
 
   // ------------ guitar anatomy (vocabulary lane — instrument facts, annotation only) ------------
-  { key:"an-open-strings", name:"Open strings", cat:"Guitar anatomy", hook:"Anatomy: ≈82–330 Hz",
-    musician:"The fundamentals of the six open strings — low E at 82 Hz up to high E at 330 Hz. Every open-position chord puts most of its weight here; drop-tune and the zone slides down with you.",
-    science:"Open-string fundamentals in standard tuning at A4 = 440 Hz: E2 82.4, A2 110.0, D3 146.8, G3 196.0, B3 246.9, E4 329.6 Hz.",
-    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 82–330 Hz for reference.",
-    values(state){ return _bandVals(state, 82, 330); } },
+  { key:"an-open-strings", name:"Open strings", cat:"Guitar anatomy", hook:"Anatomy: ≈82–330 Hz (E std)",
+    musician:"The fundamentals of the six open strings — low E at 82 Hz up to high E at 330 Hz in standard tuning. Every open-position chord puts most of its weight here; drop-tune and the zone slides down with you — the plotted region follows the tuning selector.",
+    science:"Open-string fundamentals in standard tuning at A4 = 440 Hz: E2 82.4, A2 110.0, D3 146.8, G3 196.0, B3 246.9, E4 329.6 Hz. The zone's bounds are the lowest and highest open-string fundamentals of the selected tuning and A4.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over the zone's current bounds (they follow the selected tuning).",
+    values(state){ const T=typeof VOCAB_TUNING!=="undefined"?VOCAB_TUNING:{lowF:82,highF:330}; return _bandVals(state, T.lowF, T.highF); } },
 
   { key:"an-body", name:"Body & warmth", cat:"Guitar anatomy", hook:"Anatomy: ≈200–500 Hz",
     musician:"Where the instrument's woody thickness lives. Acoustics have real top-plate resonances in this zone; electrics get their “body” here from the low-order harmonics of every note.",
@@ -2191,17 +2201,17 @@ const GLOSSARY=[
     measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 200–500 Hz for reference.",
     values(state){ return _bandVals(state, 200, 500); } },
 
-  { key:"an-fretted", name:"Fretted fundamentals", cat:"Guitar anatomy", hook:"Anatomy: ≈330 Hz–1.3 kHz",
-    musician:"Everything above the open high E is a fretted note — melodies and solos put their fundamentals here, and the zone tops out at the last fret.",
-    science:"From open E4 (329.6 Hz) to the 24th-fret high E (E6 ≈ 1319 Hz), the ceiling of guitar fundamentals in standard tuning. A 22-fret guitar stops at D6 ≈ 1175 Hz.",
-    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 330 Hz–1.32 kHz for reference.",
-    values(state){ return _bandVals(state, 330, 1320); } },
+  { key:"an-fretted", name:"Fretted fundamentals", cat:"Guitar anatomy", hook:"Anatomy: ≈330 Hz–1.3 kHz (E std)",
+    musician:"Everything above the highest open string is a fretted note — melodies and solos put their fundamentals here, and the zone tops out at the last fret. It follows the tuning selector.",
+    science:"From the highest open string (E4 329.6 Hz in standard tuning) to its 24th fret two octaves up (E6 ≈ 1319 Hz), the ceiling of guitar fundamentals. A 22-fret guitar stops two semitones short (D6 ≈ 1175 Hz); the app assumes 24 frets.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over the zone's current bounds (they follow the selected tuning).",
+    values(state){ const T=typeof VOCAB_TUNING!=="undefined"?VOCAB_TUNING:{highF:330,fretTopF:1320}; return _bandVals(state, T.highF, T.fretTopF); } },
 
-  { key:"an-harmonics", name:"Harmonics only", cat:"Guitar anatomy", hook:"Anatomy: ≈1.3–20 kHz",
-    musician:"No guitar note has its fundamental above the last fret — everything up here is harmonics, pick noise and air. That's why EQ moves above ≈1.3 kHz change a guitar's colour, never its notes.",
-    science:"Above the highest fundamental (≈1.32 kHz in standard tuning) the spectrum is exclusively overtones and transients; their balance sets brightness and articulation.",
-    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 1.32–20 kHz for reference.",
-    values(state){ return _bandVals(state, 1320, 20000); } },
+  { key:"an-harmonics", name:"Harmonics only", cat:"Guitar anatomy", hook:"Anatomy: ≈1.3–20 kHz (E std)",
+    musician:"No guitar note has its fundamental above the last fret — everything up here is harmonics, pick noise and air. That's why EQ moves above this line change a guitar's colour, never its notes. The line follows the tuning selector.",
+    science:"Above the highest fundamental (24th fret of the highest string — ≈1.32 kHz in standard tuning) the spectrum is exclusively overtones and transients; their balance sets brightness and articulation.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live from the zone's current lower bound (it follows the selected tuning) to 20 kHz.",
+    values(state){ const T=typeof VOCAB_TUNING!=="undefined"?VOCAB_TUNING:{fretTopF:1320}; return _bandVals(state, T.fretTopF, 20000); } },
 
   { key:"an-attack", name:"Pick attack", cat:"Guitar anatomy", hook:"Anatomy: ≈2–5 kHz",
     musician:"The click and definition of the pick meeting the string — what you lose with the tone knob rolled off and get back with a fresh plectrum edge.",
@@ -2607,29 +2617,26 @@ function drawAxes(ctx, w, h, yMin, yMax, yStep){
   ctx.restore();
 }
 
-// ---------- shaded bands with clickable labels ----------
-function drawBands(ctx, w, h, bands, hits){
+// ---------- region shading (from the active vocabulary) ----------
+// The lane's row-0 regions also provide the plot's background shading, so the
+// annotation and the shading always agree. Role regions (Band mix) tint by role;
+// the rest alternate neutral fills. Row-1 regions overlap row-0 — labels only.
+function drawRegionShading(ctx, w, h){
+  const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
   const pH=h-PLOT.mT-PLOT.mB;
-  ctx.save();
-  ctx.font=FONT_XS;
-  ctx.textAlign="center"; ctx.textBaseline="alphabetic";
   const xL=PLOT.mL, xR=w-PLOT.mR;
-  bands.forEach((b,i)=>{
-    if(b.f1<=XV.f0 || b.f0>=XV.f1) return;
-    const x0=Math.max(xL, xOfF(b.f0,w)), x1=Math.min(xR, xOfF(b.f1,w));
-    ctx.fillStyle = i%2 ? cssRGBA("grid-rgb",0.016) : cssRGBA("grid-rgb",0.032);
+  ctx.save();
+  let n=0;
+  for(const r of vocab.regions){
+    if(r.row) continue;
+    const f0=regionF(r.f0), f1=regionF(r.f1);
+    if(f1<=XV.f0 || f0>=XV.f1){ n++; continue; } // keep alternation stable under zoom
+    const x0=Math.max(xL, xOfF(f0,w)), x1=Math.min(xR, xOfF(f1,w));
+    ctx.fillStyle = r.role ? cssRGBA(ROLE_VAR[r.role], r.role==="keep"?0.075:0.06)
+                           : (n%2 ? cssRGBA("grid-rgb",0.016) : cssRGBA("grid-rgb",0.032));
     ctx.fillRect(x0, PLOT.mT, x1-x0, pH);
-    const cx=(x0+x1)/2, ly=PLOT.mT+pH-8;
-    ctx.fillStyle=cssColor("dim");
-    const label=b.label.toUpperCase();
-    ctx.save(); ctx.font=FONT_XS;
-    const tw=ctx.measureText(label).width;
-    if(tw < (x1-x0)-6){
-      ctx.fillText(label, cx, ly);
-      if(hits) hits.push({x:cx-tw/2-3, y:ly-11, w:tw+6, h:14, term:b.key});
-    }
-    ctx.restore();
-  });
+    n++;
+  }
   ctx.restore();
 }
 
@@ -2657,10 +2664,12 @@ function drawTuning(ctx, w, h, markers, hits){
   ctx.restore();
 }
 
-// ---------- frequency-vocabulary lane (annotation only, boundaries are folklore) ----------
-// Four selectable vocabularies for the lane above the spectrum/difference plots.
-// Annotation only: the M1 shaded bands still drive every number, and the Band
-// Energy table's EQ rows stay tied to the "eq" set regardless of the selection.
+// ---------- frequency vocabularies (lane, shading, Band Energy rows) ----------
+// Four selectable vocabularies. The active one drives the lane above the
+// spectrum/difference plots, the plot's background shading, and the Band Energy
+// table's rows. Boundaries are colloquial folklore (except Anatomy, whose f0/f1
+// may be string keys resolved against VOCAB_TUNING so they follow the tuning
+// selector); the summary metrics and tone panel keep their fixed physics bands.
 const VOCABS=[
   { id:"eq", label:"EQ speak", regions:[
     { key:"eq-low-end",    label:"LOW END",    f0:60,    f1:250,   row:0 },
@@ -2671,13 +2680,13 @@ const VOCABS=[
     { key:"eq-air",        label:"AIR",        f0:10000, f1:20000, row:0 },
   ]},
   { id:"anatomy", label:"Anatomy", regions:[
-    { key:"an-open-strings", label:"OPEN STRINGS",         f0:82,    f1:330,   row:0 },
-    { key:"an-fretted",      label:"FRETTED FUNDAMENTALS", f0:330,   f1:1320,  row:0 },
-    { key:"an-attack",       label:"PICK ATTACK",          f0:2000,  f1:5000,  row:0 },
-    { key:"an-zing",         label:"STRING ZING",          f0:5000,  f1:10000, row:0 },
-    { key:"an-air",          label:"AIR",                  f0:10000, f1:20000, row:0 },
-    { key:"an-body",         label:"BODY & WARMTH",        f0:200,   f1:500,   row:1 },
-    { key:"an-harmonics",    label:"HARMONICS ONLY",       f0:1320,  f1:20000, row:1 },
+    { key:"an-open-strings", label:"OPEN STRINGS",         f0:"lowF",     f1:"highF",    row:0 },
+    { key:"an-fretted",      label:"FRETTED FUNDAMENTALS", f0:"highF",    f1:"fretTopF", row:0 },
+    { key:"an-attack",       label:"PICK ATTACK",          f0:2000,       f1:5000,       row:0 },
+    { key:"an-zing",         label:"STRING ZING",          f0:5000,       f1:10000,      row:0 },
+    { key:"an-air",          label:"AIR",                  f0:10000,      f1:20000,      row:0 },
+    { key:"an-body",         label:"BODY & WARMTH",        f0:200,        f1:500,        row:1 },
+    { key:"an-harmonics",    label:"HARMONICS ONLY",       f0:"fretTopF", f1:20000,      row:1 },
   ]},
   { id:"solo", label:"Solo EQ", regions:[
     { key:"so-rumble", label:"RUMBLE", f0:60,    f1:100,   row:0 },
@@ -2690,18 +2699,31 @@ const VOCABS=[
     { key:"so-air",    label:"AIR",    f0:10000, f1:20000, row:0 },
   ]},
   { id:"mix", label:"Band mix", regions:[
-    { key:"mx-kick",   label:"KICK · CUT",        f0:60,   f1:100,   row:0 },
-    { key:"mx-bass",   label:"BASS GUITAR · THIN",       f0:100,  f1:250,   row:0 },
-    { key:"mx-mud",    label:"MUD PILE-UP · CUT",        f0:250,  f1:500,   row:0 },
-    { key:"mx-core",   label:"GUITAR CORE · KEEP",       f0:500,  f1:1200,  row:0, strong:true },
-    { key:"mx-vocals", label:"VOCALS · CARVE",           f0:1200, f1:2500,  row:0 },
-    { key:"mx-fight",  label:"ATTACK · KEEP",  f0:2500, f1:5000,  row:0, strong:true },
-    { key:"mx-air",    label:"CYMBALS + AIR · ROLL OFF", f0:5000, f1:20000, row:0 },
+    { key:"mx-kick",   label:"KICK",          role:"cut",     f0:60,   f1:100,   row:0 },
+    { key:"mx-bass",   label:"BASS GUITAR",   role:"thin",    f0:100,  f1:250,   row:0 },
+    { key:"mx-mud",    label:"MUD PILE-UP",   role:"cut",     f0:250,  f1:500,   row:0 },
+    { key:"mx-core",   label:"GUITAR CORE",   role:"keep",    f0:500,  f1:1200,  row:0, strong:true },
+    { key:"mx-vocals", label:"VOCALS",        role:"carve",   f0:1200, f1:2500,  row:0 },
+    { key:"mx-fight",  label:"ATTACK",        role:"keep",    f0:2500, f1:5000,  row:0, strong:true },
+    { key:"mx-air",    label:"CYMBALS + AIR", role:"rolloff", f0:5000, f1:20000, row:0 },
   ]},
 ];
 const VOCAB_BY_ID={}; for(const v of VOCABS) VOCAB_BY_ID[v.id]=v;
-const EQ_REGIONS=VOCAB_BY_ID.eq.regions; // Band Energy's EQ rows always use this set
-let VOCAB_ACTIVE="eq";                   // set by block 4 (selector / snapshot / ?vocab=)
+let VOCAB_ACTIVE="eq"; // set by block 4 (selector / snapshot / ?vocab=)
+// One-liners for the Band Energy group header.
+const VOCAB_DESC={
+  eq:"the regions guitarists name when tuning EQ",
+  anatomy:"where this instrument's own voice lives (follows the tuning)",
+  solo:"the words engineers use when a solo guitar sound is off",
+  mix:"where the guitar sits against the rest of a band",
+};
+// Band-mix role → label suffix and theme color var.
+const ROLE_TEXT={ cut:"CUT", keep:"KEEP", thin:"THIN", carve:"CARVE", rolloff:"ROLL OFF" };
+const ROLE_VAR ={ cut:"role-cut-rgb", keep:"role-keep-rgb",
+                  thin:"role-room-rgb", carve:"role-room-rgb", rolloff:"role-room-rgb" };
+// Anatomy bounds that follow the tuning: block 4 refreshes this via syncVocabTuning().
+let VOCAB_TUNING={ lowF:82.41, highF:329.63, fretTopF:1318.51 }; // E standard defaults
+const regionF=v=>typeof v==="number"?v:VOCAB_TUNING[v];
 
 function drawEqLane(ctx, w, hits){
   const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
@@ -2711,24 +2733,28 @@ function drawEqLane(ctx, w, hits){
   ctx.lineWidth=1;
   const xL=PLOT.mL, xR=w-PLOT.mR;
   for(const r of vocab.regions){
-    if(r.f1<=XV.f0 || r.f0>=XV.f1) continue;
+    const f0=regionF(r.f0), f1=regionF(r.f1);
+    if(f1<=XV.f0 || f0>=XV.f1) continue;
     // One row keeps the original geometry (yMid 12.5); two rows pack tighter,
     // both above the tuning labels (glyphs start ≈ y32 for baseline mT−4).
     const yMid=twoRows?(r.row?21.5:7.5):12.5, yTick0=yMid-4, yTick1=yMid+4;
-    const x0=Math.max(xL, xOfF(r.f0,w)), x1=Math.min(xR, xOfF(r.f1,w));
+    const x0=Math.max(xL, xOfF(f0,w)), x1=Math.min(xR, xOfF(f1,w));
     ctx.strokeStyle=cssRGBA("ink-rgb",0.18);
     ctx.beginPath();
-    if(r.f0>=XV.f0){ ctx.moveTo(x0+0.5,yTick0); ctx.lineTo(x0+0.5,yTick1); }
-    if(r.f1<=XV.f1){ ctx.moveTo(x1+0.5,yTick0); ctx.lineTo(x1+0.5,yTick1); }
+    if(f0>=XV.f0){ ctx.moveTo(x0+0.5,yTick0); ctx.lineTo(x0+0.5,yTick1); }
+    if(f1<=XV.f1){ ctx.moveTo(x1+0.5,yTick0); ctx.lineTo(x1+0.5,yTick1); }
     ctx.stroke();
-    const cx=(x0+x1)/2, tw=ctx.measureText(r.label).width;
+    const lab=r.label+(r.role?" ("+ROLE_TEXT[r.role]+")":"");
+    const cx=(x0+x1)/2, tw=ctx.measureText(lab).width;
     if(tw<(x1-x0)-14){ // dimension-line style: hairline broken by a centered label
       ctx.beginPath();
       ctx.moveTo(x0+3,yMid); ctx.lineTo(cx-tw/2-5,yMid);
       ctx.moveTo(cx+tw/2+5,yMid); ctx.lineTo(x1-3,yMid);
       ctx.stroke();
-      ctx.fillStyle=cssColor(r.strong?"ink":"dim"); // "guitar holds its ground here" zones print stronger
-      ctx.fillText(r.label,cx,yMid);
+      // Role regions print in their role color; "guitar holds its ground here"
+      // zones print stronger than the rest.
+      ctx.fillStyle=r.role?cssRGBA(ROLE_VAR[r.role],0.95):cssColor(r.strong?"ink":"dim");
+      ctx.fillText(lab,cx,yMid);
       if(hits) hits.push({x:cx-tw/2-3, y:yMid-7, w:tw+6, h:14, term:r.key});
     }else{
       ctx.beginPath(); ctx.moveTo(x0+3,yMid); ctx.lineTo(x1-3,yMid); ctx.stroke();
@@ -2860,7 +2886,7 @@ function drawSpectrumScene(ctx, w, h, model, hits){
   ctx.clearRect(0,0,w,h);
   setXView(model.fv?model.fv[0]:FMIN, model.fv?model.fv[1]:FMAX);
   if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
-  drawBands(ctx, w, h, model.bands, hits);
+  drawRegionShading(ctx, w, h);
   drawAxes(ctx, w, h, model.yMin, model.yMax, model.yStep||10);
   drawTuning(ctx, w, h, model.markers, hits);
   drawEqLane(ctx, w, hits);
@@ -3661,22 +3687,6 @@ const glossBackdrop=el("glossBackdrop"), glossPanel=el("glossPanel"),
 const popover=el("popover"), dropOverlay=el("dropOverlay"), dropTitle=el("dropTitle"),
       toastEl=el("toast");
 
-// ---------- bands ----------
-function bandsFor(mode){
-  const mid = mode==="acoustic"
-    ? {key:"boxiness", label:"Warmth / Boxiness", f0:200, f1:500,
-       termsHtml:termHtml("warmth","Warmth")+" / "+termHtml("boxiness","Boxiness")}
-    : {key:"warmth", label:"Warmth / Mud", f0:200, f1:500,
-       termsHtml:termHtml("warmth","Warmth")+" / "+termHtml("mud","Mud")};
-  return [
-    {key:"low-end",  label:"Low end",  f0:60,   f1:200,   termsHtml:termHtml("low-end","Low end")},
-    mid,
-    {key:"body-band",label:"Body",     f0:500,  f1:1200,  termsHtml:termHtml("body-band","Body")},
-    {key:"presence", label:"Presence", f0:2000, f1:5000,  termsHtml:termHtml("presence","Presence")},
-    {key:"air",      label:"Air",      f0:5000, f1:12000, termsHtml:termHtml("air","Air")},
-  ];
-}
-
 // ---------- analysis pipeline ----------
 function setCardProgress(i,label,frac){
   if(cardUI[i].mode!=="loading") return;
@@ -3980,6 +3990,15 @@ function tuningMarkers(){
     return {f,name:noteInfo(f,state.a4).name};
   });
 }
+// Refresh the Anatomy vocabulary's string-derived bounds (block 3's VOCAB_TUNING)
+// from the current tuning/A4. 24 frets above the highest string caps fundamentals.
+function syncVocabTuning(){
+  const fs=tuningMarkers().map(m=>m.f);
+  VOCAB_TUNING.lowF=Math.min(...fs);
+  VOCAB_TUNING.highF=Math.max(...fs);
+  VOCAB_TUNING.fretTopF=VOCAB_TUNING.highF*Math.pow(2,24/12);
+}
+syncVocabTuning(); // state defaults are valid here
 function annotationsFor(slot,i){
   const m=slot.metrics||{}, anns=[], a4=state.a4;
   let peaks=(m.peaks||[]).slice();
@@ -4020,7 +4039,7 @@ function buildSpecModel(forExport){
     if(z.y0!=null){ yMin=z.y0; yMax=z.y1; yStep=niceStep((yMax-yMin)/5); }
     st+=" · "+zoomNoteFor("spec");
   }
-  return { exportBg:!!forExport, bands:bandsFor(state.mode),
+  return { exportBg:!!forExport,
            yMin, yMax, yStep, fv:zoomXf("spec"),
            markers:tuningMarkers(), grid:GRID,
            curves, statusText:st };
@@ -4670,10 +4689,13 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
 }
 
 // ---------- band table ----------
+// Tuning-derived bounds are floats — print Hz rounded, kHz to 2–3 significant digits.
 function rangeStr(f0,f1){
-  if(f1<1000) return f0+"–"+f1+" Hz";
-  if(f0>=1000) return (f0/1000)+"–"+(f1/1000)+" kHz";
-  return f0+" Hz–"+(f1/1000)+" kHz";
+  const hz=v=>String(Math.round(v));
+  const khz=v=>(v/1000).toFixed(v<10000?2:1).replace(/\.?0+$/,"");
+  if(f1<1000) return hz(f0)+"–"+hz(f1)+" Hz";
+  if(f0>=1000) return khz(f0)+"–"+khz(f1)+" kHz";
+  return hz(f0)+" Hz–"+khz(f1)+" kHz";
 }
 function renderBandsTable(){
   const s0=state.slots[0], s1=state.slots[1];
@@ -4698,16 +4720,25 @@ function renderBandsTable(){
     }
     return '<tr><td>'+termsHtml+'</td><td class="rng">'+rangeStr(f0,f1)+'</td>'+cells+'</tr>';
   };
-  for(const b of bandsFor(state.mode)) html+=row(b.termsHtml,b.f0,b.f1);
-  html+='<tr class="grp"><td colspan="'+nCols+'">EQ vocabulary — the regions guitarists name when tuning EQ</td></tr>';
-  for(const r of EQ_REGIONS){
+  const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
+  html+='<tr class="grp"><td colspan="'+nCols+'">'+esc(vocab.label)+' — '+esc(VOCAB_DESC[vocab.id])+'</td></tr>';
+  for(const r of vocab.regions){
     const label=r.label.charAt(0)+r.label.slice(1).toLowerCase();
-    html+=row(termHtml(r.key,label),r.f0,r.f1);
+    let terms=termHtml(r.key,label);
+    if(r.role) terms+=' <span class="rolecell role-'+r.role+'">('+ROLE_TEXT[r.role]+')</span>';
+    html+=row(terms,regionF(r.f0),regionF(r.f1));
   }
   bandsTable.innerHTML=html+"</tbody>";
-  let foot="Shares are of each recording's own 60 Hz–20 kHz energy — level-independent. "+
-    "The named bands deliberately leave 1.2–2 kHz unnamed, so their shares won't sum to 100 %; "+
-    "the EQ-vocabulary regions tile the whole range, so theirs do (≈100 %).";
+  let foot="Shares are of each recording's own 60 Hz–20 kHz energy — level-independent. ";
+  if(vocab.id==="eq"||vocab.id==="mix")
+    foot+="These regions tile the whole range, so shares sum to ≈100 %.";
+  else if(vocab.id==="solo")
+    foot+="These regions deliberately leave 1.2–2 kHz unnamed, so shares won't sum to 100 %.";
+  else
+    foot+="Anatomy zones overlap and leave gaps, so shares won't sum to 100 %. "+
+      "String-derived bounds follow the tuning selector: open strings "+
+      rangeStr(VOCAB_TUNING.lowF,VOCAB_TUNING.highF)+", highest 24th-fret fundamental ≈ "+
+      fmtHz(VOCAB_TUNING.fretTopF)+".";
   if(both) foot+=state.lm&&state.lmOffset!=null
     ? " Δ is band level A − B after the "+fmtDb(state.lmOffset,2)+" level-match on B."
     : " Δ is raw band level A − B (level-match off).";
@@ -5354,6 +5385,7 @@ function applySnapshot(snap){
     eqDevSel.value=state.eqDevice;
   }
   if(typeof st.vocab==="string"&&VOCAB_BY_ID[st.vocab]) setVocab(st.vocab);
+  syncVocabTuning(); // tuning/A4 restored above — refresh anatomy bounds
   comparePrimed=true; // snapshot settings are authoritative — don't auto-flip toggles
   loadSeq[0]++; loadSeq[1]++;
   state.slots=[null,null];
@@ -5537,10 +5569,12 @@ function boot(){
   tuningSel.addEventListener("change",()=>{
     state.tuning=tuningSel.value;
     customOffsetWrap.style.display=state.tuning==="custom"?"":"none";
+    syncVocabTuning(); renderBandsTable();
     requestDraw();
   });
   customOffsetEl.addEventListener("input",()=>{
     state.customOffset=parseInt(customOffsetEl.value,10)||0;
+    syncVocabTuning(); renderBandsTable();
     requestDraw();
   });
   a4Input.addEventListener("change",()=>{
@@ -5548,6 +5582,7 @@ function boot(){
     if(!isFinite(v)) v=440;
     v=Math.max(415,Math.min(466,v));
     a4Input.value=v; state.a4=v;
+    syncVocabTuning();
     requestDraw(); renderAnalysis();
   });
   lmToggle.addEventListener("change",()=>{

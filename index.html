@@ -218,6 +218,20 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .card.foldable .cardhead{ cursor:pointer; }
 .card.foldable .cardhead:hover .cardtitle{ color:var(--ink); }
 .card.foldable .cardhead:hover .collbtn{ color:var(--ink); border-color:var(--hair); }
+/* frequency-card sub-sections (M2.6f): three individually foldable rows inside #freqCard */
+#freqCard .freq-sub{ border-top:1px solid var(--hair); }
+#freqCard .freq-sub:first-of-type{ border-top:none; }
+.freq-sub .subhead{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:12px 20px 10px; flex-wrap:wrap;
+}
+.freq-sub .subbody{ padding:0 20px 16px; }
+.freq-sub.collapsed .subbody{ display:none; }
+.freq-sub.collapsed .subhead .controls{ display:none; }
+.freq-sub.collapsed .collbtn::before{ transform:rotate(-90deg); }
+.freq-sub.foldable .subhead{ cursor:pointer; }
+.freq-sub.foldable .subhead:hover .cardtitle{ color:var(--ink); }
+.freq-sub.foldable .subhead:hover .collbtn{ color:var(--ink); border-color:var(--hair); }
 
 /* section reveal */
 .reveal{ animation:reveal 240ms var(--ease); }
@@ -658,21 +672,8 @@ kbd{
         <input type="number" id="a4Input" value="440" min="415" max="466" step="0.1"> <span style="font-size:11px;color:var(--dim)">Hz</span>
       </div>
       <div class="field">
-        <label for="vocabSel">Regions</label>
-        <select id="vocabSel" aria-label="Frequency-region vocabulary">
-          <option value="eq">EQ speak</option>
-          <option value="anatomy">Guitar anatomy</option>
-          <option value="solo">Solo EQ words</option>
-          <option value="mix" selected>Band-mix zones</option>
-        </select>
-      </div>
-      <div class="field">
         <label>Comparison</label>
         <label class="switch" id="lmSwitch"><input type="checkbox" id="lmToggle"><span class="tk"></span><span class="lbl">Level-match</span></label>
-      </div>
-      <div class="field">
-        <label>Strings</label>
-        <label class="switch" id="stringsSwitch"><input type="checkbox" id="stringsToggle"><span class="tk"></span><span class="lbl">On axis</span></label>
       </div>
       <div class="field">
         <label>Theme</label>
@@ -701,82 +702,104 @@ kbd{
       <div class="prose verdict" id="verdictPara"></div>
     </section>
 
-    <!-- spectrum -->
-    <section class="card" id="specCard">
+    <!-- frequency analysis — one card, three foldable sub-sections (M2.6f) -->
+    <section class="card reveal" id="freqCard" style="display:none">
       <div class="cardhead">
         <div>
-          <div class="cardtitle">Spectrum</div>
-          <div class="cardsub" id="specSub">long-term average · dB re full-scale sine</div>
+          <div class="cardtitle">Frequency analysis</div>
+          <div class="cardsub">long-term average, difference, and band energy — Regions and Strings drive exactly these views</div>
         </div>
         <div class="controls">
-          <div class="ctlgroup">
-            <span>Smoothing</span>
-            <div class="seg" id="smoothSeg" role="group" aria-label="Octave smoothing">
-              <button data-sm="0">Off</button>
-              <button data-sm="12">1/12</button>
-              <button data-sm="6" class="on">1/6</button>
-              <button data-sm="3">1/3</button>
+          <div class="field">
+            <label for="vocabSel">Regions</label>
+            <select id="vocabSel" aria-label="Frequency-region vocabulary">
+              <option value="eq">EQ speak</option>
+              <option value="anatomy">Guitar anatomy</option>
+              <option value="solo">Solo EQ words</option>
+              <option value="mix" selected>Band-mix zones</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Strings</label>
+            <label class="switch" id="stringsSwitch"><input type="checkbox" id="stringsToggle"><span class="tk"></span><span class="lbl">On axis</span></label>
+          </div>
+        </div>
+      </div>
+      <div class="freq-sub foldable" id="freqSpec" data-sub="spec">
+        <div class="subhead">
+          <div class="headleft">
+            <button class="collbtn" data-coll="spec" aria-expanded="true" title="Collapse panel" aria-label="Collapse Spectrum panel"></button>
+            <div>
+              <div class="cardtitle">Spectrum</div>
+              <div class="cardsub" id="specSub">long-term average · dB re full-scale sine</div>
             </div>
           </div>
-          <div class="exports">
-            <button class="btn" id="pngBtn" disabled>PNG</button>
-            <button class="btn" id="csvBtn" disabled>CSV</button>
-            <button class="btn" id="jsonBtn" disabled>Snapshot</button>
+          <div class="controls">
+            <div class="ctlgroup">
+              <span>Smoothing</span>
+              <div class="seg" id="smoothSeg" role="group" aria-label="Octave smoothing">
+                <button data-sm="0">Off</button>
+                <button data-sm="12">1/12</button>
+                <button data-sm="6" class="on">1/6</button>
+                <button data-sm="3">1/3</button>
+              </div>
+            </div>
+            <div class="exports">
+              <button class="btn" id="pngBtn" disabled>PNG</button>
+              <button class="btn" id="csvBtn" disabled>CSV</button>
+              <button class="btn" id="jsonBtn" disabled>Snapshot</button>
+            </div>
+          </div>
+        </div>
+        <div class="subbody">
+          <div class="plotwrap" id="specWrap">
+            <button class="magbtn" data-mag="spec" title="Magnify" aria-label="Magnify spectrum plot">⤢</button>
+            <canvas id="specCanvas"></canvas>
+            <div class="xline" id="specXline"></div>
+            <div class="readout" id="specReadout"></div>
+            <div class="plotempty" id="specEmpty">
+              <div class="t1">One guitar to study, two to compare</div>
+              <div class="t2">Drop recordings above — a single guitar gets the full analysis;
+                add a second playing the same riff and the comparison views unlock.<br>
+                First time? Read <a href="#" id="guideLink">how to record a fair comparison</a>.</div>
+              <button class="btn" id="demoBtn">Load demo pair</button>
+            </div>
           </div>
         </div>
       </div>
-      <div class="cardbody">
-        <div class="plotwrap" id="specWrap">
-          <button class="magbtn" data-mag="spec" title="Magnify" aria-label="Magnify spectrum plot">⤢</button>
-          <canvas id="specCanvas"></canvas>
-          <div class="xline" id="specXline"></div>
-          <div class="readout" id="specReadout"></div>
-          <div class="plotempty" id="specEmpty">
-            <div class="t1">One guitar to study, two to compare</div>
-            <div class="t2">Drop recordings above — a single guitar gets the full analysis;
-              add a second playing the same riff and the comparison views unlock.<br>
-              First time? Read <a href="#" id="guideLink">how to record a fair comparison</a>.</div>
-            <button class="btn" id="demoBtn">Load demo pair</button>
+      <div class="freq-sub foldable" id="freqDiff" data-sub="diff">
+        <div class="subhead">
+          <div class="headleft">
+            <button class="collbtn" data-coll="diff" aria-expanded="true" title="Collapse panel" aria-label="Collapse Difference panel"></button>
+            <div>
+              <div class="cardtitle">Difference</div>
+              <div class="cardsub" id="diffSub">A − B, dB</div>
+            </div>
+          </div>
+        </div>
+        <div class="subbody">
+          <div class="plotwrap" id="diffWrap">
+            <button class="magbtn" data-mag="diff" title="Magnify" aria-label="Magnify difference plot">⤢</button>
+            <canvas id="diffCanvas"></canvas>
+            <div class="xline" id="diffXline"></div>
+            <div class="readout" id="diffReadout"></div>
           </div>
         </div>
       </div>
-    </section>
-
-    <!-- difference -->
-    <section class="card reveal foldable" id="diffCard" style="display:none">
-      <div class="cardhead">
-        <div class="headleft">
-          <button class="collbtn" data-coll="diff" aria-expanded="true" title="Collapse panel" aria-label="Collapse Difference panel"></button>
-          <div>
-            <div class="cardtitle">Difference</div>
-            <div class="cardsub" id="diffSub">A − B, dB</div>
+      <div class="freq-sub foldable" id="freqBands" data-sub="bands">
+        <div class="subhead">
+          <div class="headleft">
+            <button class="collbtn" data-coll="bands" aria-expanded="true" title="Collapse panel" aria-label="Collapse Band energy panel"></button>
+            <div>
+              <div class="cardtitle">Band energy</div>
+              <div class="cardsub" id="bandsSub">share of total 60 Hz–20 kHz energy · Δ in dB</div>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="cardbody">
-        <div class="plotwrap" id="diffWrap">
-          <button class="magbtn" data-mag="diff" title="Magnify" aria-label="Magnify difference plot">⤢</button>
-          <canvas id="diffCanvas"></canvas>
-          <div class="xline" id="diffXline"></div>
-          <div class="readout" id="diffReadout"></div>
+        <div class="subbody">
+          <table class="datatable" id="bandsTable"></table>
+          <div class="tablefoot" id="bandsFoot"></div>
         </div>
-      </div>
-    </section>
-
-    <!-- band energy -->
-    <section class="card reveal foldable" id="bandsCard" style="display:none">
-      <div class="cardhead">
-        <div class="headleft">
-          <button class="collbtn" data-coll="bands" aria-expanded="true" title="Collapse panel" aria-label="Collapse Band energy panel"></button>
-          <div>
-            <div class="cardtitle">Band energy</div>
-            <div class="cardsub" id="bandsSub">share of total 60 Hz–20 kHz energy · Δ in dB</div>
-          </div>
-        </div>
-      </div>
-      <div class="cardbody">
-        <table class="datatable" id="bandsTable"></table>
-        <div class="tablefoot" id="bandsFoot"></div>
       </div>
     </section>
 
@@ -2759,8 +2782,8 @@ function drawStringAxis(ctx, w, h, markers, hits){
   for(const m of markers){
     if(m.f<XV.f0 || m.f>XV.f1) continue;
     const x=xOfF(m.f,w);
-    ctx.strokeStyle=cssRGBA("ink-rgb",0.13);
-    ctx.setLineDash([1,3]); ctx.lineWidth=1;
+    ctx.strokeStyle=cssRGBA("ink-rgb",0.32);
+    ctx.setLineDash([2,4]); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
     ctx.setLineDash([]);
     if(x-lastX>16){ // avoid label pile-up for close strings
@@ -3794,13 +3817,16 @@ const smoothSeg=el("smoothSeg"), vocabSel=el("vocabSel"),
       stringsSwitch=el("stringsSwitch"), stringsToggle=el("stringsToggle"),
       pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn");
 const verdictCard=el("verdictCard"), verdictPara=el("verdictPara");
+const freqCard=el("freqCard"), freqSpec=el("freqSpec"), freqDiff=el("freqDiff"), freqBands=el("freqBands");
 const specWrap=el("specWrap"), specCanvas=el("specCanvas"),
       specXline=el("specXline"), specReadout=el("specReadout"),
       specEmpty=el("specEmpty"), demoBtn=el("demoBtn");
-const diffCard=el("diffCard"), diffSub=el("diffSub"), diffWrap=el("diffWrap"),
+const diffSub=el("diffSub"), diffWrap=el("diffWrap"),
       diffCanvas=el("diffCanvas"), diffXline=el("diffXline"), diffReadout=el("diffReadout");
-const bandsCard=el("bandsCard"), bandsSub=el("bandsSub"),
+const bandsSub=el("bandsSub"),
       bandsTable=el("bandsTable"), bandsFoot=el("bandsFoot");
+// aliases for pre-M2.6f card IDs (now sub-sections inside #freqCard)
+const diffCard=freqDiff, bandsCard=freqBands, specCard=freqSpec;
 const toneCard=el("toneCard"), toneRows=el("toneRows"),
       prosePara=el("prosePara"), toneNote=el("toneNote");
 const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"), sgramSub=el("sgramSub"),
@@ -4376,13 +4402,15 @@ function buildDiffModel(){
     nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)};
 }
 function drawAll(){
-  const {ctx,w,h}=setupCanvas(specCanvas);
-  specHits.length=0;
-  drawSpectrumScene(ctx,w,h,buildSpecModel(false),specHits);
+  if(!collState.spec){
+    const {ctx,w,h}=setupCanvas(specCanvas);
+    specHits.length=0;
+    drawSpectrumScene(ctx,w,h,buildSpecModel(false),specHits);
+  }else specHits.length=0;
   // Folded panels (progressive disclosure) skip model building and canvas
   // work entirely — their canvases are display:none; unfolding requestDraws.
   diffHits.length=0;
-  const dm=collState.diff?null:buildDiffModel();
+  const dm=(collState.diff||!bothLoaded())?null:buildDiffModel();
   if(dm){
     const d=setupCanvas(diffCanvas);
     drawDiffScene(d.ctx,d.w,d.h,dm,diffHits);
@@ -5325,17 +5353,18 @@ function copyEqSettings(){
 
 // ---------- master update ----------
 // ---------- progressive disclosure ----------
-// Six analysis panels fold to their header line; the at-a-glance verdict and
-// the spectrum never fold. The deeper instruments (EQ match, spectrogram,
-// envelope) start folded so a fresh comparison reads verdict → spectrum →
-// difference → band energy → tone character, with the rest one click away.
-// gsCollapse stores only panels the user has explicitly clicked, so a future
-// default change still reaches untouched panels; snapshots don't carry fold
-// state — it's reader preference, not analysis state. drawAll() skips the
-// canvas work of folded panels; unfolding requests a fresh draw.
-const COLL_CARDS={ diff:diffCard, bands:bandsCard, tone:toneCard,
+// Seven foldable panels (M2.6f: frequency analysis has three individually
+// foldable sub-sections spec/diff/bands + tone/eq/sgram/env). Verdict and
+// the outer frequency card never fold. EQ match, spectrogram, envelope start
+// folded so a fresh comparison reads verdict → spectrum → difference → band
+// energy → tone, with the rest one click away. gsCollapse stores only panels
+// the user has explicitly clicked, so a future default change still reaches
+// untouched panels; snapshots don't carry fold state — reader preference, not
+// analysis state. drawAll() skips the canvas work of folded panels; unfolding
+// requests a fresh draw.
+const COLL_CARDS={ spec:freqSpec, diff:freqDiff, bands:freqBands, tone:toneCard,
                    eq:eqCard, sgram:sgramCard, env:envCard };
-const COLL_DEFAULT={ diff:false, bands:false, tone:false, eq:true, sgram:true, env:true };
+const COLL_DEFAULT={ spec:false, diff:false, bands:false, tone:false, eq:true, sgram:true, env:true };
 const collState=Object.assign({},COLL_DEFAULT);
 const collTouched={};   // only these keys persist
 function applyCollapse(){
@@ -5358,13 +5387,17 @@ function toggleCollapse(key){
 function updateVisibility(){
   const n=(state.slots[0]?1:0)+(state.slots[1]?1:0), both=n===2;
   verdictCard.style.display=n?"":"none";
+  freqCard.style.display=n?"":"none";
+  freqDiff.style.display=both?"":"none";
   specEmpty.style.display=n?"none":"";
-  magBtns.forEach(b=>{ if(b.dataset.mag==="spec") b.style.display=n?"":"none"; });
+  magBtns.forEach(b=>{
+    if(b.dataset.mag==="spec") b.style.display=n?"":"none";
+    if(b.dataset.mag==="diff") b.style.display=both?"":"none";
+  });
   pngBtn.disabled=csvBtn.disabled=jsonBtn.disabled=!n;
   lmToggle.disabled=!both;
   lmSwitch.classList.toggle("disabled",!both);
-  diffCard.style.display=both?"":"none";
-  bandsCard.style.display=n?"":"none";
+  // diff/bands sub-sections live inside #freqCard now — outer card gates n
   toneCard.style.display=n?"":"none";
   eqCard.style.display=both?"":"none";
   bandsSub.textContent=both
@@ -6257,7 +6290,9 @@ function boot(){
   for(const k in COLL_CARDS){
     // The whole header folds/unfolds — but an expanded header holds live
     // controls, so clicks on those (or a text selection) must not fold the card.
-    COLL_CARDS[k].querySelector(".cardhead").addEventListener("click",e=>{
+    const head=COLL_CARDS[k].querySelector(".cardhead, .subhead");
+    if(!head) continue;
+    head.addEventListener("click",e=>{
       if(!collState[k]){
         if(e.target.closest("button,.seg,.switch,select,label,a,input")) return;
         if(window.getSelection&&String(window.getSelection())) return;

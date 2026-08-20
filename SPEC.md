@@ -633,4 +633,36 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
 - **Verification:** node CSS-contract tests in `tests/dsp.test.js` (vars present in both
   palettes, checked rules bind those vars, `#39424f` gone, switch block has no `--slot-*`).
   Headless `?demo&strings=1` in both themes to eyeball the header switches.
-- **Next:** M2.6f frequency-card unification (then g harmonics, h exports, i settings).
+
+### 2026-08-20 — M2.6f built: frequency-card unification (session 11)
+
+- **One card, three rows.** `Spectrum`, `Difference`, and `Band energy` are now
+  sub-sections inside a single `Frequency analysis` card (`#freqCard`). The card
+  header owns the cross-card controls that the M2.6a audit flagged as mis-scoped:
+  **Regions** (vocabulary selector) and **Strings** ("On axis" switch) — they
+  drive exactly the spectrum, difference shading, band table, and string axis,
+  so their position now expresses that scope. **Level-match stays global** in the
+  top bar (it also drives spectrogram, verdict, and playback gain).
+- **Sub-sections fold individually.** Each has its own `collbtn` (`data-coll`
+  `spec`/`diff`/`bands`) and `subhead`/`subbody`. `COLL_CARDS`/`COLL_DEFAULT`
+  gain the new `spec` key (default expanded, like the old always-visible
+  spectrum); `diff`/`bands` keep their keys so existing `gsCollapse` values
+  migrate without a bump. `applyCollapse` and the header-click wiring handle
+  both `.cardhead` (tone/eq/sgram/env) and `.subhead` (frequency rows).
+  `?open=all|key,key` and `gsCollapse` speak the same keys.
+- **Visibility = data scope.** `#freqCard` shows when any slot is loaded;
+  the `Difference` row shows only when both slots are loaded (`bothLoaded()`);
+  Spectrum and Band energy show whenever the outer card does. `updateVisibility`
+  now gates `freqDiff` separately and hides the diff magnify button when single.
+  `drawAll` skips the spectrum canvas when `spec` is collapsed and the
+  difference model when `diff` is collapsed or single.
+- **Styling:** `#freqCard .freq-sub` rows are divided by `var(--hair)` hairlines;
+  each row's header is a flex space-between `subhead` mirroring `.cardhead`
+  metrics; collapsed rows hide their `subbody` and their header's `.controls`
+  (smoothing lives in the Spectrum row). Aliases `diffCard`/`bandsCard`/`specCard`
+  remain for any legacy references but point at the new sub-sections.
+- **Verification:** 107/107 DSP tests (block 0 unchanged, CSS still passes);
+  node `--check` on all five script blocks; headless `?demo&open=all` and
+  single-guitar `?demo=a` checked — outer card shows spectrum+bands, diff row
+  hidden, strings/regions in the card header, smoothing in the spectrum row.
+- **Next:** M2.6g string harmonics, then h exports, i settings.

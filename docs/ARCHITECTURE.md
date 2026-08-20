@@ -563,6 +563,40 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   loaded for DSP extraction) and asserts the two palettes define the vars, the checked
   rules use them, `#39424f` is absent, and the switch block mentions no `--slot-*`.
 
+## M2.6f (session 11): frequency-card unification — one card, three sub-sections
+
+- **Why one card.** Spectrum, Difference, and Band energy share the same data scope
+  (60 Hz–20 kHz log grid), the same annotation lane/region shading, and the same
+  Strings axis. Three separate cards forced the user to hunt for the two controls
+  (Regions, Strings) that drive all three views — the M2.6a audit rule says
+  "position expresses scope". Merging puts those controls in the outer
+  `#freqCard` header where they visibly govern the three rows below, while
+  Level-match stays in the global top bar because it also drives spectrogram,
+  verdict, and playback.
+- **Foldable rows, not foldable card.** The outer `#freqCard` itself never folds
+  (verdict already never folds — outer cards are the stable page skeleton).
+  Each inner `.freq-sub` (`#freqSpec`/`#freqDiff`/`#freqBands`) is `foldable`
+  with its own `subhead` + `collbtn` (`data-coll` `spec`/`diff`/`bands`) and
+  `subbody`. `COLL_CARDS` now maps `spec`→`freqSpec` etc.; `COLL_DEFAULT`
+  gains `spec:false` (the old spectrum was always visible, so expanded by
+  default). Reusing `diff`/`bands` keys means a user who already collapsed
+  Difference or Bands keeps that preference without a storage migration.
+- **Visibility vs collapse.** `updateVisibility()` gates the *existence* of rows:
+  `#freqCard` when `anyLoaded()`, `#freqDiff` only when `bothLoaded()`. Collapse
+  gates *rendering*: `drawAll()` skips `buildSpecModel` when `spec` collapsed and
+  `buildDiffModel` when `diff` collapsed or single-guitar. The spectrum canvas
+  reuses the same `specHits` hit-rects; clearing them when collapsed prevents
+  stale hover hit-tests.
+- **Styling.** `.freq-sub` rows are separated by `1px var(--hair)` hairlines;
+  `.subhead` mirrors `.cardhead` flex metrics (space-between, wrap) so the
+  hierarchy reads but doesn't shout. `.freq-sub.collapsed .subbody` and
+  `.collapsed .subhead .controls` mirror the card-level collapse rules.
+  The header-click handler now queries `.cardhead, .subhead` so both card types
+  fold on header click with the same "controls exempt" guard.
+- **Aliases.** `diffCard`/`bandsCard`/`specCard` remain as aliases to the new
+  sub-sections so any external or test hook referencing the old IDs doesn't
+  break — they point at `freqDiff`/`freqBands`/`freqSpec`.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

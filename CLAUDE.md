@@ -52,10 +52,12 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   hover-revealed). **M2.6e BUILT (session 10):** checked switches use `--switch-on`
   (cool slate, not `--slot-a/--slot-b`) with `--switch-knob` (paper-light) in both
   themes; the old `#39424f` + `--ink` fill read as a solid dark pill on Bright.
-  CSS-only. **Remaining (restaged session 10): M2.6f** frequency-card unification (one card, three
-  individually foldable sub-sections, Difference sub-section only with two sources;
-  Strings + Regions move from the global header into the card header, Level-match
-  stays global; `gsCollapse`/`?open=` gain sub-section keys); **M2.6g** "Show
+  CSS-only. **M2.6f BUILT (session 11):** one "Frequency analysis" card with three
+  individually foldable sub-sections (Spectrum / Difference / Band energy);
+  Difference sub-section exists only with two sources; Strings + Regions move from
+  the global header into the card header (scope = this card), Level-match stays
+  global; `gsCollapse`/`?open=` gain sub-section keys (`spec`/`diff`/`bands`);
+  magnify keys unchanged. **Remaining (restaged session 10): M2.6g** "Show
   harmonics" sub-toggle under Strings (low harmonics per string on both line plots,
   lighter than fundamentals, click-to-popover, persisted); **M2.6h** per-card
   exports (300-dpi PNG / JSON / CSV, EQ-match JSON — design done pre-restage,

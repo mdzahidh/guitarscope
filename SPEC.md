@@ -716,3 +716,7 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   — not level-match”) and a “Reset saved settings” button (`resetSettingsBtn`)
   that clears `gsSettings`+legacy keys, resets state/UI to defaults, and toasts.
 - **Next:** M3 live input (deferred until user testing, per CLAUDE.md).
+
+### 2026-08-21 — Export data-only rule (user request)
+
+- **Exports are data-only, not UI.** CSV, JSON (per-card and snapshot), and PNG now exclude purely UI state: `strings` (open-string axis guides), `stringHarmonics` (per-string harmonic toggles, 6×4), and `sgAlign` (spectrogram time-axis alignment). `_exportCardJson` and snapshot `settings` no longer carry `strings`/`stringHarmonics`/`sgAlign`; PNG builders (`exportPNG`, `_cardPng` for Difference/Envelope/EQ, and `exportSgramPNG`) suppress string guides (temporarily `state.strings=false` during `buildSpecModel`/`buildDiffModel`) so images show only data, not the UI overlay. `mode`/`tuning`/`customOffset`/`A4`/`smooth`/`lm`/`vocab`/`eqDevice`/`eqDir` remain (they define the measurement). Applies to CSV/JSON/PNG alike; `gsSettings` (UI persistence) is unchanged.

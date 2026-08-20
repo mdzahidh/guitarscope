@@ -5944,6 +5944,8 @@ function _exportPngCanvas(cv, name){
 }
 function exportPNG(){
   if(!anyLoaded()) return;
+  const _oldStrings=state.strings, _oldHarm=state.stringHarmonics.map(a=>a.slice());
+  state.strings=false;
   try{
   const W=1240, H=830, SC=2;
   const FS='-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
@@ -5986,10 +5988,11 @@ function exportPNG(){
   ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-24);
   ctx.textAlign="left";
   _exportPngCanvas(cv, "guitarscope_"+exportBaseName()+".png");
-  }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); }
+  }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } finally { state.strings=_oldStrings; state.stringHarmonics=_oldHarm; }
 }
 // Per-card 300-dpi PNG / JSON / CSV (M2.6h): spectrum/diff/bands live per sub-section
 function _cardPng(name, draw){
+  const _oldS=state.strings, _oldH=state.stringHarmonics.map(a=>a.slice()); state.strings=false;
   try{
   const W=1240, H=720, SC=2;
   const cv=document.createElement("canvas");
@@ -6010,7 +6013,7 @@ function _cardPng(name, draw){
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
   ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-14); ctx.textAlign="left";
   _exportPngCanvas(cv, "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".png");
-  }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); }
+  }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } finally { state.strings=_oldS; state.stringHarmonics=_oldH; }
 }
 function exportDiffPNG(){ if(!bothLoaded()) return; try{ _cardPng("Difference A-B", (ctx,W,H)=>{ drawDiffScene(ctx,W,H,buildDiffModel()); }); }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } }
 function exportSgramPNG(){
@@ -6121,7 +6124,7 @@ function exportEnvCSV(){
 }
 function _exportCardJson(name, payload){
   const base={ app:"GuitarScope", type:"export", card:name, created:new Date().toISOString(),
-    state:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset, a4:state.a4, smooth:state.smooth, lm:state.lm, lmOffset:state.lmOffset, strings:state.strings, stringHarmonics:state.stringHarmonics, vocab:state.vocab, sgAlign:state.sgAlign, eqDir:state.eqDir, eqDevice:state.eqDevice },
+    state:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset, a4:state.a4, smooth:state.smooth, lm:state.lm, lmOffset:state.lmOffset, vocab:state.vocab, eqDir:state.eqDir, eqDevice:state.eqDevice },
     guitars:state.slots.map((s,i)=> s?{slot:SLOT_LETTER[i], name:s.name, sampleRate:s.info.sampleRate, container:s.info.container}:null).filter(Boolean),
     regions:(VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix).regions.map(r=>({key:r.key,label:r.label,f0:regionF(r.f0),f1:regionF(r.f1)})),
     ...payload };
@@ -6177,8 +6180,8 @@ function exportJSON(){
   const snap={ app:"GuitarScope", type:"snapshot", version:1,
     created:new Date().toISOString(),
     settings:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
-               a4:state.a4, smooth:state.smooth, lm:state.lm, sgAlign:state.sgAlign,
-               eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab, strings:state.strings, stringHarmonics:state.stringHarmonics },
+               a4:state.a4, smooth:state.smooth, lm:state.lm,
+               eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab },
     files };
   download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
     "guitarscope_"+exportBaseName()+".json");

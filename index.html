@@ -424,6 +424,9 @@ table.datatable tr.grp td{
 .pop-val .v{ margin-left:auto; color:var(--ink); white-space:nowrap; }
 .pop-val .v small{ color:var(--dim); }
 .pop-none{ font-size:12px; color:var(--faint); font-style:italic; }
+.pop-audit{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.pop-audit .popplay{ font-variant-numeric:tabular-nums; min-width:52px; }
+.pop-audnote{ font-size:11.5px; color:var(--dim); font-variant-numeric:tabular-nums; }
 
 /* ---------- glossary panel ---------- */
 .backdrop{
@@ -5330,6 +5333,7 @@ function applyCompareDefaults(){
   if(!compareTouched.sgDiff){ state.sgDiff=true; sgDiffToggle.checked=true; }
 }
 function afterDataChange(animate){
+  stopPlayback(); // whatever was sounding may no longer match any slot
   const s0=state.slots[0], s1=state.slots[1];
   if(s0&&s1&&s0.welch&&s1.welch){
     const pa=bandPower(s0.welch.power,s0.welch.df,60,20000);
@@ -5407,6 +5411,95 @@ function renderCard(i){
     '<div class="filemeta">'+chseg+chips.join("")+'</div>';
 }
 
+// ---------- audio playback (region audition; card play reuses this) ----------
+// Playback sources slot.samples — the analyzed mono mix — never the original
+// multichannel audio: you hear exactly what the analyzer measured (and demo
+// slots, which have no AudioBuffer, play the same way). The buffer is built at
+// the file's own rate; the source node resamples to the output device. One
+// playback at a time, one lazily-created output context for the whole app.
+let playCtx=null, playCur=null;
+function canPlay(i){
+  const s=state.slots[i];
+  return !!(s&&s.samples&&s.samples.length&&s.info&&s.info.sampleRate>0);
+}
+// Same rule as the plots: level-match applies its offset to B only.
+function playGainDb(i){
+  return (i===1&&state.lm&&state.lmOffset!=null)?state.lmOffset:0;
+}
+function stopPlayback(){
+  if(!playCur) return;
+  const p=playCur; playCur=null;
+  try{ p.src.onended=null; p.src.stop(); }catch(_e){}
+  if(p.onstop) p.onstop();
+}
+// f0/f1 in Hz bound the audition band-pass; pass null for full-range playback.
+// The band edges are 4th-order Butterworth: two biquad sections per side with
+// Q 0.5412 / 1.3066 (poles at 22.5° and 67.5°), i.e. 24 dB/oct outside the band.
+function startPlayback(i,f0,f1,onstop){
+  stopPlayback();
+  if(!canPlay(i)) return false;
+  if(!playCtx){
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC) return false;
+    playCtx=new AC();
+  }
+  if(playCtx.state==="suspended") playCtx.resume();
+  const s=state.slots[i];
+  const buf=playCtx.createBuffer(1,s.samples.length,s.info.sampleRate);
+  buf.getChannelData(0).set(s.samples);
+  const src=playCtx.createBufferSource();
+  src.buffer=buf;
+  let node=src;
+  if(f0!=null&&f1!=null){
+    for(const q of [0.5412,1.3066]){
+      const hp=playCtx.createBiquadFilter();
+      hp.type="highpass"; hp.frequency.value=f0; hp.Q.value=q;
+      node.connect(hp); node=hp;
+    }
+    for(const q of [0.5412,1.3066]){
+      const lp=playCtx.createBiquadFilter();
+      lp.type="lowpass"; lp.frequency.value=Math.min(f1,playCtx.sampleRate/2); lp.Q.value=q;
+      node.connect(lp); node=lp;
+    }
+  }
+  const g=playCtx.createGain();
+  g.gain.value=Math.pow(10,playGainDb(i)/20);
+  node.connect(g); g.connect(playCtx.destination);
+  playCur={src,onstop};
+  src.onended=()=>{ if(playCur&&playCur.src===src){ playCur=null; if(onstop) onstop(); } };
+  src.start();
+  return true;
+}
+// Region audition: any glossary key that is a vocabulary region gets ▶ buttons
+// in its popover (so it works from lane labels, plot shading, and Band Energy
+// rows alike). Bounds resolve through regionF at open time so Anatomy regions
+// follow the tuning selector.
+function regionForKey(key){
+  for(const v of VOCABS) for(const r of v.regions) if(r.key===key) return r;
+  return null;
+}
+function auditionHtml(key){
+  const r=regionForKey(key);
+  if(!r||(!canPlay(0)&&!canPlay(1))) return "";
+  const f0=regionF(r.f0), f1=regionF(r.f1);
+  let btns="";
+  for(const i of [0,1]) if(canPlay(i))
+    btns+='<button class="btn popplay" data-slot="'+i+'" data-f0="'+f0+'" data-f1="'+f1+
+      '" style="color:var(--slot-'+(i?"b":"a")+')" title="Hear '+SLOT_LETTER[i]+
+      '’s analyzed mono mix through this band">▶ '+SLOT_LETTER[i]+'</button>';
+  const lm=(state.lm&&state.lmOffset!=null&&canPlay(1))
+    ? " · level-match "+fmtDb(state.lmOffset,1)+" on B":"";
+  return '<div class="pop-sec"><div class="pop-label">Audition</div>'+
+    '<div class="pop-audit">'+btns+'<span class="pop-audnote" title="4th-order Butterworth band-pass over the analyzed mono mix">band-pass '+
+    fmtHz(f0)+'–'+fmtHz(f1)+', 24 dB/oct'+lm+'</span></div></div>';
+}
+function setPopPlayUI(btn){
+  popover.querySelectorAll(".popplay.playing").forEach(x=>{
+    x.classList.remove("playing"); x.textContent="▶ "+SLOT_LETTER[+x.dataset.slot];
+  });
+  if(btn){ btn.classList.add("playing"); btn.textContent="■ "+SLOT_LETTER[+btn.dataset.slot]; }
+}
+
 // ---------- glossary & popover ----------
 function termSections(t){
   let vals=[];
@@ -5432,7 +5525,8 @@ function termContentHtml(key){
 function openPopover(key,anchor){
   const html=termContentHtml(key);
   if(!html) return;
-  popover.innerHTML=html;
+  stopPlayback(); // a reopen replaces the buttons; never leave orphaned audio
+  popover.innerHTML=html+auditionHtml(key);
   popover.classList.add("open");
   const pw=popover.offsetWidth, ph=popover.offsetHeight;
   const vw=window.innerWidth, vh=window.innerHeight;
@@ -5444,7 +5538,8 @@ function openPopover(key,anchor){
   popover.style.left=left+"px";
   popover.style.top=top+"px";
 }
-function closePopover(){ popover.classList.remove("open"); }
+function closePopover(){ popover.classList.remove("open"); stopPlayback(); }
+let popPinned=false;   // ?pop= test hook: keep the popover through the capture resize
 
 const GLOSS_CATS=["Frequency regions","EQ regions","Guitar anatomy","Solo EQ words","Band-mix zones","Tone descriptors","Physics","Method"];
 function buildGlossList(q){
@@ -6040,6 +6135,13 @@ function boot(){
       }
     }
   });
+  popover.addEventListener("click",e=>{
+    const b=e.target.closest?e.target.closest(".popplay"):null;
+    if(!b) return;
+    if(b.classList.contains("playing")){ stopPlayback(); return; }
+    if(startPlayback(+b.dataset.slot,+b.dataset.f0,+b.dataset.f1,()=>setPopPlayUI(null)))
+      setPopPlayUI(b);
+  });
   document.addEventListener("click",e=>{
     if(e._gsTermHandled) return;
     const t=e.target.closest?e.target.closest(".term"):null;
@@ -6076,8 +6178,8 @@ function boot(){
       case "Escape": escCascade(); break;
     }
   });
-  window.addEventListener("resize",()=>{ closePopover(); requestDraw(); });
-  window.addEventListener("scroll",closePopover,{passive:true});
+  window.addEventListener("resize",()=>{ if(!popPinned) closePopover(); requestDraw(); });
+  window.addEventListener("scroll",()=>{ if(!popPinned) closePopover(); },{passive:true});
 
   attachCrosshair(specWrap,specCanvas,specXline,specReadout,false);
   attachCrosshair(diffWrap,diffCanvas,diffXline,diffReadout,true);
@@ -6180,6 +6282,18 @@ function boot(){
   if(zm&&(zm[1].toLowerCase() in ZOOMS))
     ZOOMS[zm[1].toLowerCase()]={x0:parseFloat(zm[2]), x1:parseFloat(zm[3]),
       y0:zm[4]!=null?parseFloat(zm[4]):null, y1:zm[5]!=null?parseFloat(zm[5]):null};
+  const pp=location.search.match(/[?&]pop=([a-z0-9-]+)(?:&|$)/i);                   // test hook
+  if(pp){        // wait for analysis (lmOffset) so the audition row is complete, then pin open:
+    let hops=0;  // the screenshot capture resizes the surface, and resize normally closes popovers
+    const tryOpen=()=>{
+      if(hops++<50||(state.lmOffset==null&&hops<2500)){ setTimeout(tryOpen,0); return; }
+      popPinned=true;
+      popover.style.transition="none";                    // shots catch opacity mid-fade otherwise
+      const c=window.innerWidth/2;
+      openPopover(pp[1].toLowerCase(),{left:c-40,right:c+40,top:80,bottom:100});
+    };
+    setTimeout(tryOpen,0);
+  }
   const vc=location.search.match(/[?&]vocab=([a-z]+)(?:&|$)/i);                     // test hook
   if(vc&&VOCAB_BY_ID[vc[1].toLowerCase()]){ setVocab(vc[1].toLowerCase()); requestDraw(); }
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook

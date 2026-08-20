@@ -2600,7 +2600,8 @@ function termHtml(key, text){
    Term "links" inside canvases are recorded as hit rectangles.
    ============================================================ */
 
-const PLOT={ mL:52, mR:18, mT:34, mB:34 }; // mT holds the EQ-region lane; mB holds Hz ticks + string labels
+const PLOT={ mL:52, mR:18, mT:34, mB:34 }; // mT holds the EQ-region lane (34, or 48 for
+// two-row vocabularies — syncLaneHeight() keeps it in step); mB holds Hz ticks + string labels
 const CSS_COLORS={};
 function cssColor(name){
   if(!CSS_COLORS[name]){
@@ -2640,6 +2641,7 @@ function setupCanvas(canvas, scale){
 const FONT="12px "+"system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 const FONT_S="10.5px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 const FONT_XS="10px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+const FONT_XXS="9px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 // ---------- axes ----------
 const X_MAJOR=[100,200,500,1000,2000,5000,10000,20000];
@@ -2826,24 +2828,35 @@ const ROLE_VAR ={ cut:"role-cut-rgb", keep:"role-keep-rgb",
 let VOCAB_TUNING={ lowF:82.41, highF:329.63, fretTopF:1318.51 }; // E standard defaults
 const regionF=v=>typeof v==="number"?v:VOCAB_TUNING[v];
 
+// The lane grows taller only when the active vocabulary uses two rows (Anatomy):
+// each row then needs its own boundary-Hz line below its ticks. Block 4 calls
+// this from setVocab(); the default ("mix", one row) matches PLOT's initial 34.
+function laneTwoRows(){
+  const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
+  return vocab.regions.some(r=>r.row===1);
+}
+function syncLaneHeight(){ PLOT.mT=laneTwoRows()?48:34; }
 function drawEqLane(ctx, w, hits){
   const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
-  const twoRows=vocab.regions.some(r=>r.row===1);
+  const twoRows=laneTwoRows();
   ctx.save();
   ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="middle";
   ctx.lineWidth=1;
   const xL=PLOT.mL, xR=w-PLOT.mR;
+  // Boundary ticks collected per row so their Hz values can be printed below,
+  // deduped where adjacent regions share an edge.
+  const bounds=[[],[]];
   for(const r of vocab.regions){
     const f0=regionF(r.f0), f1=regionF(r.f1);
     if(f1<=XV.f0 || f0>=XV.f1) continue;
-    // One row keeps the original geometry (yMid 12.5); two rows pack tighter
-    // (rows at 7.5/21.5 — bottom row ends ≈ y28.5, above the plot top mT 34).
-    const yMid=twoRows?(r.row?21.5:7.5):12.5, yTick0=yMid-4, yTick1=yMid+4;
+    // One row keeps the original geometry; two rows (8.5/29.5) leave room for a
+    // boundary-Hz line under each row's ticks (mT is 48 then, via syncLaneHeight).
+    const yMid=twoRows?(r.row?29.5:8.5):12.5, yTick0=yMid-4, yTick1=yMid+4;
     const x0=Math.max(xL, xOfF(f0,w)), x1=Math.min(xR, xOfF(f1,w));
     ctx.strokeStyle=cssRGBA("ink-rgb",0.18);
     ctx.beginPath();
-    if(f0>=XV.f0){ ctx.moveTo(x0+0.5,yTick0); ctx.lineTo(x0+0.5,yTick1); }
-    if(f1<=XV.f1){ ctx.moveTo(x1+0.5,yTick0); ctx.lineTo(x1+0.5,yTick1); }
+    if(f0>=XV.f0){ ctx.moveTo(x0+0.5,yTick0); ctx.lineTo(x0+0.5,yTick1); bounds[r.row?1:0].push({f:f0,x:x0}); }
+    if(f1<=XV.f1){ ctx.moveTo(x1+0.5,yTick0); ctx.lineTo(x1+0.5,yTick1); bounds[r.row?1:0].push({f:f1,x:x1}); }
     ctx.stroke();
     const lab=r.label+(r.role?" ("+ROLE_TEXT[r.role]+")":"");
     const cx=(x0+x1)/2, tw=ctx.measureText(lab).width;
@@ -2859,6 +2872,22 @@ function drawEqLane(ctx, w, hits){
       if(hits) hits.push({x:cx-tw/2-3, y:yMid-7, w:tw+6, h:14, term:r.key});
     }else{
       ctx.beginPath(); ctx.moveTo(x0+3,yMid); ctx.lineTo(x1-3,yMid); ctx.stroke();
+    }
+  }
+  // Boundary frequencies, one small line per row directly below that row's ticks.
+  // Sorted + deduped (shared edges tick once), and any label that would touch its
+  // left neighbor is skipped rather than smeared — zoomed views can crowd edges.
+  ctx.font=FONT_XXS; ctx.fillStyle=cssColor("dim");
+  for(let row=0;row<2;row++){
+    if(!bounds[row].length) continue;
+    const yLab=twoRows?(row?39.5:18.5):23.5;
+    bounds[row].sort((a,b)=>a.x-b.x);
+    let lastRight=-Infinity;
+    for(const b of bounds[row]){
+      const lab=fLabel(b.f), lw=ctx.measureText(lab).width;
+      if(b.x-lw/2<lastRight+4) continue; // shared edge dupes land here too
+      ctx.fillText(lab, b.x, yLab);
+      lastRight=b.x+lw/2;
     }
   }
   ctx.restore();
@@ -5829,6 +5858,7 @@ function setVocab(v){
   if(!VOCAB_BY_ID[v]) return;
   state.vocab=v; VOCAB_ACTIVE=v;
   vocabSel.value=v;
+  syncLaneHeight(); // two-row vocabularies need a taller lane (PLOT.mT 48 vs 34)
 }
 function applySnapshot(snap){
   const st=snap.settings||{};

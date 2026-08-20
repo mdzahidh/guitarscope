@@ -27,7 +27,7 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   All built on explicit user request 2026-08-19/20. User rejected renaming A/B to file
   names, and deferred task-based entry points to M3. Do not start M3 (live input) or
   M4 (chain measure) until the user has tested and said so.
-- **UX batch 3 (2026-08-20, session 9): M2.6a + M2.6b BUILT** — M2.6a: global
+- **UX batch 3 (2026-08-20, session 9): M2.6a + M2.6b + M2.6c BUILT** — M2.6a: global
   Level-match switch in the header (Comparison field; spectrum/sgram twins and both
   Difference toggles + "d" key + `?diff` hook deleted — difference views exist
   whenever two sources do, fold the card to dismiss); Regions selector also moved to
@@ -40,8 +40,11 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   labels and ALL on-plot frequency text removed — peak/annotation dots are dots-only
   click targets, glossary values now print Hz + nearest note; Difference-plot lane
   and string labels clickable; PLOT.mT 46→34; sgram right-edge markers unchanged
-  (different axis); snapshots don't carry the toggle. **Remaining: M2.6c**
-  region-boundary Hz labels; **M2.6d** cursor/collapse affordance audit; **M2.6e**
+  (different axis); snapshots don't carry the toggle. M2.6c: region-boundary Hz
+  labels under the lane ticks, one small line per row (9 px, `fLabel` compact
+  format), overlap guard skips rather than smears; lane height now dynamic —
+  PLOT.mT 34, or 48 for two-row vocabularies (Anatomy), via `syncLaneHeight()`
+  called from `setVocab()`. **Remaining: M2.6d** cursor/collapse affordance audit; **M2.6e**
   per-card exports (300-dpi PNG / JSON / CSV, EQ-match JSON); **M2.6f** versioned
   `gsSettings` persistence (user agreed: mode/tuning+offset/A4/EQ device/smoothing +
   Strings; NOT level-match; footer reset). One commit per submilestone.
@@ -129,7 +132,13 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   click to a per-string docs popover (ET formula, harmonics, ±1/6-oct audition). No
   frequency text on plots — peak/annotation markers are dots-only click targets and
   the glossary values print Hz + nearest note; the sgram's right-edge string markers
-  are a separate always-on axis. EQ match: least-squares fit of RBJ
+  are a separate always-on axis. **Region-boundary Hz labels (M2.6c):** the lane
+  prints each region's start/end frequency directly below its ticks (per lane row,
+  compact axis format; full precision stays in the region's glossary popover);
+  labels sort by x, shared edges print once, and any label that would touch its
+  neighbor is skipped rather than smeared. The lane is taller only for two-row
+  vocabularies (PLOT.mT 34 vs 48, kept in step by `syncLaneHeight()` from the
+  `setVocab()` choke point — PLOT.mT is dynamic, never cache it). EQ match: least-squares fit of RBJ
   analog-magnitude band models against the **1/6-oct-smoothed** difference (never the
   raw comb) on 140 log points; device trim absorbs the broadband level gap; "Copy
   settings" exports the same `eqFitData()` as plain text. The annotation lane

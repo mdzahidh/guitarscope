@@ -520,3 +520,26 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   (17 cases: tunings, drop D, custom offset, A4=432 propagation) and the refactored
   audition block; headless screenshots bright/dark × strings on/off × acoustic ×
   single-guitar × Difference plot, plus zoomed crops of the axis rows.
+
+### 2026-08-20 — M2.6c built: region-boundary Hz labels in the annotation lane (session 9)
+
+- **Boundary labels (user item d).** The annotation lane now prints each region's
+  start and end frequency directly below its boundary ticks, one small line per lane
+  row, in a new 9 px size and the same compact format the x-axis uses (82.4, 330,
+  1.32k, 20k) — full precision stays one click away in the region's glossary
+  popover. Applies everywhere the lane draws: Spectrum plot, Difference plot, and
+  the magnify overlay.
+- **No overlaps by construction.** Boundaries are collected only for in-view ticks,
+  sorted by x; adjacent regions' shared edges dedupe to a single label, and any
+  label whose left edge would come within 4 px of its neighbor is skipped rather
+  than smeared (matters in zoomed views where edges crowd).
+- **Lane height is now dynamic.** Single-row vocabularies keep the M2.6b geometry
+  (top margin 34 px); two-row vocabularies — the commission's named hard case,
+  Guitar anatomy — get 48 px so each row has its own boundary line under its own
+  ticks. `syncLaneHeight()` runs from the `setVocab()` choke point (selector,
+  snapshot apply, localStorage boot, `?vocab=` hook). Anatomy's bounds that appear
+  in both rows (1.32k, 20k) print in each row — each row owns its own edges.
+- Verification: 100/100 DSP tests; parse + extraction suites; headless crops of all
+  four vocabularies (Anatomy two-row being the acceptance case), the Difference
+  plot's lane, and a dark-theme zoomed window (150–900 Hz) confirming the in-view
+  filter and the skip guard.

@@ -496,6 +496,29 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   `?mode=electric|acoustic` exist for headless capture; the latter because instrument
   mode is a user toggle (never detected), so tests need a way to set it.
 
+## M2.6c (session 9): region-boundary Hz labels, dynamic lane height
+
+- **Per-row boundary lines.** `drawEqLane` collects each region's in-view boundary
+  ticks into per-row buckets while drawing them (same `f0>=XV.f0`/`f1<=XV.f1`
+  conditions as the ticks, so labels and ticks can't disagree), then prints one 9 px
+  (`FONT_XXS`) line of frequencies per row using the axis idiom `fLabel()` —
+  compact numbers on the plot, full precision in the glossary popover. Because the
+  lane is shared, the Spectrum plot, Difference plot, and magnify overlay all get
+  the labels from the one function.
+- **Skip, don't smear.** Buckets are sorted by x; a label whose left edge would land
+  within 4 px of the previous label's right edge is skipped. This one guard covers
+  three cases: adjacent regions' shared edge (exact duplicate x → always skipped),
+  Anatomy's nested bounds, and zoomed windows where boundaries crowd the edges.
+  Canvas label-fit fallbacks drop silently, so zoomed screenshots are the required
+  check when touching this.
+- **`PLOT.mT` is now dynamic — supersedes the M2.6b "46→34" note.** 34 for
+  single-row vocabularies, 48 when the active vocabulary uses two rows (Anatomy),
+  set by `syncLaneHeight()` from the `setVocab()` choke point (selector change,
+  snapshot apply, localStorage boot, `?vocab=` hook — every vocab write funnels
+  through it). All PLOT.mT readers use it live at draw time; never cache it into a
+  model or a layout constant. The default vocab ("mix") is single-row, so the
+  literal 34 in PLOT needs no boot-time sync call.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

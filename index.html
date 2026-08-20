@@ -723,6 +723,10 @@ kbd{
             <label>Strings</label>
             <label class="switch" id="stringsSwitch"><input type="checkbox" id="stringsToggle"><span class="tk"></span><span class="lbl">On axis</span></label>
           </div>
+          <div class="field">
+            <label>Harmonics</label>
+            <label class="switch" id="harmonicsSwitch"><input type="checkbox" id="harmonicsToggle"><span class="tk"></span><span class="lbl">Show</span></label>
+          </div>
         </div>
       </div>
       <div class="freq-sub foldable" id="freqSpec" data-sub="spec">
@@ -2773,6 +2777,7 @@ function drawRegionShading(ctx, w, h){
 // ---------- open-string axis (Strings toggle) ----------
 // Dotted verticals at each open string's fundamental, note names on the bottom
 // axis below the Hz ticks. Clicking a label opens that string's documentation.
+// When harmonics are on, low overtones (2×–4×) draw lighter, still clickable.
 function drawStringAxis(ctx, w, h, markers, hits){
   if(!markers||!markers.length) return;
   const pH=h-PLOT.mT-PLOT.mB;
@@ -2782,16 +2787,20 @@ function drawStringAxis(ctx, w, h, markers, hits){
   for(const m of markers){
     if(m.f<XV.f0 || m.f>XV.f1) continue;
     const x=xOfF(m.f,w);
-    ctx.strokeStyle=cssRGBA("ink-rgb",0.32);
-    ctx.setLineDash([2,4]); ctx.lineWidth=1;
+    const isHarm=m.harm&&m.harm>1;
+    ctx.strokeStyle=cssRGBA("ink-rgb",isHarm?0.16:0.32);
+    ctx.setLineDash(isHarm?[1,5]:[2,4]); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
     ctx.setLineDash([]);
-    if(x-lastX>16){ // avoid label pile-up for close strings
+    if(!isHarm && x-lastX>16){ // fundamentals label; harmonics stay dots-only to avoid clutter
       ctx.fillStyle=cssColor("mut");
       ctx.fillText(m.name, x, PLOT.mT+pH+20);
       const tw=ctx.measureText(m.name).width;
       if(hits) hits.push({x:x-tw/2-3, y:PLOT.mT+pH+18, w:tw+6, h:14, string:m.si});
       lastX=x;
+    }else if(isHarm && hits){
+      // narrow hit for the dotted line itself (no label)
+      hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
     }
   }
   ctx.restore();
@@ -3798,7 +3807,7 @@ const GRID=makeLogGrid(700,60,20000);
 
 // ---------- state (contract shared with the glossary) ----------
 const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
-              a4:440, smooth:6, lm:false, lmOffset:null, strings:false,
+              a4:440, smooth:6, lm:false, lmOffset:null, strings:false, harmonics:false,
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
@@ -3815,6 +3824,7 @@ const modeSeg=el("modeSeg"), tuningSel=el("tuningSel"),
 const smoothSeg=el("smoothSeg"), vocabSel=el("vocabSel"),
       lmSwitch=el("lmSwitch"), lmToggle=el("lmToggle"),
       stringsSwitch=el("stringsSwitch"), stringsToggle=el("stringsToggle"),
+      harmonicsSwitch=el("harmonicsSwitch"), harmonicsToggle=el("harmonicsToggle"),
       pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn");
 const verdictCard=el("verdictCard"), verdictPara=el("verdictPara");
 const freqCard=el("freqCard"), freqSpec=el("freqSpec"), freqDiff=el("freqDiff"), freqBands=el("freqBands");
@@ -4160,8 +4170,23 @@ function statusText(){
 function tuningMarkers(){
   return tuningMidi(state.tuning,state.customOffset).map((mi,si)=>{
     const f=midiToFreq(mi,state.a4);
-    return {f,name:noteInfo(f,state.a4).name,si,midi:mi};
+    return {f,name:noteInfo(f,state.a4).name,si,midi:mi,harm:1};
   });
+}
+function stringAxisMarkers(){
+  const base=tuningMarkers();
+  if(!state.strings||!state.harmonics) return state.strings?base:[];
+  const out=[...base];
+  for(const m of base){
+    for(let hh=2;hh<=4;hh++){
+      const f=m.f*hh;
+      if(f<FMIN||f>FMAX) continue;
+      out.push({f,name:noteInfo(f,state.a4).name,si:m.si,midi:m.midi,harm:hh});
+    }
+  }
+  // fundamentals first so their labels win the 16px skip guard
+  out.sort((a,b)=> (a.harm===1&&b.harm!==1)?-1:(b.harm===1&&a.harm!==1)?1:a.f-b.f);
+  return out;
 }
 // Refresh the Anatomy vocabulary's string-derived bounds (block 3's VOCAB_TUNING)
 // from the current tuning/A4. 24 frets above the highest string caps fundamentals.
@@ -4207,7 +4232,7 @@ function buildSpecModel(forExport){
   }
   return { exportBg:!!forExport,
            yMin, yMax, yStep, fv:zoomXf("spec"),
-           markers:state.strings?tuningMarkers():[], grid:GRID,
+           markers:stringAxisMarkers(), grid:GRID,
            curves, statusText:st };
 }
 function diffVisible(){ return bothLoaded(); }
@@ -4397,7 +4422,7 @@ function buildDiffModel(){
     fv:zoomXf("diff"),
     yLo:z&&z.y0!=null?z.y0:null, yHi:z&&z.y0!=null?z.y1:null,
     statusText:st,
-    markers:state.strings?tuningMarkers():[],
+    markers:stringAxisMarkers(),
     colorA:COLORS[0],colorB:COLORS[1],
     nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)};
 }
@@ -6234,9 +6259,20 @@ function boot(){
     try{ localStorage.setItem("gsVocab",state.vocab); }catch(_e){} // persist only explicit choices
     renderVerdict(); renderBandsTable(); requestDraw();
   });
+  function syncHarmonicsUI(){
+    const on=state.strings;
+    harmonicsToggle.disabled=!on;
+    harmonicsSwitch.classList.toggle("disabled",!on);
+  }
   stringsToggle.addEventListener("change",()=>{
     state.strings=stringsToggle.checked;
     try{ localStorage.setItem("gsStrings",state.strings?"1":"0"); }catch(_e){} // persist only explicit choices
+    syncHarmonicsUI();
+    requestDraw();
+  });
+  harmonicsToggle.addEventListener("change",()=>{
+    state.harmonics=harmonicsToggle.checked;
+    try{ localStorage.setItem("gsHarmonics",state.harmonics?"1":"0"); }catch(_e){} // persist only explicit choices
     requestDraw();
   });
   eqDirSeg.addEventListener("click",e=>{
@@ -6457,6 +6493,11 @@ function boot(){
     if(s!=null){ state.strings=s==="1"; stringsToggle.checked=state.strings; }
   }catch(_e){}
   try{
+    const hh=localStorage.getItem("gsHarmonics");
+    if(hh!=null){ state.harmonics=hh==="1"; harmonicsToggle.checked=state.harmonics; }
+  }catch(_e){}
+  try{ syncHarmonicsUI(); }catch(_e){}
+  try{
     const j=JSON.parse(localStorage.getItem("gsCollapse"));
     if(j&&typeof j==="object") for(const k in j)
       if(k in COLL_CARDS&&typeof j[k]==="boolean"){ collState[k]=j[k]; collTouched[k]=j[k]; }
@@ -6499,7 +6540,9 @@ function boot(){
   const vc=location.search.match(/[?&]vocab=([a-z]+)(?:&|$)/i);                     // test hook
   if(vc&&VOCAB_BY_ID[vc[1].toLowerCase()]){ setVocab(vc[1].toLowerCase()); requestDraw(); }
   const stg=location.search.match(/[?&]strings=(0|1)(?:&|$)/i);                     // test hook
-  if(stg){ state.strings=stg[1]==="1"; stringsToggle.checked=state.strings; requestDraw(); }
+  if(stg){ state.strings=stg[1]==="1"; stringsToggle.checked=state.strings; try{ syncHarmonicsUI(); }catch(_e){} requestDraw(); }
+  const hh=location.search.match(/[?&]harmonics=(0|1)(?:&|$)/i);                   // test hook (M2.6g)
+  if(hh){ state.harmonics=hh[1]==="1"; harmonicsToggle.checked=state.harmonics; requestDraw(); }
   const md=location.search.match(/[?&]mode=(electric|acoustic)(?:&|$)/i);           // test hook
   if(md) setMode(md[1].toLowerCase());
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook

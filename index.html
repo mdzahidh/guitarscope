@@ -251,6 +251,8 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
   transition:color var(--dur) var(--ease), background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .iconbtn:hover{ color:var(--ink); background:var(--panel2); border-color:var(--hair2); }
+.iconbtn.cardplay{ font-variant-numeric:tabular-nums; }
+.iconbtn.cardplay.playing{ color:var(--ink); border-color:var(--hair2); }
 .emptyinner .openbtn{ margin:2px 0 1px; }
 .fileinfo{
   font-size:11.5px; color:var(--mut); margin-top:5px;
@@ -5405,7 +5407,10 @@ function renderCard(i){
   }
   card.innerHTML='<div class="filehead"><span class="slotchip" title="Guitar '+letter+' color — click to change">'+letter+'</span>'+
     '<span class="filename" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'+
-    '<span class="fileacts"><button class="iconbtn" data-act="replace" title="Replace with another file">⟳ Replace</button>'+
+    '<span class="fileacts">'+
+    (canPlay(i)?'<button class="iconbtn cardplay" data-act="play" title="Play the analyzed mono mix'+
+      (i===1?' — level-match gain applies when it’s on':'')+'">▶ Play</button>':"")+
+    '<button class="iconbtn" data-act="replace" title="Replace with another file">⟳ Replace</button>'+
     '<button class="iconbtn" data-act="clear" title="Clear this slot">✕ Clear</button></span></div>'+
     '<div class="fileinfo">'+parts.join('<span class="sep">·</span>')+'</div>'+
     '<div class="filemeta">'+chseg+chips.join("")+'</div>';
@@ -5498,6 +5503,20 @@ function setPopPlayUI(btn){
     x.classList.remove("playing"); x.textContent="▶ "+SLOT_LETTER[+x.dataset.slot];
   });
   if(btn){ btn.classList.add("playing"); btn.textContent="■ "+SLOT_LETTER[+btn.dataset.slot]; }
+}
+// Card playback: the whole take, full-range, through the same engine as the
+// region audition — level-match gain lands on B exactly as in the plots, and
+// the applied dB is printed on the button for the duration of playback.
+function toggleCardPlay(i,btn){
+  if(btn.classList.contains("playing")){ stopPlayback(); return; }
+  const reset=()=>{
+    const b=cards[i].querySelector(".cardplay");
+    if(b){ b.classList.remove("playing"); b.textContent="▶ Play"; }
+  };
+  if(!startPlayback(i,null,null,reset)) return;
+  const g=playGainDb(i);
+  btn.classList.add("playing");
+  btn.textContent=g?"■ Stop · "+fmtDb(g,1):"■ Stop";
 }
 
 // ---------- glossary & popover ----------
@@ -5983,6 +6002,7 @@ function escCascade(){
   if(colorPop.classList.contains("open")) return closeColorPop();
   if(magModal.classList.contains("open")) return closeMag();
   if(popover.classList.contains("open")) return closePopover();
+  if(playCur) return stopPlayback();
   if(glossPanel.classList.contains("open")) return setGloss(false);
   if(shortcutsModal.classList.contains("open")) return shortcutsModal.classList.remove("open");
   if(guideModal.classList.contains("open")) return guideModal.classList.remove("open");
@@ -6046,6 +6066,7 @@ function boot(){
   });
   lmToggle.addEventListener("change",()=>{
     state.lm=lmToggle.checked; compareTouched.lm=true;
+    stopPlayback(); // the applied gain would no longer match what's printed
     updateCurves(true);
     renderVerdict(); renderBandsTable(); renderFooter(); updateDiffSub();
   });
@@ -6208,6 +6229,7 @@ function boot(){
       const act=e.target.closest("[data-act]");
       if(act){
         if(act.dataset.act==="replace") fileInputs[i].click();
+        else if(act.dataset.act==="play") toggleCardPlay(i,act);
         else clearSlot(i);
         return;
       }

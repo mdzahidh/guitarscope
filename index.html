@@ -5983,19 +5983,8 @@ function exportPNG(){
   ctx.restore();
   ctx.fillStyle=cssColor("dim");
   ctx.font="11.5px "+FS;
-  { // footer: left params + right credit must not overlap (seen on long dual-guitar lines)
-    const leftRaw=plainParams(), right="made with GuitarScope";
-    const gap=24, rightW=ctx.measureText(right).width;
-    const maxLeft=W-80-rightW-gap;
-    let left=leftRaw;
-    if(ctx.measureText(left).width>maxLeft){
-      while(left.length>12 && ctx.measureText(left+"…").width>maxLeft) left=left.slice(0,-1);
-      left=left.trimEnd()+"…";
-    }
-    ctx.textAlign="left"; ctx.fillText(left,40,H-24);
-    ctx.textAlign="right"; ctx.fillText(right,W-40,H-24);
-    ctx.textAlign="left";
-  }
+  ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-24);
+  ctx.textAlign="left";
   _exportPngCanvas(cv, "guitarscope_"+exportBaseName()+".png");
   }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); }
 }

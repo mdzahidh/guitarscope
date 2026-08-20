@@ -2820,8 +2820,7 @@ function drawStringAxis(ctx, w, h, markers, hits){
   if(!markers||!markers.length) return;
   const pH=h-PLOT.mT-PLOT.mB;
   ctx.save();
-  ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="top";
-  let lastX=-100;
+  // first pass: verticals for all markers
   for(const m of markers){
     if(m.f<XV.f0 || m.f>XV.f1) continue;
     const x=xOfF(m.f,w);
@@ -2830,17 +2829,48 @@ function drawStringAxis(ctx, w, h, markers, hits){
     ctx.setLineDash(isHarm?[1,5]:[2,4]); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
     ctx.setLineDash([]);
-    if(!isHarm && x-lastX>16){ // fundamentals label; harmonics stay dots-only to avoid clutter
+  }
+  // second pass: labels — fundamentals first (priority), then harmonics lighter
+  ctx.textAlign="center"; ctx.textBaseline="top";
+  let lastX=-100; const fundXs=[];
+  ctx.font=FONT_XS;
+  for(const m of markers){
+    if(m.harm!==1) continue;
+    if(m.f<XV.f0 || m.f>XV.f1) continue;
+    const x=xOfF(m.f,w);
+    if(x-lastX>16){
       ctx.fillStyle=cssColor("mut");
       ctx.fillText(m.name, x, PLOT.mT+pH+20);
       const tw=ctx.measureText(m.name).width;
       if(hits) hits.push({x:x-tw/2-3, y:PLOT.mT+pH+18, w:tw+6, h:14, string:m.si});
-      lastX=x;
-    }else if(isHarm && hits){
-      // narrow hit for the dotted line itself (no label)
-      hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
+      lastX=x; fundXs.push(x);
     }
   }
+  // harmonics: smaller, dimmer, one line lower (32 px) so rows don't collide; "×2" suffix clarifies
+  ctx.font=FONT_XXS;
+  let lastHX=-100;
+  for(const m of markers){
+    if(!m.harm||m.harm<=1) continue;
+    if(m.f<XV.f0 || m.f>XV.f1) continue;
+    const x=xOfF(m.f,w);
+    // skip if too close to any fundamental label (fundamentals win) or previous harmonic label
+    let nearFund=false;
+    for(const fx of fundXs) if(Math.abs(x-fx)<14){ nearFund=true; break; }
+    if(nearFund || x-lastHX<14) {
+      if(hits) hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
+      continue;
+    }
+    ctx.fillStyle=cssColor("dim");
+    const label=m.name+"×"+m.harm;
+    ctx.fillText(label, x, PLOT.mT+pH+26);
+    const tw=ctx.measureText(label).width;
+    if(hits) hits.push({x:x-tw/2-3, y:PLOT.mT+pH+24, w:tw+6, h:10, string:m.si});
+    // also keep the line hit for the vertical itself
+    if(hits) hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
+    lastHX=x;
+  }
+  // harmonics that were skipped for labeling still need a hit for the line itself (if not already added)
+  // (those with nearFund already pushed a line hit above)
   ctx.restore();
 }
 

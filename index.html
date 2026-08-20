@@ -6015,7 +6015,8 @@ function _cardPng(name, draw){
 function exportDiffPNG(){ if(!bothLoaded()) return; try{ _cardPng("Difference A-B", (ctx,W,H)=>{ drawDiffScene(ctx,W,H,buildDiffModel()); }); }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } }
 function exportSgramPNG(){
   if(!anyLoaded()) return;
-  const W=1240,H=900,SC=2; const cv=document.createElement("canvas");
+  const hasDiff=sgDiffVisible();
+  const W=1240,H=hasDiff?1320:900,SC=2; const cv=document.createElement("canvas");
   cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
   ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,W,H);
   ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText("GuitarScope · Spectrogram",28,32);
@@ -6026,9 +6027,10 @@ function exportSgramPNG(){
     const hh=380; drawSpectrogramScene(ctx,W,hh,m); ctx.restore(); y+=hh+18;
     if(y>H-40) break;
   }
-  if(sgDiffVisible()){
+  if(hasDiff){
     const m=buildSgramDiffModel(); if(m){ ctx.save(); ctx.translate(0,y); drawSgramDiffScene(ctx,W,380,m); ctx.restore(); }
   }
+  // scoped to spectrogram only — never draws envelope
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, sans-serif";
   ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-14); ctx.textAlign="left";
   _exportPngCanvas(cv, "guitarscope-sgram_"+exportBaseName()+".png");

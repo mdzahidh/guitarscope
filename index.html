@@ -328,22 +328,20 @@ table.datatable tr.grp td{
 /* ---------- tone character ---------- */
 .tonerows{ display:flex; flex-direction:column; margin-top:4px; }
 .tonerow{
-  display:grid; grid-template-columns:210px 118px 1fr 118px; gap:14px;
+  display:grid; grid-template-columns:210px 64px 1fr 64px; gap:14px;
   align-items:center; padding:8px 0; border-bottom:1px solid rgba(var(--hair-rgb),.5);
 }
 .tonerow:last-child{ border-bottom:0; }
 .tonename{ font-size:12.5px; color:var(--ink); }
 .tonename small{ display:block; font-size:10.5px; color:var(--dim); letter-spacing:.02em; }
-.toneval{ font-size:12.5px; font-variant-numeric:tabular-nums; }
-.toneval.va{ text-align:right; color:var(--slot-a); }
-.toneval.vb{ text-align:left; color:var(--slot-b); }
-.toneval small{ color:var(--dim); font-size:10.5px; display:block; }
-.toneval .none{ color:var(--faint); }
-.track{ position:relative; height:22px; }
+.axend{ font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; }
+.axend.lo{ text-align:right; }
+.axend.hi{ text-align:left; }
+.track{ position:relative; height:44px; }
 .track::before{
   content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:var(--hair2);
 }
-.track .zero{ position:absolute; top:5px; bottom:5px; width:1px; background:var(--faint); }
+.track .zero{ position:absolute; top:calc(50% - 6px); height:12px; width:1px; background:var(--faint); }
 .track .pt{
   position:absolute; top:50%; width:9px; height:9px; border-radius:50%;
   transform:translate(-50%,-50%); border:1.5px solid var(--bg);
@@ -351,7 +349,14 @@ table.datatable tr.grp td{
 }
 .track .pt.a{ background:var(--slot-a); }
 .track .pt.b{ background:var(--slot-b); }
-.track .tick{ position:absolute; top:100%; font-size:9.5px; color:var(--faint); transform:translateX(-50%); font-variant-numeric:tabular-nums; }
+.track .vlab{
+  position:absolute; font-size:10.5px; font-variant-numeric:tabular-nums;
+  transform:translateX(-50%); white-space:nowrap; transition:left 260ms var(--ease);
+}
+.track .vlab.a{ bottom:calc(50% + 7px); color:var(--slot-a); }
+.track .vlab.b{ top:calc(50% + 7px); color:var(--slot-b); }
+.track .vlab small{ color:var(--dim); font-size:9.5px; margin-left:4px; }
+.track .vlab.none{ color:var(--faint); }
 .prose{
   font-size:13.5px; line-height:1.75; color:var(--mut); max-width:74ch;
   margin-top:16px; padding-top:14px; border-top:1px solid var(--hair);
@@ -562,7 +567,7 @@ kbd{
 @media (max-width:900px){
   .page{ padding:18px 16px 32px; }
   .filerow{ grid-template-columns:1fr; }
-  .tonerow{ grid-template-columns:150px 90px 1fr 90px; gap:8px; }
+  .tonerow{ grid-template-columns:150px 54px 1fr 54px; gap:8px; }
   #specCanvas{ height:356px; }
 }
 @media (prefers-reduced-motion:reduce){
@@ -4892,20 +4897,24 @@ function toneRowHtml(d){
   });
   const pos=v=>{
     const p=d.log?Math.log(v/d.lo)/Math.log(d.hi/d.lo):(v-d.lo)/(d.hi-d.lo);
-    return (Math.max(0,Math.min(1,p))*100).toFixed(1);
+    return Math.max(0,Math.min(1,p))*100;
   };
   const pts=[0,1].map(i=>vals[i]!=null
-    ?'<span class="pt '+(i?"b":"a")+'" style="left:'+pos(vals[i])+'%"></span>':"").join("");
-  const zero=d.zero!=null?'<span class="zero" style="left:'+pos(d.zero)+'%"></span>':"";
-  const ticks='<span class="tick" style="left:0;transform:none">'+d.ticks[0]+'</span>'+
-              '<span class="tick" style="left:auto;right:0;transform:none">'+d.ticks[1]+'</span>';
-  // an empty slot gets a blank cell (single-guitar mode); a loaded slot with no
-  // usable value gets an explicit em-dash
-  const cell=i=>state.slots[i]
-    ?(vals[i]!=null?d.fmt(vals[i]):'<span class="none">—</span>'):"";
+    ?'<span class="pt '+(i?"b":"a")+'" style="left:'+pos(vals[i]).toFixed(1)+'%"></span>':"").join("");
+  // value labels ride with their dots (A above the line, B below) so numbers
+  // always read in increasing order left→right; labels clamp inward so edge
+  // values stay legible. A loaded slot with no usable value gets an em-dash.
+  const labs=[0,1].map(i=>{
+    if(!state.slots[i]) return "";
+    const cls="vlab "+(i?"b":"a");
+    if(vals[i]==null) return '<span class="'+cls+' none" style="left:50%">—</span>';
+    const lp=Math.max(6,Math.min(94,pos(vals[i])));
+    return '<span class="'+cls+'" style="left:'+lp.toFixed(1)+'%">'+d.fmt(vals[i])+'</span>';
+  }).join("");
+  const zero=d.zero!=null?'<span class="zero" style="left:'+pos(d.zero).toFixed(1)+'%"></span>':"";
   return '<div class="tonerow"><div class="tonename">'+termHtml(d.term,d.name)+
-         '<small>'+d.unit+'</small></div><div class="toneval va">'+cell(0)+
-         '</div><div class="track">'+zero+pts+ticks+'</div><div class="toneval vb">'+cell(1)+'</div></div>';
+         '<small>'+d.unit+'</small></div><div class="axend lo">'+d.ticks[0]+
+         '</div><div class="track">'+zero+pts+labs+'</div><div class="axend hi">'+d.ticks[1]+'</div></div>';
 }
 function renderToneRows(){
   if(!anyLoaded()) return;

@@ -6007,6 +6007,8 @@ function _cardPng(name, draw){
   ctx.save(); ctx.translate(0,64);
   draw(ctx,W,H-80);
   ctx.restore();
+  ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-14); ctx.textAlign="left";
   _exportPngCanvas(cv, "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".png");
   }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); }
 }
@@ -6027,6 +6029,8 @@ function exportSgramPNG(){
   if(sgDiffVisible()){
     const m=buildSgramDiffModel(); if(m){ ctx.save(); ctx.translate(0,y); drawSgramDiffScene(ctx,W,380,m); ctx.restore(); }
   }
+  ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, sans-serif";
+  ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-14); ctx.textAlign="left";
   _exportPngCanvas(cv, "guitarscope-sgram_"+exportBaseName()+".png");
 }
 function exportEnvPNG(){

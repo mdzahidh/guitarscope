@@ -5900,28 +5900,36 @@ function _crc32(buf){
   let c=~0; for(let i=0;i<buf.length;i++){ c^=buf[i]; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; } return ~c>>>0;
 }
 async function _pngWithDpi(blob, dpi){
-  const dpm=Math.round(dpi/0.0254);
-  const ab=await blob.arrayBuffer(); const u=new Uint8Array(ab);
-  // find end of IHDR (first chunk after 8-byte signature)
-  let pos=8; const dv=new DataView(u.buffer);
-  const len=dv.getUint32(pos); const type=String.fromCharCode(u[pos+4],u[pos+5],u[pos+6],u[pos+7]);
-  pos+=4+4+len+4; // skip IHDR
-  const head=u.slice(0,pos); const tail=u.slice(pos);
-  const chunk=new Uint8Array(4+4+9+4); const cdv=new DataView(chunk.buffer);
-  cdv.setUint32(0,9); chunk[4]=112;chunk[5]=72;chunk[6]=89;chunk[7]=115;
-  cdv.setUint32(8,dpm); cdv.setUint32(12,dpm); chunk[20]=1;
-  const crc=_crc32(chunk.slice(4,21)); cdv.setUint32(21,crc);
-  const out=new Uint8Array(head.length+chunk.length+tail.length);
-  out.set(head,0); out.set(chunk,head.length); out.set(tail,head.length+chunk.length);
-  return new Blob([out],{type:"image/png"});
+  try{
+    const dpm=Math.round(dpi/0.0254);
+    const ab=await blob.arrayBuffer(); const u=new Uint8Array(ab);
+    if(u.length < 33) return blob;
+    let pos=8; const dv=new DataView(u.buffer, u.byteOffset, u.byteLength);
+    if(pos+8 > u.length) return blob;
+    const len=dv.getUint32(pos,false);
+    const type=String.fromCharCode(u[pos+4],u[pos+5],u[pos+6],u[pos+7]);
+    if(type!=="IHDR"||len>1e6) return blob;
+    if(pos+4+4+len+4 > u.length) return blob;
+    pos+=4+4+len+4; // skip IHDR
+    const head=u.slice(0,pos); const tail=u.slice(pos);
+    const chunk=new Uint8Array(4+4+9+4); const cdv=new DataView(chunk.buffer);
+    cdv.setUint32(0,9,false); chunk[4]=112;chunk[5]=72;chunk[6]=89;chunk[7]=115;
+    cdv.setUint32(8,dpm,false); cdv.setUint32(12,dpm,false); chunk[16]=1;
+    const crc=_crc32(chunk.slice(4,17)); cdv.setUint32(17,crc,false);
+    const out=new Uint8Array(head.length+chunk.length+tail.length);
+    out.set(head,0); out.set(chunk,head.length); out.set(tail,head.length+chunk.length);
+    return new Blob([out],{type:"image/png"});
+  }catch(e){ console.warn("pHYs inject failed, using original PNG", e); return blob; }
 }
 function _exportPngCanvas(cv, name){
   const fallback=()=>{
     try{
       const url=cv.toDataURL("image/png");
       fetch(url).then(r=>r.blob()).then(async b=>{
-        try{ download(await _pngWithDpi(b,300), name); }
-        catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); }
+        try{
+          const out=await _pngWithDpi(b,300);
+          download(out||b, name);
+        }catch(e){ console.error(e); download(b, name); }
       }, e=>{ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); });
     }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); }
   };
@@ -5930,10 +5938,11 @@ function _exportPngCanvas(cv, name){
     cv.toBlob(async b=>{
       try{
         if(!b) throw new Error("toBlob returned null");
-        download(await _pngWithDpi(b,300), name);
-      }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); fallback(); }
+        const out=await _pngWithDpi(b,300);
+        download(out||b, name);
+      }catch(e){ console.error(e); const blob=b; if(blob) try{ download(blob, name); }catch(_e){ toast("PNG export failed: "+(e&&e.message?e.message:e)); } else fallback(); }
     },"image/png");
-  }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); fallback(); }
+  }catch(e){ console.error(e); fallback(); }
 }
 function exportPNG(){
   if(!anyLoaded()) return;

@@ -219,7 +219,25 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
   display:inline-flex; align-items:center; justify-content:center;
   width:20px; height:20px; border-radius:6px; flex:none;
   font-size:11.5px; font-weight:700; color:var(--on-accent); background:var(--slot-c);
+  cursor:pointer;
 }
+.slotchip:hover{ box-shadow:0 0 0 2px var(--hair2); }
+.colorpop{
+  position:absolute; z-index:60; display:none; width:224px;
+  background:var(--panel); border:1px solid var(--hair2); border-radius:10px;
+  padding:12px; box-shadow:0 12px 32px rgba(0,0,0,.25);
+}
+.colorpop.open{ display:block; }
+.colorpop .cp-title{
+  font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--mut); margin-bottom:8px;
+}
+.colorpop .cp-row{ display:flex; align-items:center; gap:8px; }
+.colorpop input[type=color]{
+  width:46px; height:30px; padding:2px; border:1px solid var(--hair);
+  border-radius:6px; background:var(--raise); cursor:pointer;
+}
+.colorpop .cp-note{ font-size:10.5px; color:var(--faint); margin-top:8px; line-height:1.45; }
 .filehead{ display:flex; align-items:center; gap:10px; min-width:0; }
 .filename{
   font-size:13.5px; font-weight:600; color:var(--ink);
@@ -859,6 +877,17 @@ kbd{
 
 <!-- term popover -->
 <div class="popover" id="popover" role="dialog" aria-modal="false"></div>
+
+<!-- slot color picker (opens from a file card's letter chip) -->
+<div class="colorpop" id="colorPop" role="dialog" aria-modal="false">
+  <div class="cp-title" id="colorPopTitle">Guitar A color</div>
+  <div class="cp-row">
+    <input type="color" id="colorPopInput" aria-label="Pick this guitar’s color">
+    <button class="btn" id="colorPopReset">Theme default</button>
+  </div>
+  <div class="cp-note">Used everywhere this guitar appears — curves, tables, markers,
+    and its half of the difference colormap. Stored per theme.</div>
+</div>
 
 <!-- shortcuts modal -->
 <div class="modal" id="shortcutsModal">
@@ -2009,10 +2038,18 @@ function sgramDifference(sgA, t0A, sgB, t0B, dbOffsetB){
 
 // Diverging color for signed dB differences: t ∈ [−1, 1] lerps from the
 // near-background neutral to slot A's amber (t > 0, A louder) or slot B's
-// teal (t < 0, B louder). Endpoints are exactly the slot accents.
+// teal (t < 0, B louder). Endpoints default to the dark-theme slot accents;
+// user-picked slot colors may replace them via setDivergeEndpoints (the UI
+// lifts too-dark picks to a legible luminance first — the pane stays a dark
+// scope screen in both themes).
 const DIVERGE_NEUTRAL = [14,16,20];
-const DIVERGE_POS = [217,163,91];
-const DIVERGE_NEG = [94,179,171];
+let DIVERGE_POS = [217,163,91];
+let DIVERGE_NEG = [94,179,171];
+function setDivergeEndpoints(pos, neg){
+  const changed = String(pos) !== String(DIVERGE_POS) || String(neg) !== String(DIVERGE_NEG);
+  DIVERGE_POS = pos; DIVERGE_NEG = neg;
+  return changed; // caller invalidates the cached difference image on true
+}
 function divergeColor(t){
   if(!isFinite(t)) t = 0;
   t = Math.max(-1, Math.min(1, t));
@@ -5172,6 +5209,7 @@ function afterDataChange(animate){
 // ---------- file cards ----------
 function renderCard(i){
   const card=cards[i], ui=cardUI[i], letter=SLOT_LETTER[i];
+  if(colorPopSlot===i) closeColorPop(); // the anchor chip is about to be replaced
   card.classList.toggle("empty",ui.mode==="empty");
   card.classList.toggle("error",ui.mode==="error");
   if(ui.mode==="empty"){
@@ -5182,7 +5220,7 @@ function renderCard(i){
     return;
   }
   if(ui.mode==="loading"){
-    card.innerHTML='<div class="filehead"><span class="slotchip">'+letter+'</span>'+
+    card.innerHTML='<div class="filehead"><span class="slotchip" title="Guitar '+letter+' color — click to change">'+letter+'</span>'+
       '<span class="filename" title="'+esc(ui.name)+'">'+esc(ui.name)+'</span></div>'+
       '<div class="progresswrap"><div class="progressbar"><i style="width:'+
       Math.round((ui.frac||0)*100)+'%"></i></div>'+
@@ -5190,7 +5228,7 @@ function renderCard(i){
     return;
   }
   if(ui.mode==="error"){
-    card.innerHTML='<div class="filehead"><span class="slotchip">'+letter+'</span>'+
+    card.innerHTML='<div class="filehead"><span class="slotchip" title="Guitar '+letter+' color — click to change">'+letter+'</span>'+
       '<span class="filename" title="'+esc(ui.name||"")+'">'+esc(ui.name||"")+'</span>'+
       '<span class="fileacts"><button class="iconbtn" data-act="replace" title="Choose another file">⟳ Replace</button>'+
       '<button class="iconbtn" data-act="clear" title="Dismiss">✕ Clear</button></span></div>'+
@@ -5222,7 +5260,7 @@ function renderCard(i){
     const b=(mo,lb)=>'<button data-ch="'+mo+'" class="'+(s.channelMode===mo?"on":"")+'">'+lb+'</button>';
     chseg='<div class="seg" title="Channel used for analysis">'+b("mid","Mid")+b("left","L")+b("right","R")+'</div>';
   }
-  card.innerHTML='<div class="filehead"><span class="slotchip">'+letter+'</span>'+
+  card.innerHTML='<div class="filehead"><span class="slotchip" title="Guitar '+letter+' color — click to change">'+letter+'</span>'+
     '<span class="filename" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'+
     '<span class="fileacts"><button class="iconbtn" data-act="replace" title="Replace with another file">⟳ Replace</button>'+
     '<button class="iconbtn" data-act="clear" title="Clear this slot">✕ Clear</button></span></div>'+
@@ -5629,16 +5667,86 @@ function setTheme(t){
   theme=t;
   document.documentElement.setAttribute("data-theme",t);
   try{ localStorage.setItem("gsTheme",t); }catch(e){}
-  // Flush the cached palette so canvases pick up the new vars. The cached
-  // spectrogram/difference images are data colormaps (magma, diverging
-  // amber/teal) that don't theme, so they survive the switch untouched.
+  themeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.theme===t));
+  // applyUserColors flushes the cached palette, installs this theme's stored
+  // accent overrides, and redraws. The cached magma spectrograms are data
+  // colormaps that never theme; the difference image only re-renders when its
+  // endpoints actually change (the two themes carry different overrides).
+  applyUserColors();
+}
+
+// ---------- user slot colors (item k) ----------
+// Per-theme overrides for the two guitar accents, chosen by clicking a file
+// card's letter chip. Stored per theme so a color picked against the cream
+// background never silently degrades on the dark one; reset returns to the
+// theme default (the inline var override is simply removed).
+const SLOT_VAR=["--slot-a","--slot-b"];
+const colorPop=el("colorPop"), colorPopTitle=el("colorPopTitle"),
+      colorPopInput=el("colorPopInput"), colorPopReset=el("colorPopReset");
+let colorPopSlot=-1;
+const userColors=(()=>{
+  const u={bright:[null,null],dark:[null,null]};
+  try{
+    const j=JSON.parse(localStorage.getItem("gsColors"));
+    for(const t of THEMES) if(j&&Array.isArray(j[t]))
+      u[t]=[0,1].map(i=>/^#[0-9a-f]{6}$/i.test(j[t][i]||"")?j[t][i].toLowerCase():null);
+  }catch(_e){}
+  return u;
+})();
+function hexToRgb(h){ return [1,3,5].map(k=>parseInt(h.slice(k,k+2),16)); }
+// The difference pane stays a dark scope screen in both themes, so an accent
+// picked for the cream background can be illegible there; lift such picks
+// toward white until they clear a minimum luminance before handing them to
+// the diverging colormap. The stock endpoints already clear it untouched.
+function liftForDark(rgb){
+  const L=(0.2126*rgb[0]+0.7152*rgb[1]+0.0722*rgb[2])/255, target=0.55;
+  if(L>=target) return rgb;
+  const t=(target-L)/(1-L);
+  return rgb.map(c=>Math.round(c+(255-c)*t));
+}
+function slotThemeDefault(i){
+  // read the stylesheet's value with any inline override lifted for a moment
+  const rootStyle=document.documentElement.style, cur=rootStyle.getPropertyValue(SLOT_VAR[i]);
+  rootStyle.removeProperty(SLOT_VAR[i]);
+  const v=getComputedStyle(document.documentElement).getPropertyValue(SLOT_VAR[i]).trim();
+  if(cur) rootStyle.setProperty(SLOT_VAR[i],cur);
+  return v;
+}
+function applyUserColors(){
+  const ov=userColors[theme]||[null,null];
+  [0,1].forEach(i=>{
+    if(ov[i]) document.documentElement.style.setProperty(SLOT_VAR[i],ov[i]);
+    else document.documentElement.style.removeProperty(SLOT_VAR[i]);
+  });
   for(const k of Object.keys(CSS_COLORS)) delete CSS_COLORS[k];
   COLORS=[cssColor("slot-a"),cssColor("slot-b")];
-  themeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.theme===t));
+  // defaults mirror block 0's DIVERGE_POS/NEG initial values — keep in sync
+  const pos=ov[0]?liftForDark(hexToRgb(ov[0])):[217,163,91];
+  const neg=ov[1]?liftForDark(hexToRgb(ov[1])):[94,179,171];
+  if(setDivergeEndpoints(pos,neg)) state._sgDiff=null; // image + colorbar bake the endpoints
   requestDraw();
   if(anyLoaded()) renderAnalysis(); // accent dots in the HTML tables embed COLORS
 }
+function setSlotColor(i,hex,live){
+  userColors[theme][i]=hex;
+  // live picker drags recolor everything but only persist on commit
+  if(!live){ try{ localStorage.setItem("gsColors",JSON.stringify(userColors)); }catch(_e){} }
+  applyUserColors();
+}
+function openColorPop(i,anchor){
+  colorPopSlot=i;
+  colorPopTitle.textContent="Guitar "+SLOT_LETTER[i]+" color";
+  colorPopInput.value=userColors[theme][i]||slotThemeDefault(i);
+  colorPop.classList.add("open");
+  const r=anchor.getBoundingClientRect();
+  const left=Math.max(8,Math.min(window.scrollX+r.left,
+    window.scrollX+document.documentElement.clientWidth-colorPop.offsetWidth-8));
+  colorPop.style.left=left+"px";
+  colorPop.style.top=(window.scrollY+r.bottom+8)+"px";
+}
+function closeColorPop(){ colorPop.classList.remove("open"); colorPopSlot=-1; }
 function escCascade(){
+  if(colorPop.classList.contains("open")) return closeColorPop();
   if(magModal.classList.contains("open")) return closeMag();
   if(popover.classList.contains("open")) return closePopover();
   if(glossPanel.classList.contains("open")) return setGloss(false);
@@ -5649,7 +5757,24 @@ function escCascade(){
 
 // ---------- boot ----------
 function boot(){
-  COLORS=[cssColor("slot-a"),cssColor("slot-b")];
+  applyUserColors(); // installs stored per-theme accents + diverging endpoints, sets COLORS
+
+  colorPopInput.addEventListener("input",()=>{
+    if(colorPopSlot>=0) setSlotColor(colorPopSlot,colorPopInput.value,true);
+  });
+  colorPopInput.addEventListener("change",()=>{
+    if(colorPopSlot>=0) setSlotColor(colorPopSlot,colorPopInput.value);
+  });
+  colorPopReset.addEventListener("click",()=>{
+    if(colorPopSlot<0) return;
+    setSlotColor(colorPopSlot,null);
+    colorPopInput.value=slotThemeDefault(colorPopSlot);
+  });
+  document.addEventListener("click",e=>{
+    if(!colorPop.classList.contains("open")) return;
+    if(e.target.closest(".colorpop")||e.target.closest(".slotchip")) return;
+    closeColorPop();
+  });
 
   themeSeg.addEventListener("click",e=>{
     const b=e.target.closest("button[data-theme]");
@@ -5832,6 +5957,12 @@ function boot(){
   cards.forEach((card,i)=>{
     card.addEventListener("click",e=>{
       if(e.target.closest(".term")) return;
+      const chip=e.target.closest(".slotchip");
+      if(chip){
+        if(colorPopSlot===i) closeColorPop();
+        else openColorPop(i,chip);
+        return;
+      }
       const act=e.target.closest("[data-act]");
       if(act){
         if(act.dataset.act==="replace") fileInputs[i].click();
@@ -5903,6 +6034,13 @@ function boot(){
       y0:zm[4]!=null?parseFloat(zm[4]):null, y1:zm[5]!=null?parseFloat(zm[5]):null};
   const vc=location.search.match(/[?&]vocab=([a-z]+)(?:&|$)/i);                     // test hook
   if(vc&&VOCAB_BY_ID[vc[1].toLowerCase()]){ setVocab(vc[1].toLowerCase()); requestDraw(); }
+  const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook
+  const cb=location.search.match(/[?&]cb=([0-9a-f]{6})(?:&|$)/i);                   // test hook
+  if(ca||cb){ // session-only accent overrides (not persisted unless later edited)
+    if(ca) userColors[theme][0]="#"+ca[1].toLowerCase();
+    if(cb) userColors[theme][1]="#"+cb[1].toLowerCase();
+    applyUserColors();
+  }
 }
 boot();
 </script>

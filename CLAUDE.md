@@ -49,10 +49,22 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   `grabbing`), collapse chevron restyled as a real 24×24 bordered button, the whole
   header of the six foldable cards toggles both ways (`.foldable`; clicks on
   controls/text selections exempt), magnify buttons always visible (were
-  hover-revealed). **Remaining: M2.6e**
-  per-card exports (300-dpi PNG / JSON / CSV, EQ-match JSON); **M2.6f** versioned
-  `gsSettings` persistence (user agreed: mode/tuning+offset/A4/EQ device/smoothing +
-  Strings; NOT level-match; footer reset). One commit per submilestone.
+  hover-revealed). **Remaining — restaged 2026-08-20 (session 10) on two new user
+  items (merge Spectrum/Difference/Band-energy into one card with foldable
+  sub-sections + card-level Strings/Regions and a "show harmonics" sub-option;
+  restyle the enabled toggle so the on state still reads as a toggle): M2.6e**
+  toggle restyle (accent track + light knob when on, both themes, CSS-only, neutral
+  accent not guitar colors); **M2.6f** frequency-card unification (one card, three
+  individually foldable sub-sections, Difference sub-section only with two sources;
+  Strings + Regions move from the global header into the card header, Level-match
+  stays global; `gsCollapse`/`?open=` gain sub-section keys); **M2.6g** "Show
+  harmonics" sub-toggle under Strings (low harmonics per string on both line plots,
+  lighter than fundamentals, click-to-popover, persisted); **M2.6h** per-card
+  exports (300-dpi PNG / JSON / CSV, EQ-match JSON — design done pre-restage,
+  spectrum/diff/bands buttons per sub-section); **M2.6i** versioned `gsSettings`
+  persistence (user agreed: mode/tuning+offset/A4/EQ device/smoothing + Strings +
+  harmonics; NOT level-match; footer reset). One commit per submilestone. **Docs
+  restaged only — no app code until the user approves the restage.**
 - 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four

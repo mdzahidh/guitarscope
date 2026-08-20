@@ -569,3 +569,50 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
 - Verification: 100/100 DSP tests; parse + all extraction suites (the collapse
   state machine unchanged); headless bright/dark screenshots confirming visible
   chevrons on expanded and folded headers and always-visible magnify buttons.
+
+### 2026-08-20 — Milestone restage: unified frequency card, string harmonics, toggle restyle (session 10)
+
+- **User message (two items, sent before M2.6e was built, with "don't implement
+  yet — refactor the next set of milestones"):**
+  - (a) Spectrum, Difference, and Band energy share so much that they should be
+    **one card with three sub-sections, each foldable**; settings such as
+    "Strings on axis" and "Regions" should belong to that whole card and apply to
+    all sub-sections. "Strings on axis" gains a sub-option toggling **"show
+    harmonics"**, which draws a couple of important harmonics of each string on
+    the plot as well.
+  - (b) The enabled toggle currently looks mostly fully dark (both track and
+    knob) — use a different color scheme so the on state still looks like a
+    toggle.
+- **Restaged queue (replaces the pending M2.6e exports / M2.6f persistence;
+  one commit each, in this order):**
+  - **M2.6e — toggle restyle (b):** enabled switches get an accent-colored track
+    with a light knob in both themes, so on and off stay visually distinct and
+    the control still reads as a switch. CSS-only; neutral UI accent, not the
+    guitar A/B colors (those would falsely imply a per-guitar association).
+  - **M2.6f — frequency-card unification (a):** merge the Spectrum, Difference,
+    and Band Energy cards into one card (working title "Frequency analysis")
+    with three individually foldable sub-sections; the Difference sub-section
+    exists only when two sources do. Strings and Regions move from the global
+    header into this card's header — position expresses scope (M2.6a rule):
+    they drive exactly these views. Level-match stays global (it also drives
+    the spectrogram, verdict, and playback). `gsCollapse` and the `?open=` hook
+    extend to sub-section keys; magnify keys unchanged; single-guitar mode shows
+    the spectrum + band sub-sections.
+  - **M2.6g — string harmonics (a):** "Show harmonics" sub-toggle under Strings;
+    draws each open string's low harmonics on both frequency line plots, styled
+    lighter than the fundamentals, clickable to the existing per-string popover
+    (which already documents harmonics 2–5); persists alongside the Strings
+    preference.
+  - **M2.6h — exports everywhere (was M2.6e; the session-9 items g+h, design
+    unchanged, layout retargeted):** shared export layer — true 300-dpi
+    pHYs-stamped PNG, data JSON with guitar/tuning/region context, plain CSV,
+    EQ-match JSON alongside Copy settings — with the spectrum/difference/band
+    export buttons now living per sub-section inside the merged card.
+  - **M2.6i — settings persistence (was M2.6f; scope as agreed and recorded
+    under the M2.6a entry):** versioned `gsSettings` consolidation with
+    migrations, footer reset + what's-remembered line; now also carries the
+    M2.6g harmonics sub-toggle.
+- Ordering rationale: the toggle restyle is independent and tiny, so it lands
+  first; the card merge lands **before** exports so export buttons and filenames
+  are built once against the final layout instead of churning against cards that
+  are about to disappear.

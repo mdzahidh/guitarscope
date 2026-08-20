@@ -616,3 +616,21 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   first; the card merge lands **before** exports so export buttons and filenames
   are built once against the final layout instead of churning against cards that
   are about to disappear.
+
+### 2026-08-20 — M2.6e built: switch on-state restyle (session 10)
+
+- **User item (b) from the session-10 restage.** The checked switch used a hardcoded
+  `#39424f` track and `var(--ink)` knob. On Bright that is a dark track *and* a dark
+  knob — it read as a solid pill, not a toggle. Dark was better (light `--ink` knob)
+  but the track still sat too close to panel chrome to read as "on".
+- **CSS-only.** Two new theme vars: `--switch-on` (Bright `#3d4652`, Dark `#7c8796` —
+  cool slate, a UI accent) and `--switch-knob` (Bright `#faf8f1` paper, Dark `#eef0f3`).
+  Checked track fills `--switch-on` (border matches); checked knob is always the light
+  `--switch-knob`. Off-state unchanged (raised track, dim knob).
+- **Not guitar colors.** `--slot-a` / `--slot-b` would imply the switch belongs to one
+  guitar. Level-match and Strings are global/card-scope controls; their on-state must
+  stay identity-neutral. Future switches reuse the same pair.
+- **Verification:** node CSS-contract tests in `tests/dsp.test.js` (vars present in both
+  palettes, checked rules bind those vars, `#39424f` gone, switch block has no `--slot-*`).
+  Headless `?demo&strings=1` in both themes to eyeball the header switches.
+- **Next:** M2.6f frequency-card unification (then g harmonics, h exports, i settings).

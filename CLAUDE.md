@@ -49,12 +49,10 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   `grabbing`), collapse chevron restyled as a real 24×24 bordered button, the whole
   header of the six foldable cards toggles both ways (`.foldable`; clicks on
   controls/text selections exempt), magnify buttons always visible (were
-  hover-revealed). **Remaining — restaged 2026-08-20 (session 10) on two new user
-  items (merge Spectrum/Difference/Band-energy into one card with foldable
-  sub-sections + card-level Strings/Regions and a "show harmonics" sub-option;
-  restyle the enabled toggle so the on state still reads as a toggle): M2.6e**
-  toggle restyle (accent track + light knob when on, both themes, CSS-only, neutral
-  accent not guitar colors); **M2.6f** frequency-card unification (one card, three
+  hover-revealed). **M2.6e BUILT (session 10):** checked switches use `--switch-on`
+  (cool slate, not `--slot-a/--slot-b`) with `--switch-knob` (paper-light) in both
+  themes; the old `#39424f` + `--ink` fill read as a solid dark pill on Bright.
+  CSS-only. **Remaining (restaged session 10): M2.6f** frequency-card unification (one card, three
   individually foldable sub-sections, Difference sub-section only with two sources;
   Strings + Regions move from the global header into the card header, Level-match
   stays global; `gsCollapse`/`?open=` gain sub-section keys); **M2.6g** "Show
@@ -63,9 +61,8 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   exports (300-dpi PNG / JSON / CSV, EQ-match JSON — design done pre-restage,
   spectrum/diff/bands buttons per sub-section); **M2.6i** versioned `gsSettings`
   persistence (user agreed: mode/tuning+offset/A4/EQ device/smoothing + Strings +
-  harmonics; NOT level-match; footer reset). One commit per submilestone. **Docs
-  restaged only — no app code until the user approves the restage.**
-- 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
+  harmonics; NOT level-match; footer reset). One commit per submilestone.
+- 107/107 tests pass (`node tests/dsp.test.js`, including the M2.6e switch CSS contract). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
   vocabulary lanes, zoomed panes, custom guitar colors incl. the recolored difference
@@ -73,6 +70,8 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   pixel-regression compares against prior commits at each step. UI state machines
   (audition html, card play, EQ text export, disclosure) have node tests that extract
   the real functions from index.html — see the scratchpad pattern in ARCHITECTURE.md.
+  M2.6e adds a CSS-contract check in `tests/dsp.test.js` (same `index.html` read)
+  so the switch on-state cannot silently revert to the dark pill or guitar colors.
 
 ## File map
 
@@ -129,7 +128,9 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   spectrogram (never rainbow) and the diverging difference stay dark scope-screens in
   both themes. The diverging endpoints default to amber/teal and follow user-picked
   guitar colors after a luminance lift (see ARCHITECTURE.md) — a user-identity change,
-  not a theme change.
+  not a theme change. Checked `.switch` tracks fill `--switch-on` with a `--switch-knob`
+  (paper-light in both themes); never `--slot-a/--slot-b` — those would imply the
+  control belongs to one guitar.
 - **DSP params:** Welch LTAS 8192-pt Hann 50 % overlap; log grid 60 Hz–20 kHz (700 pts);
   metrics integrate 60 Hz–20 kHz only; octave smoothing off/1-12/1-6/1-3; peak detection
   always on 1/6-oct curve. Spectrogram 2048-pt Hann, 256 log cells 60 Hz–20 kHz,

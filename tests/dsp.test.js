@@ -627,6 +627,24 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
       "tone cell below both Nyquists stays measured", d3.frames[col3 + ci].toFixed(2) + " dB");
   }
 
+  // ---- M2.6e switch on-state: CSS contract (neutral accent, light knob) ----
+  {
+    const root = html.match(/:root\{[\s\S]*?\n\}/);
+    const dark = html.match(/html\[data-theme="dark"\]\{[\s\S]*?\n\}/);
+    const sw = html.match(/\/\* switch \*\/[\s\S]*?\.switch\.disabled\{[^}]+\}/);
+    ok(!!root && !!dark && !!sw, "stylesheet has :root, dark theme, and switch rules");
+    ok(/--switch-on:\s*#3d4652/.test(root[0]) && /--switch-knob:\s*#faf8f1/.test(root[0]),
+      "Bright on-track is cool slate + paper knob", (root && root[0].match(/--switch-\w+:\s*#[0-9a-f]+/g) || []).join(" "));
+    ok(/--switch-on:\s*#7c8796/.test(dark[0]) && /--switch-knob:\s*#eef0f3/.test(dark[0]),
+      "Dark on-track is mid slate + light knob");
+    ok(/input:checked \+ \.tk\{[^}]*background:var\(--switch-on\)/.test(sw[0]),
+      "checked track fills with --switch-on, not a hardcoded dark");
+    ok(/input:checked \+ \.tk::after\{[^}]*background:var\(--switch-knob\)/.test(sw[0]),
+      "checked knob is --switch-knob (light in both themes)");
+    ok(!/#39424f/.test(html), "pre-M2.6e fully-dark checked fill is gone");
+    ok(!/--slot-[ab]/.test(sw[0]), "switch CSS does not use guitar slot colors");
+  }
+
   // ---- M2.5 divergeColor: endpoints are the slot accents ----
   {
     const p = D.divergeColor(1), z = D.divergeColor(0), m = D.divergeColor(-1);

@@ -47,6 +47,11 @@
   --role-cut-rgb:  178,62,54;
   --role-keep-rgb: 34,122,62;
   --role-room-rgb: 108,84,158;
+  /* Switch on-state: a neutral UI fill, never --slot-a/--slot-b (those
+     would read as "this switch belongs to guitar A/B"). Light knob in
+     both themes so the control still looks like a toggle when on. */
+  --switch-on:   #3d4652;
+  --switch-knob: #faf8f1;
   --radius:  12px;
   --radius-s:8px;
   --ease:    cubic-bezier(.25,.6,.3,1);
@@ -81,6 +86,8 @@ html[data-theme="dark"]{
   --role-cut-rgb:  222,118,106;
   --role-keep-rgb: 118,190,132;
   --role-room-rgb: 158,136,208;
+  --switch-on:   #7c8796;
+  --switch-knob: #eef0f3;
 }
 *{ box-sizing:border-box; margin:0; padding:0; }
 html{ background:var(--bg); }
@@ -166,8 +173,8 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
   border-radius:50%; background:var(--dim);
   transition:transform var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.switch input:checked + .tk{ background:#39424f; border-color:var(--hair2); }
-.switch input:checked + .tk::after{ transform:translateX(13px); background:var(--ink); }
+.switch input:checked + .tk{ background:var(--switch-on); border-color:var(--switch-on); }
+.switch input:checked + .tk::after{ transform:translateX(13px); background:var(--switch-knob); }
 .switch input:focus-visible + .tk{ outline:1px solid var(--hair2); outline-offset:2px; }
 .switch .lbl{ font-size:12px; color:var(--mut); }
 .switch input:checked ~ .lbl{ color:var(--ink); }

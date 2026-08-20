@@ -209,8 +209,9 @@ power with the same full-scale-sine convention as Welch → resample each frame 
   follow user-picked guitar colors after a luminance lift — a user-identity change, not
   a theme change; `_sgDiff` is invalidated only when the endpoints actually change.
   See the session-7 section.)*
-- Bright accents darken to A `#a8690f` / B `#17786e` (the Dark ambers/teals fail
-  contrast on cream); `--on-accent` provides badge-text color per theme.
+-   Bright accents darken to A `#a8690f` / B `#17786e` (the Dark ambers/teals fail
+  contrast on cream); `--on-accent` provides badge-text color per theme. Switch
+  on-state is a separate pair (`--switch-on` / `--switch-knob`); see M2.6e.
 
 ## Interactive line-plot zoom (session 5)
 
@@ -543,6 +544,24 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   bordered button per plot corner, accepted deliberately.
 - The audit removed a dead `.plotwrap.hoverable{cursor:crosshair}` rule — the
   class was never applied anywhere; `attachCrosshair` sets the inline cursor.
+
+## M2.6e (session 10): switch on-state — accent track, light knob
+
+- **Bug the restyle exists to fix.** `.switch input:checked + .tk` was `background:#39424f`
+  with the knob at `background:var(--ink)`. That hex is a leftover from the original
+  dark-only palette. On Bright (`--ink` `#2c2721`) both halves of the control are dark,
+  so "on" looks like a filled rectangle rather than a track-plus-thumb. Do not restore
+  `#39424f` or an `--ink` checked knob.
+- **Vars, not slot accents.** `--switch-on` / `--switch-knob` live next to the other
+  theme tokens in `:root` and `html[data-theme="dark"]`. They are cool slates plus a
+  paper-light thumb — chrome, not data. Binding the checked fill to `--slot-a` or
+  `--slot-b` would paint a global control in a guitar's identity color (wrong scope).
+- **CSS-only, both themes.** No JS. Off-state (raised track, `--dim` knob) is unchanged.
+  The existing `var(--dur) var(--ease)` transitions already cover background and
+  thumb color, so the new fills animate for free.
+- **Guard test.** `tests/dsp.test.js` regex-reads the stylesheet (the file is already
+  loaded for DSP extraction) and asserts the two palettes define the vars, the checked
+  rules use them, `#39424f` is absent, and the switch block mentions no `--slot-*`.
 
 ## Hard-won correctness notes (dead ends — do not retry)
 

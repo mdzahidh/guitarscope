@@ -239,3 +239,32 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   Choice persists to localStorage; `?theme=bright|dark` wins over storage for headless tests.
 - Block-0 DSP untouched this session; suite stays at 100 passing. All six features verified by
   headless screenshots in both themes, including single-guitar and magnify views.
+
+### 2026-08-19 — Interactive zoom on the line plots (session 5)
+- **User request (a):** interactive zoom in/out on the line plots, including drawing a box to
+  select the region. Built for all four line plots: spectrum, difference, envelope, EQ-match
+  response. Part (b) of the same message (frequency-vocabulary annotation lanes) is
+  deliberately *not* built yet — the user asked to discuss it first.
+- **Gestures:** drag a box to zoom to it — a box thinner than 8 px on one axis zooms only the
+  other axis (classic x-only / y-only select); shift+drag pans; ctrl/⌘+wheel (macOS trackpad
+  pinch arrives as ctrl+wheel) zooms x around the cursor and snaps back to null at full range;
+  double-click or the reset-zoom button (appears only while zoomed) restores full view. The
+  magnified overlay supports all the same gestures and **shares the underlying view's zoom**,
+  since both render from the same model builders.
+- **Zoom is display-only and always disclosed.** State lives in data units per plot
+  (`ZOOMS{}` — Hz for log-frequency plots, display-time seconds for the envelope, dB for y);
+  the model builders bake it into the scene models. Metrics, the band table and the tone panel
+  never read it, and the active window is printed in the plot's status chip
+  ("zoom 200 Hz – 2.00 kHz · −70 … −30 dB"), so a screenshot or PNG export of a zoomed plot
+  still carries its own provenance. Min spans: ×1.05 geometric (log-f), 50 ms (time), 1 dB.
+- **Rendering under a partial view:** curves are canvas-clipped at the x plot edges and value-
+  clamped in y; band shading, tuning markers and the EQ lane clamp into the window; axis tick
+  generation falls back to exact endpoint labels at full range so the default look is
+  unchanged. Y ticks pick a 1-2-5 step from the window height.
+- A byproduct fix: `drawStatusChip` now sets `lineWidth=1` explicitly — the envelope pane's
+  chip border had silently inherited the 1.6 px envelope-curve stroke (canvas state leak);
+  chips now render uniformly on every pane.
+- New headless test hooks: `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp) and `?diff`
+  (turns the difference pane on, since it defaults off). Verified by 100/100 DSP tests plus
+  headless screenshots of all four zoomed plots (both themes) and the magnified overlay, and a
+  pixel-regression compare against the previous commit (clean except the intended chip border).

@@ -209,6 +209,49 @@ power with the same full-scale-sine convention as Welch → resample each frame 
 - Bright accents darken to A `#a8690f` / B `#17786e` (the Dark ambers/teals fail
   contrast on cream); `--on-accent` provides badge-text color per theme.
 
+## Interactive line-plot zoom (session 5)
+
+The four line plots (spectrum, difference, envelope, EQ-match response) zoom; the
+spectrogram images and EQ device faces deliberately do not (their pixels are data,
+resampling them would misrepresent it — magnify covers "bigger").
+
+- **State is data units, not pixels.** `ZOOMS{spec,diff,env,eqresp}` holds
+  `{x0,x1,y0,y1}` — Hz for the log-f plots, *display-time* seconds for the envelope
+  (post onset-alignment, i.e. what the axis shows), dB for y; a null entry or axis pair
+  means full range. Pixel-space state would rot on resize/DPR change and couldn't be
+  shared with the magnify overlay; data-space state survives all of that for free.
+- **The model builders bake the zoom in** (`fv` x-window, `yLo/yHi`, a `zoomNote` for
+  the status chip); scenes just render the window they're given. Because the magnify
+  overlay renders through the same builders, it inherits each view's zoom with zero
+  extra plumbing, and its own gestures write the same state back.
+- **Display-only, always disclosed.** Nothing numeric reads `ZOOMS` — metrics, band
+  table, tone panel, EQ fit all integrate full-range. The active window is appended to
+  the plot's status chip ("zoom 200 Hz – 2.00 kHz · −70 … −30 dB") so screenshots and
+  PNG exports of a zoomed plot are self-describing.
+- **Rendering under a partial view:** x is *canvas-clipped* at the plot edges
+  (`ctx.rect(mL−1, 0, pW+2, h)` — the ±1 keeps endpoint pixels), y is value-clamped in
+  the `yOf` closures (a clipped y would drop segments crossing the window; clamping
+  draws them flat at the edge, which reads correctly as "off scale"). Band shading,
+  tuning markers and the EQ lane clamp their rects into the window. Tick generation
+  (`xTicksFor`) falls back to the hand-picked exact labels at full range so the default
+  render is pixel-identical to pre-zoom builds; zoomed views get generated 1-2-5 ticks.
+- **Gesture disambiguation:** a drag that moved ≤3 px is a click (crosshair/popovers
+  keep working — a capture-phase click handler suppresses exactly one click after a
+  real drag); a box thinner than 8 px on an axis means "don't zoom that axis"; shift
+  turns the drag into a pan (absolute, from the zoom captured at mousedown, clamped to
+  full range); ctrl/⌘+wheel — which is what a macOS pinch arrives as — zooms x
+  geometrically around the cursor and snaps to null when it reaches full range, so
+  wheel-out always lands exactly on the pristine full view. Min spans ×1.05 geometric /
+  50 ms / 1 dB stop degenerate windows. All gestures no-op while a plot has no data
+  (`zoomAxes` returns null when the relevant builder does).
+- Byproduct fix: `drawStatusChip` never set `lineWidth`, so the envelope chip's border
+  silently inherited the 1.6 px envelope-curve stroke (found by pixel-diffing renders
+  across the zoom change — the new x-clip save/restore "fixed" it accidentally). It now
+  sets `lineWidth=1` explicitly; chip rendering no longer depends on caller state.
+- Test hooks: `?zoom=key:x0,x1[,y0,y1]` seeds `ZOOMS` before boot renders; `?diff`
+  turns the difference pane on (it defaults off, which otherwise hides that pane from
+  headless shots).
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

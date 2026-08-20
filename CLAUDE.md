@@ -12,13 +12,18 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   ticks) + M2.5 (spectrogram difference/level-match/string markers, EQ-region lane,
   EQ match with device faces) + M2.5 follow-ups (spectrogram time-axis alignment,
   plot magnify, EQ-vocabulary rows in Band Energy, single-guitar mode, recording guide,
-  Bright/Dark themes with Bright default): BUILT, awaiting user testing.** All built on
-  explicit user request 2026-08-19. Do not start M3 (live input) or M4 (chain measure)
+  Bright/Dark themes with Bright default) + interactive zoom on the four line plots
+  (box-select, shift-pan, ctrl/⌘-wheel, reset): BUILT, awaiting user testing.** All built
+  on explicit user request 2026-08-19. Do not start M3 (live input) or M4 (chain measure)
   until the user has tested and said so.
+- **Next discussion queued:** frequency-vocabulary annotation lanes (user request (b),
+  2026-08-19) — guitar-POV default vocabularies for solo vs band/mix contexts. Discuss
+  first, do not build until the user decides.
 - 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; M2/M2.5 views verified by headless
   `?demo` screenshots (all four EQ device faces inspected; both themes, single-guitar
-  and magnify views inspected).
+  and magnify views inspected); zoom verified on all four plots + magnify overlay plus
+  a pixel-regression compare against the prior commit.
 
 ## File map
 
@@ -39,7 +44,8 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 
 - Open `index.html` in a browser. `?demo` auto-loads the built-in demo pair
   (`?demo=a`/`=b` loads one side only). Other test hooks: `?theme=bright|dark`,
-  `?sgalign=file|onset`, `?mag=<viewkey>`, `?guide`.
+  `?sgalign=file|onset`, `?mag=<viewkey>`, `?guide`, `?diff` (difference pane on),
+  `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp; data units).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
@@ -73,6 +79,9 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   analog-magnitude band models against the **1/6-oct-smoothed** difference (never the
   raw comb) on 140 log points; device trim absorbs the broadband level gap; the EQ-region
   lane is colloquial annotation only — the M1 shaded bands still drive all numbers.
+  Line-plot zoom is **display-only** (`ZOOMS{}` in data units, baked in by the model
+  builders, shared with the magnify overlay): metrics/band table/tone panel never read
+  it, and the active window is always printed in the plot's status chip.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

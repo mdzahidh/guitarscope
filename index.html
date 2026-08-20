@@ -726,8 +726,7 @@ kbd{
             <label class="switch" id="stringsSwitch"><input type="checkbox" id="stringsToggle"><span class="tk"></span><span class="lbl">On axis</span></label>
           </div>
           <div class="field">
-            <label>Harmonics</label>
-            <label class="switch" id="harmonicsSwitch"><input type="checkbox" id="harmonicsToggle"><span class="tk"></span><span class="lbl">Show</span></label>
+            <button class="btn" id="clearHarmonicsBtn" disabled title="Hide all string harmonics">Clear harmonics</button>
           </div>
         </div>
       </div>
@@ -3863,8 +3862,10 @@ let COLORS=["#f0a13e","#44c2d4"];
 const GRID=makeLogGrid(700,60,20000);
 
 // ---------- state (contract shared with the glossary) ----------
+const _defaultHarmonics=()=>Array.from({length:6},()=> [false,false,false,false]); // per string: hh 2,3,4,5
 const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
-              a4:440, smooth:6, lm:false, lmOffset:null, strings:false, harmonics:false,
+              a4:440, smooth:6, lm:false, lmOffset:null, strings:false,
+              stringHarmonics:_defaultHarmonics(),
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
@@ -3881,7 +3882,7 @@ const modeSeg=el("modeSeg"), tuningSel=el("tuningSel"),
 const smoothSeg=el("smoothSeg"), vocabSel=el("vocabSel"),
       lmSwitch=el("lmSwitch"), lmToggle=el("lmToggle"),
       stringsSwitch=el("stringsSwitch"), stringsToggle=el("stringsToggle"),
-      harmonicsSwitch=el("harmonicsSwitch"), harmonicsToggle=el("harmonicsToggle"),
+      clearHarmonicsBtn=el("clearHarmonicsBtn"),
       pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn"),
       diffPngBtn=el("diffPngBtn"), diffCsvBtn=el("diffCsvBtn"), diffJsonBtn=el("diffJsonBtn"),
       bandsPngBtn=el("bandsPngBtn"), bandsCsvBtn=el("bandsCsvBtn"), bandsJsonBtn=el("bandsJsonBtn"),
@@ -4239,17 +4240,18 @@ function tuningMarkers(){
 }
 function stringAxisMarkers(){
   const base=tuningMarkers();
-  if(!state.strings||!state.harmonics) return state.strings?base:[];
+  if(!state.strings) return [];
   const out=[...base];
   for(const m of base){
-    for(let hh=2;hh<=4;hh++){
+    const arr=state.stringHarmonics[m.si];
+    if(!arr) continue;
+    for(let hh=2;hh<=5;hh++){
+      if(!arr[hh-2]) continue;
       const f=m.f*hh;
       if(f<FMIN||f>FMAX) continue;
       out.push({f,name:noteInfo(f,state.a4).name,si:m.si,midi:m.midi,harm:hh});
     }
   }
-  // fundamentals first so their labels win the 16px skip guard
-  out.sort((a,b)=> (a.harm===1&&b.harm!==1)?-1:(b.harm===1&&a.harm!==1)?1:a.f-b.f);
   return out;
 }
 // Refresh the Anatomy vocabulary's string-derived bounds (block 3's VOCAB_TUNING)
@@ -5785,34 +5787,41 @@ function stringContentHtml(si){
   let rows="";
   for(let hh=1;hh<=5;hh++){
     const hf=f*hh;
-    rows+='<div class="pop-val"><span class="dot" style="background:var(--dim)"></span>'+
+    const isHarm=hh>1;
+    const enabled=isHarm ? !!(state.stringHarmonics[si] && state.stringHarmonics[si][hh-2]) : true;
+    const toggle=isHarm
+      ? '<label class="switch" style="margin-left:auto"><input type="checkbox" class="harm-toggle" data-hh="'+hh+'" '+(enabled?'checked':'')+'><span class="tk"></span></label>'
+      : '<span style="margin-left:auto; font-size:10px; color:var(--dim)">always on</span>';
+    const col=isHarm? _stringColor(si, enabled?0.9:0.35) : "var(--dim)";
+    rows+='<div class="pop-val" style="gap:8px"><span class="dot" style="background:'+col+'"></span>'+
       '<span class="l">'+(hh===1?"Fundamental":"Harmonic "+hh)+'</span>'+
-      '<span class="v">'+esc(fmtHz(hf)+"  ·  "+noteInfo(hf,state.a4).name)+'</span></div>';
+      '<span class="v">'+esc(fmtHz(hf)+"  ·  "+noteInfo(hf,state.a4).name)+'</span>'+toggle+'</div>';
   }
   return '<div class="pop-term">'+esc(name)+' — open '+STRING_ORD[si]+' string</div>'+
     '<div class="pop-cat">'+esc(tun)+' · string '+(6-si)+' of 6</div>'+
     '<div class="pop-sec"><div class="pop-label">Musician’s ear</div><p>The dotted line marks this open string’s pitch — the '+
       '<button class="term" data-term="fundamental">fundamental</button> you hear when it rings open. '+
       'Everything the string adds above that line is its '+
-      '<button class="term" data-term="harmonic-series">harmonic series</button>.</p></div>'+
+      '<button class="term" data-term="harmonic-series">harmonic series</button>. Toggle harmonics below to show them on the plot in the string’s color.</p></div>'+
     '<div class="pop-sec"><div class="pop-label">The physics</div><p>Equal temperament places every pitch at '+
       'A4 × 2^((MIDI − 69)⁄12). This string is MIDI note '+midi+' with your A4 reference at '+
       state.a4.toFixed(1)+' Hz.</p></div>'+
     '<div class="pop-sec"><div class="pop-label">How GuitarScope places it</div><div class="pop-formula">f = '+
       state.a4.toFixed(1)+' × 2^(('+midi+' − 69)⁄12) = '+esc(fmtHz(f))+'</div></div>'+
-    '<div class="pop-sec"><div class="pop-label">Current values</div><div class="pop-vals">'+rows+'</div></div>';
+    '<div class="pop-sec"><div class="pop-label">Current values — harmonics toggle their guides</div><div class="pop-vals">'+rows+'</div></div>';
 }
 function openStringPopover(si,anchor){
   const html=stringContentHtml(si);
   if(!html) return;
   stopPlayback();
+  popover.dataset.stringSi=si;
   const f=midiToFreq(tuningMidi(state.tuning,state.customOffset)[si],state.a4);
   // audition a 1/3-octave band centred on the open-string fundamental
   popover.innerHTML=html+auditionBlock(f*Math.pow(2,-1/6),f*Math.pow(2,1/6));
   popover.classList.add("open");
   placePopover(anchor);
 }
-function closePopover(){ popover.classList.remove("open"); stopPlayback(); }
+function closePopover(){ popover.classList.remove("open"); delete popover.dataset.stringSi; stopPlayback(); }
 let popPinned=false;   // ?pop= test hook: keep the popover through the capture resize
 
 const GLOSS_CATS=["Frequency regions","EQ regions","Guitar anatomy","Solo EQ words","Band-mix zones","Tone descriptors","Physics","Method"];
@@ -6103,7 +6112,7 @@ function exportEnvCSV(){
 }
 function _exportCardJson(name, payload){
   const base={ app:"GuitarScope", type:"export", card:name, created:new Date().toISOString(),
-    state:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset, a4:state.a4, smooth:state.smooth, lm:state.lm, lmOffset:state.lmOffset, strings:state.strings, harmonics:state.harmonics, vocab:state.vocab, sgAlign:state.sgAlign, eqDir:state.eqDir, eqDevice:state.eqDevice },
+    state:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset, a4:state.a4, smooth:state.smooth, lm:state.lm, lmOffset:state.lmOffset, strings:state.strings, stringHarmonics:state.stringHarmonics, vocab:state.vocab, sgAlign:state.sgAlign, eqDir:state.eqDir, eqDevice:state.eqDevice },
     guitars:state.slots.map((s,i)=> s?{slot:SLOT_LETTER[i], name:s.name, sampleRate:s.info.sampleRate, container:s.info.container}:null).filter(Boolean),
     regions:(VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix).regions.map(r=>({key:r.key,label:r.label,f0:regionF(r.f0),f1:regionF(r.f1)})),
     ...payload };
@@ -6160,7 +6169,7 @@ function exportJSON(){
     created:new Date().toISOString(),
     settings:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
                a4:state.a4, smooth:state.smooth, lm:state.lm, sgAlign:state.sgAlign,
-               eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab, strings:state.strings, harmonics:state.harmonics },
+               eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab, strings:state.strings, stringHarmonics:state.stringHarmonics },
     files };
   download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
     "guitarscope_"+exportBaseName()+".json");
@@ -6195,21 +6204,33 @@ function setVocab(v){
 // Versioned gsSettings: mode, tuning+offset, A4, EQ device/dir, smoothing,
 // vocab, Strings, harmonics — NOT level-match. Written only on explicit
 // user actions, read on boot with migration from legacy keys.
-const SETTINGS_VER=1;
+const SETTINGS_VER=2;
 function _settingsPayload(){
   return {v:SETTINGS_VER, mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
     a4:state.a4, smooth:state.smooth, eqDevice:state.eqDevice, eqDir:state.eqDir,
-    vocab:state.vocab, strings:state.strings, harmonics:state.harmonics};
+    vocab:state.vocab, strings:state.strings, stringHarmonics:state.stringHarmonics.map(a=>a.slice())};
 }
 function saveSettings(){
   try{ localStorage.setItem("gsSettings", JSON.stringify(_settingsPayload())); }catch(_e){}
+  try{ localStorage.setItem("gsVocab", state.vocab); }catch(_e){}
+  try{ localStorage.setItem("gsStrings", state.strings?"1":"0"); }catch(_e){}
+  try{ localStorage.setItem("gsStringHarmonics", JSON.stringify(state.stringHarmonics)); }catch(_e){}
+}
+function _hasAnyHarmonics(){
+  return state.stringHarmonics.some(a=>a.some(v=>v));
+}
+function _clearAllHarmonics(){
+  for(let i=0;i<6;i++) for(let j=0;j<4;j++) state.stringHarmonics[i][j]=false;
+}
+function syncClearHarmonicsBtn(){
+  clearHarmonicsBtn.disabled = !state.strings || !_hasAnyHarmonics();
 }
 function loadSettings(){
   try{
     const raw=localStorage.getItem("gsSettings");
     if(raw){
       const j=JSON.parse(raw);
-      if(j&&j.v===SETTINGS_VER){
+      if(j&& (j.v===SETTINGS_VER || j.v===1)){
         if(j.mode==="electric"||j.mode==="acoustic") state.mode=j.mode;
         if(typeof j.tuning==="string"&&(TUNINGS[j.tuning]||j.tuning==="custom")) state.tuning=j.tuning;
         if(typeof j.customOffset==="number") state.customOffset=j.customOffset|0;
@@ -6219,26 +6240,40 @@ function loadSettings(){
         if(j.eqDir===0||j.eqDir===1) state.eqDir=j.eqDir;
         if(typeof j.vocab==="string"&&VOCAB_BY_ID[j.vocab]) state.vocab=j.vocab;
         if(typeof j.strings==="boolean") state.strings=j.strings;
-        if(typeof j.harmonics==="boolean") state.harmonics=j.harmonics;
-        // apply to UI (decoupled from save)
+        // v1 had harmonics:boolean, v2 has stringHarmonics:6x4
+        if(Array.isArray(j.stringHarmonics) && j.stringHarmonics.length===6){
+          for(let i=0;i<6;i++) for(let k=0;k<4;k++) state.stringHarmonics[i][k]=!!(j.stringHarmonics[i]&&j.stringHarmonics[i][k]);
+        } else if(typeof j.harmonics==="boolean" && j.harmonics){
+          // migrate old global harmonics=true → enable 2–4 for all strings
+          for(let i=0;i<6;i++) for(let k=0;k<3;k++) state.stringHarmonics[i][k]=true;
+        } else if(Array.isArray(j.stringHarmonics)){
+          // handle length mismatch
+          for(let i=0;i<Math.min(6,j.stringHarmonics.length);i++) for(let k=0;k<4;k++) state.stringHarmonics[i][k]=!!(j.stringHarmonics[i]&&j.stringHarmonics[i][k]);
+        }
+        // apply to UI
         modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===state.mode));
         tuningSel.value=state.tuning; customOffsetWrap.style.display=state.tuning==="custom"?"":"none"; customOffsetEl.value=state.customOffset;
         a4Input.value=state.a4;
         setSmoothUI(state.smooth);
         eqDevSel.value=state.eqDevice; eqDirSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.dir===state.eqDir));
-        setVocab(state.vocab); stringsToggle.checked=state.strings; harmonicsToggle.checked=state.harmonics;
-        try{ syncHarmonicsUI(); }catch(_e){}
+        setVocab(state.vocab); stringsToggle.checked=state.strings;
+        try{ syncClearHarmonicsBtn(); }catch(_e){}
         syncVocabTuning();
         return true;
       }
     }
-    // migration from legacy keys (gsVocab/gsStrings/gsHarmonics + current state for mode/tuning etc not previously persisted)
+    // legacy migration (gsVocab/gsStrings/gsHarmonics/gsStringHarmonics)
     let migrated=false;
     try{
       const v=localStorage.getItem("gsVocab"); if(v&&VOCAB_BY_ID[v]){ state.vocab=v; setVocab(v); migrated=true; }
       const s=localStorage.getItem("gsStrings"); if(s!=null){ state.strings=s==="1"; stringsToggle.checked=state.strings; migrated=true; }
-      const hh=localStorage.getItem("gsHarmonics"); if(hh!=null){ state.harmonics=hh==="1"; harmonicsToggle.checked=state.harmonics; migrated=true; }
-      if(migrated) try{ syncHarmonicsUI(); }catch(_e){}
+      const sh=localStorage.getItem("gsStringHarmonics");
+      if(sh){ try{ const a=JSON.parse(sh); if(Array.isArray(a)&&a.length===6){ for(let i=0;i<6;i++) for(let k=0;k<4;k++) state.stringHarmonics[i][k]=!!(a[i]&&a[i][k]); migrated=true; } }catch(_e){} }
+      else {
+        const hh=localStorage.getItem("gsHarmonics"); if(hh==="1"){ for(let i=0;i<6;i++) for(let k=0;k<3;k++) state.stringHarmonics[i][k]=true; migrated=true; }
+        if(hh!=null) stringsToggle.checked=state.strings;
+      }
+      if(migrated) try{ syncClearHarmonicsBtn(); }catch(_e){}
     }catch(_e){}
     return migrated;
   }catch(_e){ return false; }
@@ -6248,19 +6283,18 @@ function resetSettings(){
     localStorage.removeItem("gsSettings");
     localStorage.removeItem("gsStrings");
     localStorage.removeItem("gsHarmonics");
-    // keep gsVocab? spec says vocab is persisted separately but now also in gsSettings — clear it to default
-    // keep theme/colors/collapse as they are viewer prefs, not analysis settings
+    localStorage.removeItem("gsStringHarmonics");
   }catch(_e){}
   state.mode="electric"; state.tuning="estd"; state.customOffset=0; state.a4=440;
   state.smooth=6; state.eqDevice="ge7"; state.eqDir=0; state.vocab="mix";
-  state.strings=false; state.harmonics=false;
+  state.strings=false; _clearAllHarmonics();
   modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===state.mode));
   tuningSel.value=state.tuning; customOffsetWrap.style.display="none"; customOffsetEl.value=state.customOffset;
   a4Input.value=state.a4;
   setSmoothUI(state.smooth);
   eqDevSel.value=state.eqDevice; eqDirSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.dir===state.eqDir));
-  setVocab("mix"); stringsToggle.checked=false; harmonicsToggle.checked=false;
-  try{ syncHarmonicsUI(); }catch(_e){}
+  setVocab("mix"); stringsToggle.checked=false;
+  try{ syncClearHarmonicsBtn(); }catch(_e){}
   syncVocabTuning();
   requestDraw(); renderAnalysis();
   toast("Saved settings reset to defaults.");
@@ -6600,23 +6634,26 @@ function boot(){
     try{ localStorage.setItem("gsVocab",state.vocab); }catch(_e){}
     renderVerdict(); renderBandsTable(); requestDraw();
   });
-  function syncHarmonicsUI(){
-    const on=state.strings;
-    harmonicsToggle.disabled=!on;
-    harmonicsSwitch.classList.toggle("disabled",!on);
-  }
   stringsToggle.addEventListener("change",()=>{
     state.strings=stringsToggle.checked;
     saveSettings();
     try{ localStorage.setItem("gsStrings",state.strings?"1":"0"); }catch(_e){}
-    syncHarmonicsUI();
+    syncClearHarmonicsBtn();
     requestDraw();
   });
-  harmonicsToggle.addEventListener("change",()=>{
-    state.harmonics=harmonicsToggle.checked;
+  clearHarmonicsBtn.addEventListener("click",()=>{
+    _clearAllHarmonics();
     saveSettings();
-    try{ localStorage.setItem("gsHarmonics",state.harmonics?"1":"0"); }catch(_e){}
+    try{ localStorage.setItem("gsStringHarmonics", JSON.stringify(state.stringHarmonics)); }catch(_e){}
+    syncClearHarmonicsBtn();
     requestDraw();
+    // if a string popover is open, refresh its toggles
+    if(popover.classList.contains("open") && popover.dataset.stringSi!=null){
+      const si=+popover.dataset.stringSi;
+      popover.querySelectorAll(".harm-toggle").forEach(inp=>{
+        const hh=+inp.dataset.hh; inp.checked=!!state.stringHarmonics[si][hh-2];
+      });
+    }
   });
   eqDirSeg.addEventListener("click",e=>{
     const b=e.target.closest("button[data-dir]");
@@ -6724,6 +6761,21 @@ function boot(){
     if(b.classList.contains("playing")){ stopPlayback(); return; }
     if(startPlayback(+b.dataset.slot,+b.dataset.f0,+b.dataset.f1,()=>setPopPlayUI(null)))
       setPopPlayUI(b);
+  });
+  popover.addEventListener("change",e=>{
+    const tog=e.target.closest?e.target.closest(".harm-toggle"):null;
+    if(!tog) return;
+    const si=+popover.dataset.stringSi;
+    const hh=+tog.dataset.hh;
+    if(!Number.isFinite(si)||!Number.isFinite(hh)||hh<2||hh>5) return;
+    state.stringHarmonics[si][hh-2]=tog.checked;
+    saveSettings();
+    try{ localStorage.setItem("gsStringHarmonics", JSON.stringify(state.stringHarmonics)); }catch(_e){}
+    syncClearHarmonicsBtn();
+    // update dot color in the same row
+    const row=tog.closest(".pop-val");
+    if(row){ const dot=row.querySelector(".dot"); if(dot) dot.style.background=_stringColor(si, tog.checked?0.9:0.35); }
+    requestDraw();
   });
   document.addEventListener("click",e=>{
     if(e._gsTermHandled) return;
@@ -6845,7 +6897,7 @@ function boot(){
     }
     loadSettings();
   }catch(_e){}
-  try{ syncHarmonicsUI(); }catch(_e){}
+  try{ syncClearHarmonicsBtn(); }catch(_e){}
   try{
     const j=JSON.parse(localStorage.getItem("gsCollapse"));
     if(j&&typeof j==="object") for(const k in j)
@@ -6889,9 +6941,14 @@ function boot(){
   const vc=location.search.match(/[?&]vocab=([a-z]+)(?:&|$)/i);                     // test hook
   if(vc&&VOCAB_BY_ID[vc[1].toLowerCase()]){ setVocab(vc[1].toLowerCase()); requestDraw(); }
   const stg=location.search.match(/[?&]strings=(0|1)(?:&|$)/i);                     // test hook
-  if(stg){ state.strings=stg[1]==="1"; stringsToggle.checked=state.strings; try{ syncHarmonicsUI(); }catch(_e){} requestDraw(); }
-  const hh=location.search.match(/[?&]harmonics=(0|1)(?:&|$)/i);                   // test hook (M2.6g)
-  if(hh){ state.harmonics=hh[1]==="1"; harmonicsToggle.checked=state.harmonics; requestDraw(); }
+  if(stg){ state.strings=stg[1]==="1"; stringsToggle.checked=state.strings; try{ syncClearHarmonicsBtn(); }catch(_e){} requestDraw(); }
+  const hh=location.search.match(/[?&]harmonics=(0|1)(?:&|$)/i);                   // test hook (M2.6g compat: global flag enables all per-string harmonics)
+  if(hh){
+    const on=hh[1]==="1";
+    for(let i=0;i<6;i++) for(let k=0;k<4;k++) state.stringHarmonics[i][k]=on && k<3; // 2–4 when global on
+    try{ syncClearHarmonicsBtn(); }catch(_e){}
+    saveSettings(); requestDraw();
+  }
   const md=location.search.match(/[?&]mode=(electric|acoustic)(?:&|$)/i);           // test hook
   if(md) setMode(md[1].toLowerCase());
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook

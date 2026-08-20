@@ -2989,9 +2989,11 @@ function tTickLabel(t, step){
 
 // ---------- string-frequency markers (M2.5) ----------
 // Open-string fundamentals of the selected tuning, dashed across the
-// time–frequency image in drawTuning's idiom. Every string is named: low
-// strings crowd together on a log axis, so labels stack downward with a
-// minimum spacing and a short leader reconnects a displaced label to its line.
+// time–frequency image in drawTuning's idiom. Every string is named: the
+// labels sit OUTSIDE the plot in the right margin (over data they were
+// illegible), each tied to its line by a tick; low strings crowd together
+// on a log axis, so labels stack downward with a minimum spacing and the
+// tick bends into a leader when a label is displaced from its line.
 function drawStringMarkers(ctx, pW, pH, markers, yOfF){
   if(!markers || !markers.length) return;
   const items=markers.filter(m=>m.f>FMIN&&m.f<FMAX)
@@ -3007,20 +3009,24 @@ function drawStringMarkers(ctx, pW, pH, markers, yOfF){
     ly[0]=Math.max(ly[0],top);
     for(let i=1;i<ly.length;i++) if(ly[i]-ly[i-1]<MIN) ly[i]=ly[i-1]+MIN;
   }
+  const xr=SGPLOT.mL+pW;
   ctx.save();
   ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
-  ctx.font=FONT_XS;
-  const xr=SGPLOT.mL+pW;
+  ctx.strokeStyle=cssRGBA("ink-rgb",0.28); ctx.lineWidth=1; ctx.setLineDash([1,3]);
+  for(const it of items){
+    ctx.beginPath(); ctx.moveTo(SGPLOT.mL,it.y+0.5); ctx.lineTo(xr,it.y+0.5); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.save();
+  ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="middle";
   for(let i=0;i<items.length;i++){
-    const y=items[i].y, Y=ly[i];
-    ctx.strokeStyle=cssRGBA("ink-rgb",0.28); ctx.lineWidth=1; ctx.setLineDash([1,3]);
-    ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y+0.5); ctx.lineTo(xr,y+0.5); ctx.stroke();
-    ctx.setLineDash([]);
+    const y=items[i].y+0.5, Y=ly[i];
+    ctx.strokeStyle=cssRGBA("ink-rgb",0.40); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(xr+1,y); ctx.lineTo(xr+4,y);
+    if(Math.abs(Y-y)>1) ctx.lineTo(xr+6,Y);            // leader to a displaced label
+    ctx.stroke();
     ctx.fillStyle=cssRGBA("ink-rgb",0.66);
-    ctx.textAlign="right"; ctx.textBaseline="middle";
-    ctx.fillText(items[i].name, xr-12, Y);
-    ctx.strokeStyle=cssRGBA("ink-rgb",0.40);
-    ctx.beginPath(); ctx.moveTo(xr-10,Y); ctx.lineTo(xr-2,y+0.5); ctx.stroke();
+    ctx.fillText(items[i].name, xr+8, Y);
   }
   ctx.restore();
 }
@@ -3054,7 +3060,7 @@ function sgramImage(sg, dbMax, dbMin, dbOffset){
 }
 
 // ---------- spectrogram scene (M2) ----------
-const SGPLOT={mL:52, mR:64, mT:30, mB:34};   // wider right margin hosts the colorbar
+const SGPLOT={mL:52, mR:98, mT:30, mB:34};   // right margin hosts string labels + colorbar
 
 function drawSpectrogramScene(ctx, w, h, model){
   const {sg, image, name, color, onsets, dbMax, dbMin}=model;
@@ -3135,8 +3141,9 @@ function drawSpectrogramScene(ctx, w, h, model){
   // open-string fundamentals for the selected tuning (M2.5)
   drawStringMarkers(ctx, pW, pH, model.markers, yOfF);
 
-  // colorbar: the exact magma → dB mapping the image used
-  const cbX=w-SGPLOT.mR+14, cbW=10;
+  // colorbar: the exact magma → dB mapping the image used (pinned at the card
+  // edge — the margin between plot and colorbar belongs to the string labels)
+  const cbX=w-50, cbW=10;
   for(let yy=0; yy<pH; yy++){
     const rgb=magmaColor(1-yy/(pH-1));
     ctx.fillStyle="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
@@ -3157,7 +3164,7 @@ function drawSpectrogramScene(ctx, w, h, model){
   ctx.fillText(nm, SGPLOT.mL+13, 15.5);
   if(model.statusText){
     ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint"); ctx.textAlign="right";
-    ctx.fillText(model.statusText, w-SGPLOT.mR-6, 15.5);
+    ctx.fillText(model.statusText, cbX-20, 15.5);
   }
   ctx.restore();
 }
@@ -3279,7 +3286,8 @@ function drawSgramDiffScene(ctx, w, h, model){
   drawStringMarkers(ctx, pW, pH, model.markers, yOfF);
 
   // diverging colorbar: amber = A louder, teal = B louder, 0 = equal
-  const cbX=w-SGPLOT.mR+14, cbW=10;
+  // (pinned at the card edge, like the individual panes' magma bar)
+  const cbX=w-50, cbW=10;
   for(let yy=0; yy<pH; yy++){
     const rgb=divergeColor(1-2*yy/(pH-1));
     ctx.fillStyle="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
@@ -3312,7 +3320,7 @@ function drawSgramDiffScene(ctx, w, h, model){
   ctx.fillText("A − B · aligned at first onset (t = 0)"+(model.lmText?" · "+model.lmText:""), SGPLOT.mL+22, 15.5);
   if(model.statusText){
     ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint"); ctx.textAlign="right";
-    ctx.fillText(model.statusText, w-SGPLOT.mR-6, 15.5);
+    ctx.fillText(model.statusText, cbX-20, 15.5);
   }
   ctx.restore();
 }

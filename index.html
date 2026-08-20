@@ -684,6 +684,7 @@ kbd{
           <button data-theme="dark">Dark</button>
         </div>
       </div>
+      <button class="btn" id="debugLoadBtn" title="Load demo bright + warm pair (Karplus–Strong, 44.1k vs 48k)">Load test files</button>
       <button class="btn" id="guideBtn">How to record</button>
       <button class="btn" id="glossaryBtn">Glossary</button>
     </div>
@@ -3921,6 +3922,7 @@ const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsMod
 const guideModal=el("guideModal"), guideBtn=el("guideBtn"),
       guideLink=el("guideLink"), guideClose=el("guideClose");
 const resetSettingsBtn=el("resetSettingsBtn");
+const debugLoadBtn=el("debugLoadBtn");
 const magModal=el("magModal"), magTitle=el("magTitle"),
       magCanvas=el("magCanvas"), magClose=el("magClose"),
       magWrap=el("magWrap"), magReset=el("magReset");
@@ -6708,6 +6710,7 @@ function boot(){
     if(e.target===shortcutsModal) shortcutsModal.classList.remove("open");
   });
   resetSettingsBtn.addEventListener("click", resetSettings);
+  if(debugLoadBtn) debugLoadBtn.addEventListener("click",()=>loadDemo());
   guideBtn.addEventListener("click",()=>guideModal.classList.add("open"));
   guideLink.addEventListener("click",e=>{ e.preventDefault(); guideModal.classList.add("open"); });
   guideClose.addEventListener("click",()=>guideModal.classList.remove("open"));

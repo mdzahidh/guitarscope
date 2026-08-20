@@ -516,6 +516,23 @@ kbd{
 }
 .plotwrap:hover .magbtn, .magbtn:focus-visible{ opacity:1; }
 .magbtn:hover{ color:var(--ink); }
+
+/* interactive zoom */
+.zoombox{
+  position:absolute; display:none; pointer-events:none; z-index:6;
+  border:1px solid rgba(var(--grid-rgb),0.55);
+  background:rgba(var(--grid-rgb),0.08);
+}
+.zoomreset{
+  position:absolute; top:8px; right:40px; z-index:5; height:24px;
+  display:none; align-items:center; padding:0 9px;
+  font:inherit; font-size:12px; line-height:1;
+  color:var(--mut); background:var(--raise); border:1px solid var(--hair2);
+  border-radius:6px; cursor:pointer;
+  transition:color var(--dur) var(--ease);
+}
+.zoomreset:hover{ color:var(--ink); }
+.mag .mhead .mhctl{ display:flex; gap:10px; align-items:center; }
 .modal .inner.mag{
   display:flex; flex-direction:column;
   width:calc(100vw - 56px); height:calc(100vh - 56px);
@@ -717,7 +734,7 @@ kbd{
           <button class="magbtn" data-mag="eqface" title="Magnify" aria-label="Magnify EQ device panel">⤢</button>
           <canvas id="eqFaceCanvas"></canvas>
         </div>
-        <div class="plotwrap">
+        <div class="plotwrap" id="eqRespWrap">
           <button class="magbtn" data-mag="eqresp" title="Magnify" aria-label="Magnify EQ response plot">⤢</button>
           <canvas id="eqRespCanvas"></canvas>
         </div>
@@ -827,6 +844,10 @@ kbd{
     <div class="shortcutrow"><span><kbd>G</kbd></span><span>glossary</span></div>
     <div class="shortcutrow"><span><kbd>E</kbd></span><span>export PNG</span></div>
     <div class="shortcutrow"><span><kbd>Esc</kbd></span><span>close panels</span></div>
+    <div class="shortcutrow"><span>drag a box</span><span>zoom line plot to selection</span></div>
+    <div class="shortcutrow"><span><kbd>Shift</kbd> + drag</span><span>pan a zoomed plot</span></div>
+    <div class="shortcutrow"><span><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + scroll</span><span>zoom frequency / time axis</span></div>
+    <div class="shortcutrow"><span>double-click</span><span>reset zoom</span></div>
   </div>
 </div>
 
@@ -893,9 +914,12 @@ kbd{
   <div class="inner mag">
     <div class="mhead">
       <h3 id="magTitle">Plot</h3>
-      <button class="iconbtn" id="magClose" aria-label="Close magnified view">✕</button>
+      <div class="mhctl">
+        <button class="btn" id="magReset" style="display:none">Reset zoom</button>
+        <button class="iconbtn" id="magClose" aria-label="Close magnified view">✕</button>
+      </div>
     </div>
-    <div class="magwrap"><canvas id="magCanvas"></canvas></div>
+    <div class="magwrap" id="magWrap"><canvas id="magCanvas"></canvas></div>
   </div>
 </div>
 
@@ -2343,8 +2367,14 @@ function withAlpha(hex, a){
 function cssRGBA(name, a){ return `rgba(${cssColor(name)},${a})`; }
 
 const FMIN=60, FMAX=20000, LOGSPAN=Math.log(FMAX/FMIN);
-function xOfF(f, w){ return PLOT.mL + Math.log(f/FMIN)/LOGSPAN * (w-PLOT.mL-PLOT.mR); }
-function fOfX(x, w){ return FMIN*Math.exp((x-PLOT.mL)/(w-PLOT.mL-PLOT.mR)*LOGSPAN); }
+// Current x-view for the log-frequency scenes. Scenes (and the interaction layer)
+// call setXView() before mapping; the default is the full 60 Hz–20 kHz range, so
+// nothing changes for unzoomed plots. Draws are synchronous, so a single mutable
+// view is safe — every scene entry sets it.
+let XV={f0:FMIN, f1:FMAX, span:LOGSPAN};
+function setXView(f0, f1){ XV={f0:f0, f1:f1, span:Math.log(f1/f0)}; }
+function xOfF(f, w){ return PLOT.mL + Math.log(f/XV.f0)/XV.span * (w-PLOT.mL-PLOT.mR); }
+function fOfX(x, w){ return XV.f0*Math.exp((x-PLOT.mL)/(w-PLOT.mL-PLOT.mR)*XV.span); }
 
 function setupCanvas(canvas, scale){
   const cssW=canvas.clientWidth, cssH=canvas.clientHeight;
@@ -2364,18 +2394,49 @@ const FONT_XS="10px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 // ---------- axes ----------
 const X_MAJOR=[100,200,500,1000,2000,5000,10000,20000];
 const X_MINOR=[60,70,80,90,300,400,600,700,800,900,3000,4000,6000,7000,8000,9000];
-function fLabel(f){ return f>=1000 ? (f/1000)+"k" : ""+f; }
+function fLabel(f){
+  if(f>=1000){ const k=f/1000; return (+k.toFixed(k>=10?1:2))+"k"; }
+  return ""+(+f.toFixed(f<100?1:0));
+}
+function niceStep(raw){
+  const p=Math.pow(10,Math.floor(Math.log10(raw))), r=raw/p;
+  return (r<=1?1:r<=2?2:r<=5?5:10)*p;
+}
+// Tick positions for the current x-view. At the full range this returns the
+// hand-tuned X_MAJOR/X_MINOR lists exactly (zero visual change when unzoomed);
+// zoomed views get generated 1-2-5 log ticks, or linear nice-step ticks once
+// the window is narrower than a factor of ~4.
+function xTicksFor(f0, f1){
+  if(f0<=FMIN*1.0001 && f1>=FMAX*0.9999) return {major:X_MAJOR, minor:X_MINOR};
+  const major=[], minor=[];
+  if(f1/f0>=4){
+    const d0=Math.floor(Math.log10(f0)), d1=Math.ceil(Math.log10(f1));
+    for(let d=d0; d<=d1; d++){
+      const base=Math.pow(10,d);
+      for(const m of [1,2,5]){ const f=m*base; if(f>=f0&&f<=f1) major.push(f); }
+      for(const m of [3,4,6,7,8,9]){ const f=m*base; if(f>=f0&&f<=f1) minor.push(f); }
+    }
+  }else{
+    const step=niceStep((f1-f0)/6), sub=step/5;
+    for(let v=Math.ceil(f0/step-1e-9)*step; v<=f1+1e-9; v+=step) major.push(v);
+    for(let v=Math.ceil(f0/sub-1e-9)*sub; v<=f1+1e-9; v+=sub){
+      if(Math.abs(v/step-Math.round(v/step))>1e-6) minor.push(v);
+    }
+  }
+  return {major:major, minor:minor};
+}
 
 function drawAxes(ctx, w, h, yMin, yMax, yStep){
   const pW=w-PLOT.mL-PLOT.mR, pH=h-PLOT.mT-PLOT.mB;
+  const ticks=xTicksFor(XV.f0, XV.f1);
   ctx.save();
   ctx.font=FONT_S; ctx.textAlign="center"; ctx.textBaseline="top";
-  for(const f of X_MINOR){
+  for(const f of ticks.minor){
     const x=xOfF(f,w);
     ctx.strokeStyle=cssRGBA("grid-rgb",0.028); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
   }
-  for(const f of X_MAJOR){
+  for(const f of ticks.major){
     const x=xOfF(f,w);
     ctx.strokeStyle=cssRGBA("grid-rgb",0.06); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
@@ -2408,8 +2469,10 @@ function drawBands(ctx, w, h, bands, hits){
   ctx.save();
   ctx.font=FONT_XS;
   ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+  const xL=PLOT.mL, xR=w-PLOT.mR;
   bands.forEach((b,i)=>{
-    const x0=xOfF(b.f0,w), x1=xOfF(b.f1,w);
+    if(b.f1<=XV.f0 || b.f0>=XV.f1) return;
+    const x0=Math.max(xL, xOfF(b.f0,w)), x1=Math.min(xR, xOfF(b.f1,w));
     ctx.fillStyle = i%2 ? cssRGBA("grid-rgb",0.016) : cssRGBA("grid-rgb",0.032);
     ctx.fillRect(x0, PLOT.mT, x1-x0, pH);
     const cx=(x0+x1)/2, ly=PLOT.mT+pH-8;
@@ -2433,7 +2496,7 @@ function drawTuning(ctx, w, h, markers, hits){
   ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="bottom";
   let lastX=-100;
   for(const m of markers){
-    if(m.f<FMIN || m.f>FMAX) continue;
+    if(m.f<XV.f0 || m.f>XV.f1) continue;
     const x=xOfF(m.f,w);
     ctx.strokeStyle=cssRGBA("ink-rgb",0.13);
     ctx.setLineDash([1,3]); ctx.lineWidth=1;
@@ -2464,12 +2527,14 @@ function drawEqLane(ctx, w, hits){
   ctx.save();
   ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="middle";
   ctx.lineWidth=1;
+  const xL=PLOT.mL, xR=w-PLOT.mR;
   for(const r of EQ_REGIONS){
-    const x0=xOfF(r.f0,w), x1=xOfF(r.f1,w);
+    if(r.f1<=XV.f0 || r.f0>=XV.f1) continue;
+    const x0=Math.max(xL, xOfF(r.f0,w)), x1=Math.min(xR, xOfF(r.f1,w));
     ctx.strokeStyle=cssRGBA("ink-rgb",0.18);
     ctx.beginPath();
-    ctx.moveTo(x0+0.5,yTick0); ctx.lineTo(x0+0.5,yTick1);
-    ctx.moveTo(x1+0.5,yTick0); ctx.lineTo(x1+0.5,yTick1);
+    if(r.f0>=XV.f0){ ctx.moveTo(x0+0.5,yTick0); ctx.lineTo(x0+0.5,yTick1); }
+    if(r.f1<=XV.f1){ ctx.moveTo(x1+0.5,yTick0); ctx.lineTo(x1+0.5,yTick1); }
     ctx.stroke();
     const cx=(x0+x1)/2, tw=ctx.measureText(r.label).width;
     if(tw<(x1-x0)-14){ // dimension-line style: hairline broken by a centered label
@@ -2492,6 +2557,10 @@ function drawCurve(ctx, w, h, grid, db, yMin, yMax, color, fillAlpha){
   const pH=h-PLOT.mT-PLOT.mB;
   const yOf=v=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,v))-yMin)/(yMax-yMin))*pH;
   ctx.save();
+  // Horizontal clip: a zoomed x-view maps out-of-window points into the margins.
+  // 1px slack keeps full-range endpoint strokes unclipped. y is not clipped —
+  // out-of-window values are clamped by yOf and pin at the plot edge instead.
+  ctx.beginPath(); ctx.rect(PLOT.mL-1, 0, w-PLOT.mL-PLOT.mR+2, h); ctx.clip();
   ctx.beginPath();
   for(let i=0;i<grid.length;i++){
     const x=xOfF(grid[i],w), y=yOf(db[i]);
@@ -2536,7 +2605,7 @@ function drawPeakDots(ctx, w, h, peaks, grid, db, yMin, yMax, color, hits, occ){
   ctx.save();
   ctx.font=FONT_XS; ctx.textAlign="center";
   peaks.forEach(p=>{
-    if(p.f<FMIN||p.f>FMAX) return;
+    if(p.f<XV.f0||p.f>XV.f1) return;
     const x=xOfF(p.f,w), y=yOf(dbAt(p.f));
     ctx.fillStyle=color;
     ctx.beginPath(); ctx.arc(x,y,2.4,0,2*Math.PI); ctx.fill();
@@ -2569,6 +2638,7 @@ function drawStatusChip(ctx, w, text){
   const x=w-PLOT.mR-tw-16, y=PLOT.mT+8;
   ctx.fillStyle=cssRGBA("chip-rgb",0.85);
   ctx.strokeStyle=cssRGBA("chipline-rgb",0.9);
+  ctx.lineWidth=1; // don't inherit the caller's curve stroke width
   roundRect(ctx, x-8, y-3, tw+16, 18, 9); ctx.fill(); ctx.stroke();
   ctx.fillStyle=cssColor("mut");
   ctx.textAlign="left"; ctx.textBaseline="middle";
@@ -2603,9 +2673,10 @@ function drawLegend(ctx, w, items){
 // ---------- full spectrum scene ----------
 function drawSpectrumScene(ctx, w, h, model, hits){
   ctx.clearRect(0,0,w,h);
+  setXView(model.fv?model.fv[0]:FMIN, model.fv?model.fv[1]:FMAX);
   if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
   drawBands(ctx, w, h, model.bands, hits);
-  drawAxes(ctx, w, h, model.yMin, model.yMax, 10);
+  drawAxes(ctx, w, h, model.yMin, model.yMax, model.yStep||10);
   drawTuning(ctx, w, h, model.markers, hits);
   drawEqLane(ctx, w, hits);
   for(const c of model.curves){
@@ -2625,13 +2696,15 @@ function drawSpectrumScene(ctx, w, h, model, hits){
 // ---------- difference scene ----------
 function drawDiffScene(ctx, w, h, model){
   ctx.clearRect(0,0,w,h);
+  setXView(model.fv?model.fv[0]:FMIN, model.fv?model.fv[1]:FMAX);
   const pH=h-PLOT.mT-PLOT.mB, pW=w-PLOT.mL-PLOT.mR;
-  const {yMax}=model, yMin=-yMax;
+  const yMin = model.yLo!=null ? model.yLo : -model.yMax;
+  const yMax = model.yHi!=null ? model.yHi : model.yMax;
   const yOf=v=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,v))-yMin)/(yMax-yMin))*pH;
   ctx.save();
   // x grid
   ctx.font=FONT_S; ctx.textAlign="center"; ctx.textBaseline="top";
-  for(const f of X_MAJOR){
+  for(const f of xTicksFor(XV.f0,XV.f1).major){
     const x=xOfF(f,w);
     ctx.strokeStyle=cssRGBA("grid-rgb",0.05);
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
@@ -2639,7 +2712,7 @@ function drawDiffScene(ctx, w, h, model){
   }
   // y grid
   ctx.textAlign="right"; ctx.textBaseline="middle";
-  const step=yMax>12?6:3;
+  const step = model.yLo!=null ? niceStep((yMax-yMin)/5) : (yMax>12?6:3);
   for(let v=Math.ceil(yMin/step)*step; v<=yMax; v+=step){
     const y=yOf(v);
     ctx.strokeStyle=cssRGBA("grid-rgb",0.05);
@@ -2647,11 +2720,15 @@ function drawDiffScene(ctx, w, h, model){
     ctx.fillStyle=cssColor("dim"); ctx.fillText((v>0?"+":"")+v, PLOT.mL-8, y);
   }
   // zero line
-  ctx.strokeStyle=cssRGBA("ink-rgb",0.28); ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(PLOT.mL,yOf(0)); ctx.lineTo(PLOT.mL+pW,yOf(0)); ctx.stroke();
+  if(yMin<0 && yMax>0){
+    ctx.strokeStyle=cssRGBA("ink-rgb",0.28); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(PLOT.mL,yOf(0)); ctx.lineTo(PLOT.mL+pW,yOf(0)); ctx.stroke();
+  }
   drawEqLane(ctx, w, null); // diff canvas has no glossary click handler — no hit rects
 
   const {grid, diff}=model;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(PLOT.mL-1, 0, pW+2, h); ctx.clip(); // x-clip (see drawCurve)
   // sign-split fills: above zero = A louder (A color), below = B louder
   for(const sign of [1,-1]){
     ctx.beginPath();
@@ -2672,12 +2749,18 @@ function drawDiffScene(ctx, w, h, model){
   }
   ctx.strokeStyle=cssRGBA("ink-rgb",0.75); ctx.lineWidth=1.3; ctx.lineJoin="round";
   ctx.stroke();
+  ctx.restore();
   // side labels
   ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="middle";
   ctx.fillStyle=withAlpha(model.colorA,0.8);
   ctx.fillText("▲ "+model.nameA+" louder", PLOT.mL+8, PLOT.mT+10);
   ctx.fillStyle=withAlpha(model.colorB,0.8);
   ctx.fillText("▼ "+model.nameB+" louder", PLOT.mL+8, PLOT.mT+pH-10);
+  if(model.zoomNote){
+    ctx.textAlign="right";
+    ctx.fillStyle=cssColor("mut");
+    ctx.fillText(model.zoomNote, PLOT.mL+pW-8, PLOT.mT+10);
+  }
   ctx.restore();
 }
 
@@ -3030,7 +3113,8 @@ function drawSgramDiffScene(ctx, w, h, model){
 function drawEnvelopeScene(ctx, w, h, model){
   const {curves, tMin, tMax}=model;
   const pW=w-PLOT.mL-PLOT.mR, pH=h-PLOT.mT-PLOT.mB;
-  const yMin=-60, yMax=0;
+  const yMin = model.yLo!=null ? model.yLo : -60;
+  const yMax = model.yHi!=null ? model.yHi : 0;
   const xOfT=t=>PLOT.mL+((t-tMin)/(tMax-tMin))*pW;
   const yOf=db=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,db))-yMin)/(yMax-yMin))*pH;
   ctx.clearRect(0,0,w,h);
@@ -3048,7 +3132,8 @@ function drawEnvelopeScene(ctx, w, h, model){
     ctx.fillStyle=cssColor("dim"); ctx.fillText(tTickLabel(t,step), x, PLOT.mT+pH+7);
   }
   ctx.textAlign="right"; ctx.textBaseline="middle";
-  for(let v=yMin; v<=yMax; v+=10){
+  const yStep = model.yLo!=null ? niceStep((yMax-yMin)/5) : 10;
+  for(let v=Math.ceil(yMin/yStep)*yStep; v<=yMax; v+=yStep){
     const y=yOf(v);
     ctx.strokeStyle = v===0 ? cssRGBA("grid-rgb",0.10) : cssRGBA("grid-rgb",0.05);
     ctx.beginPath(); ctx.moveTo(PLOT.mL,y); ctx.lineTo(PLOT.mL+pW,y); ctx.stroke();
@@ -3076,6 +3161,8 @@ function drawEnvelopeScene(ctx, w, h, model){
   }
 
   // curves
+  ctx.save();
+  ctx.beginPath(); ctx.rect(PLOT.mL-1, 0, pW+2, h); ctx.clip(); // x-clip (see drawCurve)
   curves.forEach((c, ci)=>{
     const n=c.env.length;
     const dbAt=k=>{ const a=c.env[k]; return a>0 ? 20*Math.log10(a) : yMin-1; };
@@ -3101,6 +3188,7 @@ function drawEnvelopeScene(ctx, w, h, model){
       }
     }
   });
+  ctx.restore();
 
   drawLegend(ctx, w, curves.map(c=>({color:c.color, label:c.label})));
   drawStatusChip(ctx, w, model.statusText);
@@ -3260,8 +3348,12 @@ function drawEqFaceScene(ctx, w, h, model){
 // ---------- EQ response vs target (M2.5) ----------
 function drawEqRespScene(ctx, w, h, model){
   ctx.clearRect(0,0,w,h);
-  const {grid, yMax}=model, yMin=-yMax, pH=h-PLOT.mT-PLOT.mB;
-  drawAxes(ctx, w, h, yMin, yMax, yMax>12?6:3);
+  setXView(model.fv?model.fv[0]:FMIN, model.fv?model.fv[1]:FMAX);
+  const {grid}=model, pH=h-PLOT.mT-PLOT.mB;
+  const yMin = model.yLo!=null ? model.yLo : -model.yMax;
+  const yMax = model.yHi!=null ? model.yHi : model.yMax;
+  const yStep = model.yLo!=null ? niceStep((yMax-yMin)/5) : (yMax>12?6:3);
+  drawAxes(ctx, w, h, yMin, yMax, yStep);
   const yOf=v=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,v))-yMin)/(yMax-yMin))*pH;
   const stroke=(vals)=>{ // NaN-tolerant polyline
     ctx.beginPath();
@@ -3275,6 +3367,7 @@ function drawEqRespScene(ctx, w, h, model){
     ctx.stroke();
   };
   ctx.save();
+  ctx.beginPath(); ctx.rect(PLOT.mL-1, 0, w-PLOT.mL-PLOT.mR+2, h); ctx.clip(); // x-clip
   ctx.lineJoin="round";
   ctx.setLineDash([5,4]);
   ctx.strokeStyle=cssRGBA("ink-rgb",0.55); ctx.lineWidth=1.2;
@@ -3369,12 +3462,14 @@ const sgLmSwitch=el("sgLmSwitch"), sgLmToggle=el("sgLmToggle"),
 const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
 const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSeg=el("eqDevSeg"),
-      eqFaceCanvas=el("eqFaceCanvas"), eqRespCanvas=el("eqRespCanvas"), eqNote=el("eqNote");
+      eqFaceCanvas=el("eqFaceCanvas"), eqRespCanvas=el("eqRespCanvas"), eqNote=el("eqNote"),
+      eqRespWrap=el("eqRespWrap");
 const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
 const guideModal=el("guideModal"), guideBtn=el("guideBtn"),
       guideLink=el("guideLink"), guideClose=el("guideClose");
 const magModal=el("magModal"), magTitle=el("magTitle"),
-      magCanvas=el("magCanvas"), magClose=el("magClose");
+      magCanvas=el("magCanvas"), magClose=el("magClose"),
+      magWrap=el("magWrap"), magReset=el("magReset");
 const magBtns=Array.from(document.querySelectorAll(".magbtn"));
 const glossBackdrop=el("glossBackdrop"), glossPanel=el("glossPanel"),
       glossClose=el("glossClose"), glossSearch=el("glossSearch"), glossList=el("glossList");
@@ -3666,6 +3761,29 @@ function requestDraw(){
   rafId=requestAnimationFrame(()=>{ rafId=0; drawAll(); });
 }
 
+// ---------- interactive zoom state ----------
+// Display-only zoom for the four line plots, in DATA units — Hz for the log-
+// frequency plots, display-time seconds for the envelope, dB for y. A null
+// entry (or null axis pair) means full range. The magnified overlay reuses the
+// same model builders, so it shares each view's zoom. Metrics, band table and
+// tone panel never read this; the current window is printed on the plot so
+// exports stay defensible.
+const ZOOMS={spec:null, diff:null, env:null, eqresp:null};
+function zoomXf(key){ const z=ZOOMS[key]; return z&&z.x0!=null?[z.x0,z.x1]:null; }
+function zoomNoteFor(key){
+  const z=ZOOMS[key];
+  if(!z) return null;
+  const parts=[];
+  if(z.x0!=null) parts.push(key==="env"
+    ? z.x0.toFixed(2)+" – "+z.x1.toFixed(2)+" s"
+    : fmtHz(z.x0)+" – "+fmtHz(z.x1));
+  if(z.y0!=null){
+    const d=(z.y1-z.y0)<10?1:0;
+    parts.push(z.y0.toFixed(d)+" … "+z.y1.toFixed(d)+" dB");
+  }
+  return "zoom "+parts.join(" · ");
+}
+
 function statusText(){
   let t=state.smooth?("1/"+state.smooth+"-oct smoothing"):"smoothing off";
   if(state.lm&&state.lmOffset!=null&&bothLoaded()) t+=" · level-match "+fmtDb(state.lmOffset,1)+" on B";
@@ -3711,9 +3829,16 @@ function buildSpecModel(forExport){
       annotations:annotationsFor(s,i)});
   }
   const r=forExport?anim.toRange:yRange;
+  const z=ZOOMS.spec;
+  let yMin=r.min, yMax=r.max, yStep=10, st=statusText();
+  if(z){
+    if(z.y0!=null){ yMin=z.y0; yMax=z.y1; yStep=niceStep((yMax-yMin)/5); }
+    st+=" · "+zoomNoteFor("spec");
+  }
   return { exportBg:!!forExport, bands:bandsFor(state.mode),
-           yMin:r.min, yMax:r.max, markers:tuningMarkers(), grid:GRID,
-           curves, statusText:statusText() };
+           yMin, yMax, yStep, fv:zoomXf("spec"),
+           markers:tuningMarkers(), grid:GRID,
+           curves, statusText:st };
 }
 function diffVisible(){ return bothLoaded()&&state.diff; }
 function bothSgLoaded(){
@@ -3812,8 +3937,16 @@ function buildEnvModel(){
     tMax=Math.max(tMax,s.duration-tv.firstOnset);
   }
   if(!curves.length) return null;
-  return {curves, tMin, tMax, statusText:(curves.length>1
-    ?"aligned at first onset · ":"t = 0 at first onset · ")+"0 dB = full scale"};
+  const model={curves, tMin, tMax, tFullMin:tMin, tFullMax:tMax,
+    statusText:(curves.length>1
+      ?"aligned at first onset · ":"t = 0 at first onset · ")+"0 dB = full scale"};
+  const z=ZOOMS.env;
+  if(z){
+    if(z.x0!=null){ model.tMin=z.x0; model.tMax=z.x1; }
+    if(z.y0!=null){ model.yLo=z.y0; model.yHi=z.y1; }
+    model.statusText+=" · "+zoomNoteFor("env");
+  }
+  return model;
 }
 
 // ---------- EQ match (M2.5) ----------
@@ -3853,21 +3986,29 @@ function buildEqModels(){
     if(isFinite(fit.target[k])) maxAbs=Math.max(maxAbs,Math.abs(fit.target[k]));
     if(isFinite(fit.achieved[k])) maxAbs=Math.max(maxAbs,Math.abs(fit.achieved[k]));
   }
+  const z=ZOOMS.eqresp, zn=zoomNoteFor("eqresp");
   return {
     face:{device:fit.device, settings:fit.settings},
     resp:{grid:GRID, target:fit.target, achieved:fit.achieved,
       yMax:Math.ceil(maxAbs/3)*3,
+      fv:zoomXf("eqresp"),
+      yLo:z&&z.y0!=null?z.y0:null, yHi:z&&z.y0!=null?z.y1:null,
       colorFit:COLORS[fit.dst],
       legendTarget:"target: "+SLOT_LETTER[fit.dst]+" − "+SLOT_LETTER[fit.src]+" (1/6 oct)",
       legendFit:fit.device.name+" response",
-      statusText:"residual "+fit.settings.residualRms.toFixed(2)+" dB RMS"},
+      statusText:"residual "+fit.settings.residualRms.toFixed(2)+" dB RMS"
+        +(zn?" · "+zn:"")},
   };
 }
 function buildDiffModel(){
   if(!(diffVisible()&&dispDb[0]&&dispDb[1])) return null;
   if(!diffBuf) diffBuf=new Float64Array(GRID.length);
   for(let k=0;k<GRID.length;k++) diffBuf[k]=dispDb[0][k]-dispDb[1][k];
+  const z=ZOOMS.diff;
   return {grid:GRID,diff:diffBuf,yMax:diffYMax,
+    fv:zoomXf("diff"),
+    yLo:z&&z.y0!=null?z.y0:null, yHi:z&&z.y0!=null?z.y1:null,
+    zoomNote:zoomNoteFor("diff"),
     colorA:COLORS[0],colorB:COLORS[1],
     nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)};
 }
@@ -3909,6 +4050,7 @@ function drawAll(){
     }
   }
   drawMag();
+  updateZoomUI();
 }
 
 // ---------- plot magnify ----------
@@ -3965,6 +4107,8 @@ function attachCrosshair(wrap,canvas,xline,readout,isDiff){
     if(x<PLOT.mL||x>w-PLOT.mR||!anyLoaded()){
       xline.style.display="none"; readout.style.display="none"; return;
     }
+    const zv=ZOOMS[isDiff?"diff":"spec"];
+    if(zv&&zv.x0!=null) setXView(zv.x0,zv.x1); else setXView(FMIN,FMAX);
     const f=fOfX(x,w);
     const wrapRect=wrap.getBoundingClientRect();
     const wx=e.clientX-wrapRect.left;
@@ -4110,6 +4254,234 @@ function attachEnvCrosshair(){
     envReadout.style.top="12px";
   });
   envWrap.addEventListener("mouseleave",hide);
+}
+
+// ---------- interactive zoom (M2.5 follow-up) ----------
+// Box-drag zooms to the selection (a drag thinner than 8 px in one dimension
+// leaves that axis unchanged), shift+drag pans, ctrl/cmd+wheel zooms the x
+// axis around the cursor, double-click resets. All coordinates convert to
+// DATA units at the gesture boundary, so the state survives resizes and is
+// shared with the magnified overlay through the model builders.
+const MIN_XRATIO=1.05, MIN_TSPAN=0.05, MIN_YSPAN=1;
+const ZOOM_UIS=[];
+function setZoom(key,z){ ZOOMS[key]=z; drawAll(); }
+function updateZoomUI(){
+  for(const u of ZOOM_UIS){
+    const key=u.keyFn();
+    u.btn.style.display=(key&&ZOOMS[key])?u.show:"none";
+  }
+}
+// Current window + full bounds for one view, in data units, derived from the
+// same builders the scenes draw from. Returns null when the view has no data.
+function zoomAxes(key){
+  const z=ZOOMS[key];
+  if(key==="env"){
+    const m=buildEnvModel();
+    if(!m) return null;
+    return {logX:false, x0:m.tMin, x1:m.tMax, xF0:m.tFullMin, xF1:m.tFullMax,
+            y0:m.yLo!=null?m.yLo:-60, y1:m.yHi!=null?m.yHi:0, yF0:-60, yF1:0};
+  }
+  const ax={logX:true, x0:z&&z.x0!=null?z.x0:FMIN, x1:z&&z.x0!=null?z.x1:FMAX,
+            xF0:FMIN, xF1:FMAX};
+  if(key==="spec"){
+    if(!anyLoaded()) return null;
+    const m=buildSpecModel(false);
+    ax.y0=m.yMin; ax.y1=m.yMax; ax.yF0=yRange.min; ax.yF1=yRange.max;
+  }else if(key==="diff"){
+    const m=buildDiffModel();
+    if(!m) return null;
+    ax.y0=m.yLo!=null?m.yLo:-m.yMax; ax.y1=m.yHi!=null?m.yHi:m.yMax;
+    ax.yF0=-m.yMax; ax.yF1=m.yMax;
+  }else if(key==="eqresp"){
+    const m=bothLoaded()&&buildEqModels();
+    if(!m) return null;
+    ax.y0=m.resp.yLo!=null?m.resp.yLo:-m.resp.yMax;
+    ax.y1=m.resp.yHi!=null?m.resp.yHi:m.resp.yMax;
+    ax.yF0=-m.resp.yMax; ax.yF1=m.resp.yMax;
+  }else return null;
+  return ax;
+}
+function attachZoom(wrap,canvas,keyFn,extBtn){
+  const box=document.createElement("div");
+  box.className="zoombox";
+  wrap.appendChild(box);
+  let btn=extBtn, show="";
+  if(!btn){
+    btn=document.createElement("button");
+    btn.className="zoomreset";
+    btn.textContent="reset zoom";
+    btn.title="Reset zoom (or double-click the plot)";
+    wrap.appendChild(btn);
+    show="flex";
+  }
+  btn.addEventListener("click",()=>{ const key=keyFn(); if(key) setZoom(key,null); });
+  ZOOM_UIS.push({keyFn,btn,show});
+
+  let drag=null, suppress=false;
+  function plotBox(){
+    const r=canvas.getBoundingClientRect();
+    return {left:r.left, top:r.top, w:r.width, h:r.height,
+            pW:r.width-PLOT.mL-PLOT.mR, pH:r.height-PLOT.mT-PLOT.mB};
+  }
+  function dataX(ax,pb,px){
+    const fr=Math.max(0,Math.min(1,(px-PLOT.mL)/pb.pW));
+    return ax.logX ? ax.x0*Math.pow(ax.x1/ax.x0,fr) : ax.x0+fr*(ax.x1-ax.x0);
+  }
+  function dataY(ax,pb,py){
+    const fr=Math.max(0,Math.min(1,(py-PLOT.mT)/pb.pH));
+    return ax.y1-fr*(ax.y1-ax.y0);
+  }
+  function selRect(d,px,py){
+    const x0=Math.max(PLOT.mL,Math.min(d.px0,px)),
+          x1=Math.min(d.pb.w-PLOT.mR,Math.max(d.px0,px)),
+          y0=Math.max(PLOT.mT,Math.min(d.py0,py)),
+          y1=Math.min(d.pb.h-PLOT.mB,Math.max(d.py0,py));
+    const thinX=(x1-x0)<8, thinY=(y1-y0)<8;
+    return {sx0:thinX?PLOT.mL:x0, sx1:thinX?d.pb.w-PLOT.mR:x1,
+            sy0:thinY?PLOT.mT:y0, sy1:thinY?d.pb.h-PLOT.mB:y1,
+            thinX, thinY};
+  }
+  function doPan(d,px,py){
+    if(!d.z0) return;
+    const ax=d.ax, z=Object.assign({},d.z0), nz=Object.assign({},d.z0);
+    if(z.x0!=null){
+      if(ax.logX){
+        let k=Math.exp(-(px-d.px0)/d.pb.pW*Math.log(ax.x1/ax.x0));
+        k=Math.max(ax.xF0/z.x0,Math.min(ax.xF1/z.x1,k));
+        nz.x0=z.x0*k; nz.x1=z.x1*k;
+      }else{
+        let dt=-(px-d.px0)/d.pb.pW*(ax.x1-ax.x0);
+        dt=Math.max(ax.xF0-z.x0,Math.min(ax.xF1-z.x1,dt));
+        nz.x0=z.x0+dt; nz.x1=z.x1+dt;
+      }
+    }
+    if(z.y0!=null){
+      let dy=(py-d.py0)/d.pb.pH*(ax.y1-ax.y0);
+      dy=Math.max(ax.yF0-z.y0,Math.min(ax.yF1-z.y1,dy));
+      nz.y0=z.y0+dy; nz.y1=z.y1+dy;
+    }
+    setZoom(d.key,nz);
+  }
+  wrap.addEventListener("mousedown",e=>{
+    suppress=false;
+    if(e.button!==0) return;
+    const key=keyFn();
+    if(!key) return;
+    const ax=zoomAxes(key);
+    if(!ax) return;
+    const pb=plotBox();
+    const px=e.clientX-pb.left, py=e.clientY-pb.top;
+    if(px<PLOT.mL||px>pb.w-PLOT.mR||py<PLOT.mT||py>pb.h-PLOT.mB) return;
+    const z0=ZOOMS[key]?Object.assign({},ZOOMS[key]):null;
+    drag={key, ax, pb, px0:px, py0:py, pan:e.shiftKey, moved:false, z0};
+    if(drag.pan) canvas.style.cursor="grabbing";
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove",e=>{
+    if(!drag) return;
+    const px=e.clientX-drag.pb.left, py=e.clientY-drag.pb.top;
+    if(!drag.moved&&Math.abs(px-drag.px0)<=3&&Math.abs(py-drag.py0)<=3) return;
+    drag.moved=true;
+    if(drag.pan){ doPan(drag,px,py); return; }
+    const s=selRect(drag,px,py);
+    if(s.thinX&&s.thinY){ box.style.display="none"; return; }
+    const wr=wrap.getBoundingClientRect();
+    const ox=drag.pb.left-wr.left, oy=drag.pb.top-wr.top;
+    box.style.display="block";
+    box.style.left=(ox+s.sx0)+"px"; box.style.top=(oy+s.sy0)+"px";
+    box.style.width=(s.sx1-s.sx0)+"px"; box.style.height=(s.sy1-s.sy0)+"px";
+  });
+  window.addEventListener("mouseup",e=>{
+    if(!drag) return;
+    const d=drag; drag=null;
+    box.style.display="none";
+    canvas.style.cursor="";
+    if(!d.moved) return;                       // plain click passes through
+    suppress=true;                             // a drag never opens a popover
+    if(d.pan) return;
+    const px=e.clientX-d.pb.left, py=e.clientY-d.pb.top;
+    const s=selRect(d,px,py);
+    if(s.thinX&&s.thinY) return;
+    const ax=d.ax;
+    const nz=ZOOMS[d.key]?Object.assign({},ZOOMS[d.key])
+                         :{x0:null,x1:null,y0:null,y1:null};
+    if(!s.thinX){
+      let x0=dataX(ax,d.pb,s.sx0), x1=dataX(ax,d.pb,s.sx1);
+      if(ax.logX){
+        if(x1/x0<MIN_XRATIO){
+          const c=Math.sqrt(x0*x1), r=Math.sqrt(MIN_XRATIO);
+          x0=c/r; x1=c*r;
+        }
+        if(x0<ax.xF0){ x1*=ax.xF0/x0; x0=ax.xF0; }
+        if(x1>ax.xF1){ x0*=ax.xF1/x1; x1=ax.xF1; }
+      }else{
+        if(x1-x0<MIN_TSPAN){
+          const c=(x0+x1)/2;
+          x0=c-MIN_TSPAN/2; x1=c+MIN_TSPAN/2;
+        }
+        if(x0<ax.xF0){ x1+=ax.xF0-x0; x0=ax.xF0; }
+        if(x1>ax.xF1){ x0-=x1-ax.xF1; x1=ax.xF1; }
+      }
+      nz.x0=Math.max(ax.xF0,x0); nz.x1=Math.min(ax.xF1,x1);
+    }
+    if(!s.thinY){
+      let y1=dataY(ax,d.pb,s.sy0), y0=dataY(ax,d.pb,s.sy1);
+      if(y1-y0<MIN_YSPAN){
+        const c=(y0+y1)/2;
+        y0=c-MIN_YSPAN/2; y1=c+MIN_YSPAN/2;
+      }
+      if(y0<ax.yF0){ y1+=ax.yF0-y0; y0=ax.yF0; }
+      if(y1>ax.yF1){ y0-=y1-ax.yF1; y1=ax.yF1; }
+      nz.y0=Math.max(ax.yF0,y0); nz.y1=Math.min(ax.yF1,y1);
+    }
+    setZoom(d.key,nz);
+  });
+  wrap.addEventListener("dblclick",()=>{
+    const key=keyFn();
+    if(key&&ZOOMS[key]) setZoom(key,null);
+  });
+  wrap.addEventListener("wheel",e=>{
+    if(!(e.ctrlKey||e.metaKey)) return;        // pinch on macOS emits ctrl+wheel
+    const key=keyFn();
+    if(!key) return;
+    const ax=zoomAxes(key);
+    if(!ax) return;
+    const pb=plotBox();
+    const px=e.clientX-pb.left, py=e.clientY-pb.top;
+    if(px<PLOT.mL||px>pb.w-PLOT.mR||py<PLOT.mT||py>pb.h-PLOT.mB) return;
+    e.preventDefault();
+    const k=Math.exp(e.deltaY*0.0015);
+    const nz=ZOOMS[key]?Object.assign({},ZOOMS[key])
+                       :{x0:null,x1:null,y0:null,y1:null};
+    if(ax.logX){
+      const span=Math.log(ax.x1/ax.x0);
+      const ns=Math.max(Math.log(MIN_XRATIO),Math.min(Math.log(ax.xF1/ax.xF0),span*k));
+      const fr=Math.max(0,Math.min(1,(px-PLOT.mL)/pb.pW));
+      const fc=ax.x0*Math.exp(fr*span);        // cursor keeps its frequency
+      let x0=fc/Math.exp(fr*ns), x1=x0*Math.exp(ns);
+      if(x0<ax.xF0){ x1*=ax.xF0/x0; x0=ax.xF0; }
+      if(x1>ax.xF1){ x0*=ax.xF1/x1; x1=ax.xF1; }
+      if(x0<=ax.xF0*1.0001&&x1>=ax.xF1*0.9999){ nz.x0=null; nz.x1=null; }
+      else { nz.x0=x0; nz.x1=x1; }
+    }else{
+      const span=ax.x1-ax.x0;
+      const ns=Math.max(MIN_TSPAN,Math.min(ax.xF1-ax.xF0,span*k));
+      const fr=Math.max(0,Math.min(1,(px-PLOT.mL)/pb.pW));
+      const tc=ax.x0+fr*span;                  // cursor keeps its time
+      let x0=tc-fr*ns, x1=x0+ns;
+      if(x0<ax.xF0){ x1+=ax.xF0-x0; x0=ax.xF0; }
+      if(x1>ax.xF1){ x0-=x1-ax.xF1; x1=ax.xF1; }
+      const full=(ax.xF1-ax.xF0);
+      if(x1-x0>=full*0.9999){ nz.x0=null; nz.x1=null; }
+      else { nz.x0=Math.max(ax.xF0,x0); nz.x1=Math.min(ax.xF1,x1); }
+    }
+    if(nz.x0==null&&nz.y0==null) setZoom(key,null);
+    else setZoom(key,nz);
+  },{passive:false});
+  // A completed drag must not fall through as a click (band/marker popovers).
+  wrap.addEventListener("click",e=>{
+    if(suppress){ suppress=false; e.stopPropagation(); e.preventDefault(); }
+  },true);
 }
 
 // ---------- band table ----------
@@ -5099,6 +5471,12 @@ function boot(){
   attachSgramDiffCrosshair();
   attachEnvCrosshair();
 
+  attachZoom(specWrap, specCanvas, ()=>"spec");
+  attachZoom(diffWrap, diffCanvas, ()=>"diff");
+  attachZoom(envWrap, envCanvas, ()=>"env");
+  attachZoom(eqRespWrap, eqRespCanvas, ()=>"eqresp");
+  attachZoom(magWrap, magCanvas, ()=>(magKey&&(magKey in ZOOMS))?magKey:null, magReset);
+
   cards.forEach((card,i)=>{
     card.addEventListener("click",e=>{
       if(e.target.closest(".term")) return;
@@ -5158,8 +5536,15 @@ function boot(){
   const al=location.search.match(/[?&]sgalign=(file|onset)(?:&|$)/i);   // test hook
   if(al) setSgAlign(al[1].toLowerCase());
   if(/[?&]guide(?:&|$)/i.test(location.search)) guideModal.classList.add("open");   // test hook
+  if(/[?&]diff(?:&|$)/i.test(location.search)){                                     // test hook
+    state.diff=true; diffToggle.checked=true; updateVisibility();
+  }
   const mg=location.search.match(/[?&]mag=([a-z]+)(?:&|$)/i);                       // test hook
   if(mg) openMag(mg[1].toLowerCase());
+  const zm=location.search.match(/[?&]zoom=([a-z]+):([-\d.]+),([-\d.]+)(?:,([-\d.]+),([-\d.]+))?(?:&|$)/i); // test hook
+  if(zm&&(zm[1].toLowerCase() in ZOOMS))
+    ZOOMS[zm[1].toLowerCase()]={x0:parseFloat(zm[2]), x1:parseFloat(zm[3]),
+      y0:zm[4]!=null?parseFloat(zm[4]):null, y1:zm[5]!=null?parseFloat(zm[5]):null};
 }
 boot();
 </script>

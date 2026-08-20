@@ -778,6 +778,7 @@ kbd{
               <option value="logicChEq">Logic Channel EQ</option>
             </select>
           </div>
+          <button class="btn" id="eqCopyBtn" title="Copy the fitted settings as plain text">Copy settings</button>
         </div>
       </div>
       <div class="cardbody">
@@ -3756,6 +3757,7 @@ const sgLmSwitch=el("sgLmSwitch"), sgLmToggle=el("sgLmToggle"),
 const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
 const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSel=el("eqDevSel"),
+      eqCopyBtn=el("eqCopyBtn"),
       eqFaceCanvas=el("eqFaceCanvas"), eqRespCanvas=el("eqRespCanvas"), eqNote=el("eqNote"),
       eqRespWrap=el("eqRespWrap");
 const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
@@ -5209,6 +5211,59 @@ function renderEqNote(){
     "the trim absorbs the broadband level difference. Residual is the RMS gap between the target and the modeled response. "+
     "Real hardware differs from the model — treat the settings as a starting point, not gospel.";
 }
+// Plain-text render of the fitted settings — what you'd dial in on the real
+// unit. Same eqFitData() the device face draws, so text and panel always agree.
+function eqSettingsText(){
+  const fit=bothLoaded()&&eqFitData();
+  if(!fit) return null;
+  const d=fit.device, s=fit.settings;
+  const typeName=t=>t==="lowshelf"?"low shelf":t==="highshelf"?"high shelf":"peak";
+  const lines=[];
+  lines.push("GuitarScope EQ match — "+d.name);
+  lines.push("Reshape "+SLOT_LETTER[fit.src]+" ("+shortName(state.slots[fit.src].name,40)+
+    ") toward "+SLOT_LETTER[fit.dst]+" ("+shortName(state.slots[fit.dst].name,40)+")");
+  lines.push("");
+  if(s.kind==="graphic"){
+    for(const b of s.bands)
+      lines.push("  "+fmtHz(b.f,1).padStart(8)+"  "+fmtDb(b.gainDb,1).padStart(8));
+    lines.push("  "+d.trim.label.padStart(8)+"  "+fmtDb(s.trimDb,1).padStart(8)+"   (broadband trim)");
+    lines.push("");
+    lines.push("All bands peaking, Q "+d.q.toFixed(2)+" (≈ 1 octave wide).");
+  }else{
+    for(const b of s.bands)
+      lines.push("  "+(b.label||"").padEnd(9)+"  "+typeName(b.type).padEnd(10)+"  "+
+        fmtHz(b.f).padStart(9)+"  "+fmtDb(b.gainDb,1).padStart(8)+"   Q "+b.q.toFixed(2));
+    lines.push("  "+d.trim.label.padEnd(9)+"  "+"".padEnd(21)+"  "+
+      fmtDb(s.trimDb,1).padStart(8)+"   (broadband trim)");
+  }
+  lines.push("");
+  lines.push("Residual "+s.residualRms.toFixed(2)+" dB RMS against the 1/6-octave-smoothed difference, 60 Hz–20 kHz.");
+  lines.push("Bands are RBJ analog-magnitude models — real hardware differs; treat as a starting point.");
+  return lines.join("\n");
+}
+function copyEqSettings(){
+  const text=eqSettingsText();
+  if(!text) return;
+  const done=ok=>{
+    eqCopyBtn.textContent=ok?"Copied ✓":"Copy failed";
+    setTimeout(()=>{ eqCopyBtn.textContent="Copy settings"; },1600);
+  };
+  const fallback=()=>{
+    try{
+      const ta=document.createElement("textarea");
+      ta.value=text;
+      ta.style.position="fixed"; ta.style.opacity="0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok=document.execCommand("copy");
+      ta.remove();
+      done(ok);
+    }catch(e){ done(false); }
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(text).then(()=>done(true),fallback);
+  else fallback();
+}
 
 // ---------- master update ----------
 function updateVisibility(){
@@ -5936,6 +5991,7 @@ function boot(){
     state.eqDevice=eqDevSel.value;
     updateEqSub(); renderEqNote(); renderFooter(); requestDraw();
   });
+  eqCopyBtn.addEventListener("click",copyEqSettings);
   pngBtn.addEventListener("click",exportPNG);
   csvBtn.addEventListener("click",exportCSV);
   jsonBtn.addEventListener("click",exportJSON);

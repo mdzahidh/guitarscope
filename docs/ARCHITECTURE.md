@@ -202,18 +202,22 @@ power with the same full-scale-sine convention as Welch → resample each frame 
   `setTheme` flips the attribute, flushes the `CSS_COLORS` cache, re-derives `COLORS`,
   requests a redraw, and re-renders the HTML tables (their accent dots embed `COLORS`).
 - **Data colormaps deliberately do not theme.** The magma spectrogram and the diverging
-  amber/teal difference images are perceptual encodings, not chrome — they render as
-  dark scope-screens inside both themes. This keeps the palettes defensible (magma's
-  uniformity claims assume the dark ground), makes PNG exports identical across themes,
-  and means the cached `_sgImage`/`_sgDiff` bitmaps need no invalidation on switch.
+  difference images are perceptual encodings, not chrome — they render as dark
+  scope-screens inside both themes. This keeps the palettes defensible (magma's
+  uniformity claims assume the dark ground) and makes PNG exports identical across
+  themes. *(Session-7 refinement: the diverging endpoints default to amber/teal but
+  follow user-picked guitar colors after a luminance lift — a user-identity change, not
+  a theme change; `_sgDiff` is invalidated only when the endpoints actually change.
+  See the session-7 section.)*
 - Bright accents darken to A `#a8690f` / B `#17786e` (the Dark ambers/teals fail
   contrast on cream); `--on-accent` provides badge-text color per theme.
 
 ## Interactive line-plot zoom (session 5)
 
 The four line plots (spectrum, difference, envelope, EQ-match response) zoom; the
-spectrogram images and EQ device faces deliberately do not (their pixels are data,
-resampling them would misrepresent it — magnify covers "bigger").
+EQ device faces deliberately do not (their pixels are data, resampling them would
+misrepresent it — magnify covers "bigger"). *(Session 7 extended the same gesture set
+to the three spectrogram panes as a crop of the rendered colormap — see below.)*
 
 - **State is data units, not pixels.** `ZOOMS{spec,diff,env,eqresp}` holds
   `{x0,x1,y0,y1}` — Hz for the log-f plots, *display-time* seconds for the envelope
@@ -256,14 +260,15 @@ resampling them would misrepresent it — magnify covers "bigger").
 
 The single M2.5 EQ-region lane became four selectable vocabularies (user decision:
 options 1–3 of the proposal plus a colloquial EQ set added as #1/default; amp/cab
-layer dropped). One lane, swapped by a "Regions" segmented control — stacking all
-four at once was rejected as chartjunk, and the glossary carries the depth instead.
+layer dropped). One lane, swapped by a "Regions" selector (a segmented control in
+session 6, a dropdown since session 7) — stacking all four at once was rejected as
+chartjunk, and the glossary carries the depth instead.
 
 - **Data:** `VOCABS[]` in block 3 — `{id, label, regions:[{key,label,f0,f1,row,strong?}]}`.
-  `EQ_REGIONS` survives as an alias to the `eq` set so the Band Energy table's EQ rows
-  (block 4) stay tied to EQ-speak regardless of the lane selection — the lane is
-  presentation, the table rows are a stable reference. `VOCAB_ACTIVE` is a block-3
-  global written only by block 4 (`setVocab`), same pattern as the theme globals.
+  `VOCAB_ACTIVE` is a block-3 global written only by block 4 (`setVocab`), same pattern
+  as the theme globals. *(Superseded in session 7: the `EQ_REGIONS` alias is gone and
+  the Band Energy table now follows the selected vocabulary — see the session-7
+  section below.)*
 - **Two-row packing:** anatomy needs overlap (BODY & WARMTH 200–500 inside the
   open-string/fretted spans; HARMONICS ONLY ≥1.32 kHz spanning three row-0 zones), so
   `drawEqLane` packs `row:0` at yMid 7.5 and `row:1` at 21.5 when any region declares
@@ -293,6 +298,73 @@ four at once was rejected as chartjunk, and the glossary carries the depth inste
   numeric, and each popover shows what the app actually measures over that span.
   New categories must be appended to `GLOSS_CATS` (explicit ordered list — entries in
   an unlisted category silently vanish from the panel).
+
+## UX batch a–k (session 7)
+
+Eight user-requested changes (a–g, i) plus two mid-batch additions (j: tone rows as
+true axes, k: user-selectable guitar colors). Rationale for the non-obvious parts:
+
+- **Vocabulary regions drive the shading and the Band Energy table (a+d).** The M1
+  bottom shaded bands and the separate lane were merged: `drawRegionShading` shades the
+  spectrum from `VOCAB_ACTIVE`'s regions, and the Band Energy table rows are built from
+  the same regions, so the picture and the numbers can never disagree. `EQ_REGIONS` and
+  `bandsFor()` were **removed** — one source of truth. Region roles carry semantic
+  tints via `--role-cut-rgb` (red) / `--role-keep-rgb` (green) / a violet for
+  thin/carve/roll-off, labeled "GUITAR CORE (KEEP)"-style so color-blind users still
+  get the verdict in text. Anatomy bounds recompute from the tuning selection
+  (`VOCAB_TUNING` / `syncVocabTuning()`). The tone-character panel keeps its own fixed
+  physical bands regardless of lane — its numbers are physics, not EQ advice.
+- **Compare-on auto-latch (c).** The four comparison toggles (level-match, difference
+  pane, sgram difference, EQ match) turn on automatically when both slots fill, on the
+  theory that loading two sources *is* the statement of intent. An explicit user flip
+  this session is never overridden (latch per toggle), snapshot restores pre-prime the
+  latch (a snapshot's saved state is an explicit choice), and dropping back to one
+  source re-arms it. Auto-on without the latch was rejected: it fights the user.
+- **Spectrogram zoom (e) is a crop, not a recompute.** `ZOOMS` gained `sga/sgb/sgd`
+  (x in *display-time* seconds, y in Hz); the pane blits the cached colormap bitmap
+  with a zoom-adjusted destination rect. Unzoomed renders are pixel-identical to the
+  previous build. Deep zooms therefore blur rather than resolve — an honest tradeoff:
+  recomputing the STFT per window would change the analysis parameters mid-view and
+  break "every visible number defensible" (the footer states one FFT size). The
+  gesture layer is the line-plot `attachZoom` with a log-y branch (Hz axis pans/zooms
+  geometrically, like the log-f line plots).
+- **String labels outside the plot (f).** `SGPLOT.mR` 64→98; the colorbar is pinned at
+  `cbX = w−50` and the string-frequency labels sit in the new gap with leader ticks
+  into the plot. Labels over the colormap were unreadable at exactly the frequencies
+  they mark (that's where the energy is). They re-derive from the tuning selection.
+- **Card affordances (g).** The icon-only open/clear buttons became labeled buttons
+  ("Open file…", "Clear"), and empty cards state drag-and-drop support in text.
+  Discoverability beat chrome-minimalism here.
+- **Tone rows as true axes (j).** The tone-character rows were rebuilt as real
+  left→right-increasing axes. The underlying scales were already oriented
+  consistently — this was a layout fix, not a data fix (e.g. sustain's dot at 947 ms
+  sits left of 1.5 s because *less sustain is less*, and the axis now shows that).
+- **User-selectable guitar colors (k).** Clicking a loaded card's letter chip opens a
+  popover with a native `<input type="color">` + "Theme default" reset.
+  - **Per-theme storage** (`gsColors` = `{bright:[a,b], dark:[a,b]}`): one hex rarely
+    works on both cream and near-black grounds, so a pick applies to the active theme
+    only — same reason the stock accents differ per theme.
+  - **Applied as inline `--slot-a/--slot-b` on `documentElement`**, which outranks
+    both the `:root` (Bright) and `[data-theme=dark]` stylesheet blocks — no
+    specificity games. `applyUserColors()` sets/removes the inline vars, flushes
+    `CSS_COLORS`, rebuilds `COLORS`, and re-renders; `setTheme` delegates to it.
+  - **`slotThemeDefault(i)`** reads the stylesheet default by temporarily removing the
+    inline var, reading computed style, and restoring — no duplicated color table to
+    drift out of sync with the CSS.
+  - **Diverging difference endpoints follow the picks** via block-0
+    `setDivergeEndpoints(pos,neg)` (returns a changed-flag; caller invalidates
+    `state._sgDiff` only when true). Raw user picks can be too dark for the dark
+    scope-screen ground, so endpoints pass through `liftForDark(rgb)` — a Rec.709
+    luminance lift toward white targeting 0.55. The stock amber/teal (lum ≈0.664 /
+    0.629) pass untouched, so no-override renders stay bit-exact (verified by
+    file-size regression against the pre-k build).
+  - **Snapshots deliberately do not carry user colors** — they are viewer preference,
+    not analysis state (same class as theme, unlike vocab which affects the table).
+  - `?ca=RRGGBB`/`?cb=RRGGBB` are session-only test hooks (applied after boot, never
+    persisted).
+- Segmented controls were kept for the small closed sets (mode, theme, smoothing,
+  EQ direction, sgram alignment); only Regions (b) and EQ device (i) — the two lists
+  the user said will grow — became dropdowns.
 
 ## Hard-won correctness notes (dead ends — do not retry)
 

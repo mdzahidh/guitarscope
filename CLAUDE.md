@@ -15,15 +15,18 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   Bright/Dark themes with Bright default) + interactive zoom on the four line plots
   (box-select, shift-pan, ctrl/⌘-wheel, reset) + frequency-vocabulary lanes (user
   request (b): EQ speak default / Anatomy / Solo EQ / Band mix, selector on the spectrum
-  card): BUILT, awaiting user testing.** All built
-  on explicit user request 2026-08-19. Do not start M3 (live input) or M4 (chain measure)
-  until the user has tested and said so.
+  card) + the 2026-08-20 UX batch a–k (region vocabularies drive plot shading and the
+  Band Energy table with keep/cut role colors; Regions + EQ-device dropdowns;
+  comparison toggles auto-on when both slots fill; spectrogram zoom; string labels
+  outside the sgram plot; labeled file-card buttons; tone rows as true left→right
+  axes; user-selectable per-theme guitar colors): BUILT, awaiting user testing.**
+  All built on explicit user request 2026-08-19/20. Do not start M3 (live input) or
+  M4 (chain measure) until the user has tested and said so.
 - 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
-  against a numeric probe of the full pipeline; M2/M2.5 views verified by headless
-  `?demo` screenshots (all four EQ device faces inspected; both themes, single-guitar
-  and magnify views inspected); zoom verified on all four plots + magnify overlay plus
-  a pixel-regression compare against the prior commit; all four vocabulary lanes
-  screenshot-inspected (both themes, magnify, difference pane).
+  against a numeric probe of the full pipeline; every view since M2 verified by headless
+  `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
+  vocabulary lanes, zoomed panes, custom guitar colors incl. the recolored difference
+  colormap) plus pixel-regression compares against prior commits at each step.
 
 ## File map
 
@@ -45,8 +48,10 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 - Open `index.html` in a browser. `?demo` auto-loads the built-in demo pair
   (`?demo=a`/`=b` loads one side only). Other test hooks: `?theme=bright|dark`,
   `?sgalign=file|onset`, `?mag=<viewkey>`, `?guide`, `?diff` (difference pane on),
-  `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp; data units),
-  `?vocab=eq|anatomy|solo|mix` (annotation-lane vocabulary).
+  `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp|sga|sgb|sgd; data units —
+  sg keys take x in display-time seconds, y in Hz), `?vocab=eq|anatomy|solo|mix`
+  (annotation-lane vocabulary), `?ca=RRGGBB`/`?cb=RRGGBB` (session-only guitar-color
+  overrides).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
@@ -64,30 +69,40 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   link each label to its formula with current values.
 - **Design brief:** laboratory instrument built by a luthier. Two themes, **Bright
   (cream) is the default**, Dark is the original look; one accent per guitar per theme
-  (Dark: A amber `#d9a35b`, B teal `#5eb3ab`; Bright: A `#a8690f`, B `#17786e`).
-  Tabular numerals, no chartjunk/3D/glow, 150–250 ms non-bouncy transitions.
-  All plot chrome routes through CSS vars (`cssColor`/`cssRGBA`); **data colormaps
-  never theme** — the magma spectrogram (never rainbow) and the diverging amber/teal
-  difference stay dark scope-screens in both themes (see ARCHITECTURE.md).
+  (Dark: A amber `#d9a35b`, B teal `#5eb3ab`; Bright: A `#a8690f`, B `#17786e`),
+  **user-overridable per theme** by clicking a loaded card's letter chip (localStorage
+  `gsColors`, applied as inline `--slot-a/--slot-b`; snapshots deliberately don't carry
+  colors — viewer preference, not analysis state). Tabular numerals, no
+  chartjunk/3D/glow, 150–250 ms non-bouncy transitions. All plot chrome routes through
+  CSS vars (`cssColor`/`cssRGBA`); **data colormaps never theme** — the magma
+  spectrogram (never rainbow) and the diverging difference stay dark scope-screens in
+  both themes. The diverging endpoints default to amber/teal and follow user-picked
+  guitar colors after a luminance lift (see ARCHITECTURE.md) — a user-identity change,
+  not a theme change.
 - **DSP params:** Welch LTAS 8192-pt Hann 50 % overlap; log grid 60 Hz–20 kHz (700 pts);
   metrics integrate 60 Hz–20 kHz only; octave smoothing off/1-12/1-6/1-3; peak detection
   always on 1/6-oct curve. Spectrogram 2048-pt Hann, 256 log cells 60 Hz–20 kHz,
   **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale,
-  level-match off by default (toggle folds the spectrum lmOffset into pane B + scale);
-  difference pane onset-aligned, diverging amber/teal, p98 scale; individual panes get
+  difference pane onset-aligned, diverging colormap, p98 scale; individual panes get
   a Free / File-time / First-onset time-axis choice; envelope overlay
-  aligned at each file's first onset. EQ match: least-squares fit of RBJ
+  aligned at each file's first onset. The four comparison toggles (level-match,
+  difference, sgram level-match, sgram difference) **auto-latch on when both slots
+  fill** — an explicit user flip this session is never overridden, snapshots pre-prime
+  the latch, dropping to one source re-arms it. EQ match: least-squares fit of RBJ
   analog-magnitude band models against the **1/6-oct-smoothed** difference (never the
   raw comb) on 140 log points; device trim absorbs the broadband level gap. The
   annotation lane (`VOCABS` in block 3: EQ speak default / Anatomy / Solo EQ / Band mix,
-  persisted via localStorage `gsVocab` written only on explicit clicks) is colloquial
-  annotation only — the M1 shaded bands still drive all numbers, and the Band Energy
-  table's EQ rows stay tied to the EQ-speak set (`EQ_REGIONS` alias) regardless of the
-  lane selection. All lane regions are click-to-glossary; new glossary categories must
-  be appended to `GLOSS_CATS` or their entries won't render.
-  Line-plot zoom is **display-only** (`ZOOMS{}` in data units, baked in by the model
-  builders, shared with the magnify overlay): metrics/band table/tone panel never read
-  it, and the active window is always printed in the plot's status chip.
+  persisted via localStorage `gsVocab` written only on explicit clicks) **drives the
+  spectrum shading and the Band Energy table rows** (roles color-coded cut/keep/other;
+  Anatomy bounds are tuning-reactive via `VOCAB_TUNING`/`syncVocabTuning()`); the
+  tone-character panel keeps its own fixed physical bands regardless of lane. All lane
+  regions are click-to-glossary; new glossary categories must be appended to
+  `GLOSS_CATS` or their entries won't render.
+  Plot zoom (line plots **and** spectrogram panes) is **display-only** (`ZOOMS{}` in
+  data units, baked in by the model builders, shared with the magnify overlay):
+  metrics/band table/tone panel never read it, and the active window is always printed
+  on the plot. Sgram zoom crops the rendered colormap image (no STFT recompute), so
+  deep zooms blur rather than resolve.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

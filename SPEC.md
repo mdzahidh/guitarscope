@@ -296,3 +296,57 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   `?vocab=eq|anatomy|solo|mix` headless hook. Verified: 100/100 DSP tests (block 0 untouched),
   headless screenshots of all four lanes (Bright + Dark), the two-row anatomy lane clear of
   the tuning markers, magnify, and the difference pane following the selection.
+
+### 2026-08-20 — UX batch a–k: regions everywhere, compare-on defaults, sgram zoom, user colors (session 7)
+- **User request, nine items (a–g, i) plus two added mid-session (j, k),** with a closing
+  question asking for UX simplification suggestions (answered in the session report, not
+  built). One commit per coherent item group:
+- **(b)+(i)+(c) — dropdowns + compare-on defaults** (`fcb2c1d`): the Regions vocabulary
+  selector and the EQ Match device chooser became `<select>` dropdowns (both lists will
+  grow). When both slots fill, the four comparison toggles (level-match, difference,
+  spectrogram level-match, spectrogram difference) now switch on automatically — two
+  sources means comparison is the intent. A toggle the user flipped explicitly in the
+  session is never overridden; snapshots pre-prime the latch so saved settings stay
+  authoritative; dropping to one source re-arms it. Snapshots now carry the Difference
+  toggle.
+- **(a)+(d) — the selected region vocabulary drives shading and the Band Energy table**
+  (`5cd6b64`): the M1 five-band shading + bottom label row is gone; the active lane's
+  regions shade the spectrum plot, so annotation and shading always agree. Band-mix
+  regions tint by role (cut = red, keep = green, thin/carve/roll-off = violet) and labels
+  carry the role, e.g. "GUITAR CORE (KEEP)". The Band Energy table follows the selected
+  vocabulary (group header names it; per-vocab footnote explains tiling/overlap); the
+  `EQ_REGIONS` alias and `bandsFor()` were removed. The Anatomy vocabulary is
+  tuning-reactive: bounds resolve against the current tuning/A4 (`VOCAB_TUNING`),
+  refreshed on every tuning change and snapshot restore. Tone-panel physics bands are
+  unchanged — descriptors stay pinned to fixed physical ranges.
+- **(f) — spectrogram string labels moved outside the plot** (`038c085`): right margin
+  widened (64 → 98 px), colorbar pinned where it was, labels sit in the new gap with
+  leader ticks when stacking displaces them; they already follow the tuning selector.
+- **(e) — spectrogram zoom** (`18e1bdd`): all three spectrogram panes accept the same
+  gestures as the line plots (box-select, shift-pan, ctrl/⌘-wheel on time, double-click/
+  chip reset). New `ZOOMS` keys `sga|sgb|sgd` (x = display-time s, y = Hz, `?zoom=`-able).
+  The colormap image is blitted with a zoom-adjusted destination rect — a crop of the
+  already-rendered image, not an STFT recompute, so deep zooms interpolate rather than
+  gain resolution (disclosed here; acceptable for navigation). Unzoomed output verified
+  pixel-identical to the prior commit.
+- **(g) — obvious file-card actions** (`5792225`): empty cards pair the drop hint with an
+  explicit "Open file…" button; loaded/error cards use labeled, bordered "⟳ Replace" /
+  "✕ Clear" buttons instead of borderless icons.
+- **(j) — tone-character rows read as true axes** (`0617794`): the flanking columns now
+  hold the real axis min/max, always increasing left→right; each guitar's value rides
+  with its dot (A above, B below). No metric changed — this was a layout fix; the
+  underlying axes were already oriented consistently.
+- **(k) — user-selectable guitar colors** (`1ddee78`): clicking a loaded card's letter
+  chip opens a color popover (native picker + "Theme default" reset). Picks are stored
+  **per theme** in localStorage `gsColors` (a color chosen for cream is not assumed
+  legible on dark), applied as inline `--slot-a/--slot-b` overrides so every reference
+  follows: curves, legends, peak labels, tables, tone dots, envelope, EQ response,
+  markers — and the diverging difference colormap, whose endpoints follow the picks
+  after a luminance lift (Rec.709, target 0.55) so the pane stays a legible dark scope
+  screen in both themes. Stock defaults are bit-exact when no override is set (DSP
+  tests untouched). Decision: **snapshots deliberately do not carry user colors** —
+  they are viewer preference, not analysis state. Headless hooks `?ca=`/`?cb=`.
+- Colormap-rule interpretation recorded: "data colormaps never theme" still holds — the
+  magma spectrograms never change, and the diverging difference never follows the
+  *theme*; it now follows an explicit *user pick* for the two guitars, which is the
+  same identity the rest of the UI uses. See ARCHITECTURE.md for the rationale.

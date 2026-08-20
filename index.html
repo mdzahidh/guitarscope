@@ -810,7 +810,6 @@ kbd{
           </div>
           <div class="controls">
             <div class="exports">
-              <button class="btn" id="bandsPngBtn" disabled>PNG</button>
               <button class="btn" id="bandsCsvBtn" disabled>CSV</button>
               <button class="btn" id="bandsJsonBtn" disabled>JSON</button>
             </div>
@@ -835,7 +834,6 @@ kbd{
         </div>
         <div class="controls">
           <div class="exports">
-            <button class="btn" id="tonePngBtn" disabled>PNG</button>
             <button class="btn" id="toneCsvBtn" disabled>CSV</button>
             <button class="btn" id="toneJsonBtn" disabled>JSON</button>
           </div>
@@ -3886,8 +3884,8 @@ const smoothSeg=el("smoothSeg"), vocabSel=el("vocabSel"),
       clearHarmonicsBtn=el("clearHarmonicsBtn"),
       pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn"),
       diffPngBtn=el("diffPngBtn"), diffCsvBtn=el("diffCsvBtn"), diffJsonBtn=el("diffJsonBtn"),
-      bandsPngBtn=el("bandsPngBtn"), bandsCsvBtn=el("bandsCsvBtn"), bandsJsonBtn=el("bandsJsonBtn"),
-      tonePngBtn=el("tonePngBtn"), toneCsvBtn=el("toneCsvBtn"), toneJsonBtn=el("toneJsonBtn"),
+      bandsCsvBtn=el("bandsCsvBtn"), bandsJsonBtn=el("bandsJsonBtn"),
+      toneCsvBtn=el("toneCsvBtn"), toneJsonBtn=el("toneJsonBtn"),
       sgramPngBtn=el("sgramPngBtn"), sgramJsonBtn=el("sgramJsonBtn"),
       envPngBtn=el("envPngBtn"), envCsvBtn=el("envCsvBtn"), envJsonBtn=el("envJsonBtn"),
       eqJsonBtn=el("eqJsonBtn");
@@ -5489,8 +5487,8 @@ function updateVisibility(){
   });
   pngBtn.disabled=csvBtn.disabled=jsonBtn.disabled=!n;
   diffPngBtn.disabled=diffCsvBtn.disabled=diffJsonBtn.disabled=!both;
-  bandsPngBtn.disabled=bandsCsvBtn.disabled=bandsJsonBtn.disabled=!n;
-  tonePngBtn.disabled=toneCsvBtn.disabled=toneJsonBtn.disabled=!n;
+  bandsCsvBtn.disabled=bandsJsonBtn.disabled=!n;
+  toneCsvBtn.disabled=toneJsonBtn.disabled=!n;
   sgramPngBtn.disabled=sgramJsonBtn.disabled=!n;
   envPngBtn.disabled=envCsvBtn.disabled=envJsonBtn.disabled=!n;
   eqCopyBtn.disabled=eqJsonBtn.disabled=!both;
@@ -6015,27 +6013,6 @@ function _cardPng(name, draw){
   }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); }
 }
 function exportDiffPNG(){ if(!bothLoaded()) return; try{ _cardPng("Difference A-B", (ctx,W,H)=>{ drawDiffScene(ctx,W,H,buildDiffModel()); }); }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } }
-function exportBandsPNG(){
-  if(!anyLoaded()) return;
-  const W=900, H=640, SC=2; const cv=document.createElement("canvas");
-  cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
-  ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,W,H);
-  ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText("GuitarScope · Band energy",28,32);
-  const rows=document.querySelectorAll("#bandsTable tr"); let y=60; ctx.font="11px -apple-system, sans-serif";
-  rows.forEach(tr=>{ const t=tr.innerText.replace(/\s+/g," ").trim(); if(t){ ctx.fillStyle=tr.classList.contains("grp")?cssColor("mut"):cssColor("ink"); ctx.fillText(t.slice(0,120),28,y); y+=14; if(y>H-20) return; }});
-  _exportPngCanvas(cv, "guitarscope-bands_"+exportBaseName()+".png");
-}
-function exportTonePNG(){
-  if(!anyLoaded()) return;
-  const W=900, H=680, SC=2; const cv=document.createElement("canvas");
-  cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
-  ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,W,H);
-  ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText("GuitarScope · Tone character",28,32);
-  let y=58; ctx.font="11.5px -apple-system, sans-serif";
-  document.querySelectorAll("#toneRows .tonerow").forEach(row=>{ const t=row.innerText.replace(/\s+/g," ").trim().slice(0,140); ctx.fillStyle=cssColor("mut"); ctx.fillText(t,28,y); y+=16; });
-  const prose=document.getElementById("prosePara")?.innerText||""; if(prose){ ctx.fillStyle=cssColor("dim"); ctx.font="11px -apple-system, sans-serif"; prose.split("\n").slice(0,6).forEach(line=>{ ctx.fillText(line.slice(0,140),28,y); y+=13; }); }
-  _exportPngCanvas(cv, "guitarscope-tone_"+exportBaseName()+".png");
-}
 function exportSgramPNG(){
   if(!anyLoaded()) return;
   const W=1240,H=900,SC=2; const cv=document.createElement("canvas");
@@ -6702,10 +6679,8 @@ function boot(){
   diffPngBtn.addEventListener("click",exportDiffPNG);
   diffCsvBtn.addEventListener("click",exportDiffCSV);
   diffJsonBtn.addEventListener("click",exportDiffJSON);
-  bandsPngBtn.addEventListener("click",exportBandsPNG);
   bandsCsvBtn.addEventListener("click",exportBandsCSV);
   bandsJsonBtn.addEventListener("click",exportBandsJSON);
-  tonePngBtn.addEventListener("click",exportTonePNG);
   toneCsvBtn.addEventListener("click",exportToneCSV);
   toneJsonBtn.addEventListener("click",exportToneJSON);
   sgramPngBtn.addEventListener("click",exportSgramPNG);

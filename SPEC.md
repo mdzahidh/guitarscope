@@ -543,3 +543,29 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   four vocabularies (Anatomy two-row being the acceptance case), the Difference
   plot's lane, and a dark-theme zoomed window (150–900 Hz) confirming the in-view
   filter and the skip guard.
+
+### 2026-08-20 — M2.6d built: cursor + collapse affordance audit (session 9)
+
+- **"Something to click here" cursor (user item e).** Every canvas hit target that
+  opens documentation — peak dots, annotation-lane regions, boundary labels, string
+  labels — now shows the `help` cursor (arrow + question mark) on hover, the specific
+  "documentation behind this" signal rather than the generic pointer. The existing
+  crosshair hover hit-test drives it, so cursor and click can't disagree; a
+  mid-drag guard keeps it from fighting the pan gesture's `grabbing` cursor. Text
+  terms with popovers (`.term`) already used `help` — this makes canvas and text
+  consistent.
+- **Obvious fold affordance (user item f).** The collapse chevron was a bare
+  borderless glyph; it is now a real 24×24 bordered button matching the app's icon
+  buttons, and the entire header of a foldable card is clickable in **both**
+  directions (fold and unfold), with hover feedback on title + chevron. Clicks on
+  live header controls (buttons, switches, selects) and active text selections are
+  exempt so folding never eats an interaction.
+- **Audit results.** Fixed: magnify buttons were invisible until the plot was
+  hovered (`opacity:0`) — now always visible; a dead `.plotwrap.hoverable` CSS rule
+  removed. Already good, left alone: `.term` help cursor; collapse buttons carry
+  `aria-expanded` + Expand/Collapse titles; guitar-letter chips have a
+  "click to change color" tooltip, pointer and hover ring; file-card buttons are
+  labeled (batch 2); zoom-reset appears contextually with visible text.
+- Verification: 100/100 DSP tests; parse + all extraction suites (the collapse
+  state machine unchanged); headless bright/dark screenshots confirming visible
+  chevrons on expanded and folded headers and always-visible magnify buttons.

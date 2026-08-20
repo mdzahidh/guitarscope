@@ -519,6 +519,31 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   model or a layout constant. The default vocab ("mix") is single-row, so the
   literal 34 in PLOT needs no boot-time sync call.
 
+## M2.6d (session 9): affordance audit — help cursor, foldable headers
+
+- **Canvas doc-targets use the `help` cursor, not `pointer`.** `attachCrosshair`
+  already hit-tests every click target on hover (it used to set "pointer");
+  switching that to "help" gives the arrow-with-question-mark that specifically
+  means "documentation behind this click", matching the `.term` text buttons which
+  always used `cursor:help`. The set is guarded with `!(e.buttons & 1)` so a
+  shift-pan in progress keeps its `grabbing` cursor — mousemove during a drag would
+  otherwise flicker the cursor on every hit-zone crossing.
+- **Foldable-header pattern.** The six collapsible cards carry a `foldable` class;
+  their whole `.cardhead` toggles collapse in both directions. When the card is
+  *expanded* the header holds live controls, so the click handler ignores anything
+  inside `button,.seg,.switch,select,label,a,input` and bails when a text selection
+  is active (users drag-select header prose). The chevron button keeps its own
+  handler with `stopPropagation` — without it a chevron click would toggle twice.
+  The chevron itself is a 24×24 bordered button in the `.iconbtn` visual family;
+  the previous borderless 16px glyph failed the "would a user even notice it"
+  test that motivated user item f.
+- **Magnify buttons must not be hover-revealed.** They were `opacity:0` until
+  `.plotwrap:hover` — invisible chrome scores zero on discoverability, and on
+  touch devices it never appears at all. Always-visible now; the cost is one small
+  bordered button per plot corner, accepted deliberately.
+- The audit removed a dead `.plotwrap.hoverable{cursor:crosshair}` rule — the
+  class was never applied anywhere; `attachCrosshair` sets the inline cursor.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

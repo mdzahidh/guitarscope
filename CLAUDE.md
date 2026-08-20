@@ -27,7 +27,7 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   All built on explicit user request 2026-08-19/20. User rejected renaming A/B to file
   names, and deferred task-based entry points to M3. Do not start M3 (live input) or
   M4 (chain measure) until the user has tested and said so.
-- **UX batch 3 (2026-08-20, session 9): M2.6a + M2.6b + M2.6c BUILT** — M2.6a: global
+- **UX batch 3 (2026-08-20, session 9): M2.6a + M2.6b + M2.6c + M2.6d BUILT** — M2.6a: global
   Level-match switch in the header (Comparison field; spectrum/sgram twins and both
   Difference toggles + "d" key + `?diff` hook deleted — difference views exist
   whenever two sources do, fold the card to dismiss); Regions selector also moved to
@@ -44,7 +44,12 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   labels under the lane ticks, one small line per row (9 px, `fLabel` compact
   format), overlap guard skips rather than smears; lane height now dynamic —
   PLOT.mT 34, or 48 for two-row vocabularies (Anatomy), via `syncLaneHeight()`
-  called from `setVocab()`. **Remaining: M2.6d** cursor/collapse affordance audit; **M2.6e**
+  called from `setVocab()`. M2.6d: affordance audit — canvas doc-targets hover the
+  `help` cursor (attachCrosshair hit-test; guarded so it never fights a pan's
+  `grabbing`), collapse chevron restyled as a real 24×24 bordered button, the whole
+  header of the six foldable cards toggles both ways (`.foldable`; clicks on
+  controls/text selections exempt), magnify buttons always visible (were
+  hover-revealed). **Remaining: M2.6e**
   per-card exports (300-dpi PNG / JSON / CSV, EQ-match JSON); **M2.6f** versioned
   `gsSettings` persistence (user agreed: mode/tuning+offset/A4/EQ device/smoothing +
   Strings; NOT level-match; footer reset). One commit per submilestone.

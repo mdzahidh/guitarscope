@@ -196,19 +196,21 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 /* progressive disclosure: analysis panels fold to their header line */
 .headleft{ display:flex; align-items:center; gap:10px; min-width:0; }
 .collbtn{
-  font:inherit; width:22px; height:22px; flex:none; padding:0;
+  font:inherit; width:24px; height:24px; flex:none; padding:0;
   display:inline-flex; align-items:center; justify-content:center;
-  color:var(--dim); background:transparent; border:1px solid transparent;
+  color:var(--mut); background:var(--raise); border:1px solid var(--hair2);
   border-radius:6px; cursor:pointer;
   transition:color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.collbtn::before{ content:"▾"; display:block; font-size:11px; transition:transform 200ms var(--ease); }
+.collbtn::before{ content:"▾"; display:block; font-size:12px; transition:transform 200ms var(--ease); }
 .collbtn:hover{ color:var(--ink); border-color:var(--hair); }
 .card.collapsed .collbtn::before{ transform:rotate(-90deg); }
 .card.collapsed .cardbody{ display:none; }
 .card.collapsed .cardhead .controls{ display:none; }
-.card.collapsed .cardhead{ cursor:pointer; }
-.card.collapsed .cardhead:hover .cardtitle{ color:var(--ink); }
+/* the whole header folds/unfolds (controls excepted in JS), so it advertises it */
+.card.foldable .cardhead{ cursor:pointer; }
+.card.foldable .cardhead:hover .cardtitle{ color:var(--ink); }
+.card.foldable .cardhead:hover .collbtn{ color:var(--ink); border-color:var(--hair); }
 
 /* section reveal */
 .reveal{ animation:reveal 240ms var(--ease); }
@@ -306,7 +308,6 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 #eqFaceCanvas{ height:216px; }
 #eqRespCanvas{ height:236px; }
 .sgramstack{ display:flex; flex-direction:column; gap:14px; }
-.plotwrap.hoverable{ cursor:crosshair; }
 .xline{
   position:absolute; top:0; bottom:0; width:1px; background:rgba(var(--ink-rgb),.22);
   pointer-events:none; display:none;
@@ -569,11 +570,10 @@ kbd{
   display:flex; align-items:center; justify-content:center;
   font:inherit; font-size:13px; line-height:1; padding:0;
   color:var(--mut); background:var(--raise); border:1px solid var(--hair2);
-  border-radius:6px; cursor:pointer; opacity:0;
-  transition:opacity var(--dur) var(--ease), color var(--dur) var(--ease);
+  border-radius:6px; cursor:pointer;
+  transition:color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.plotwrap:hover .magbtn, .magbtn:focus-visible{ opacity:1; }
-.magbtn:hover{ color:var(--ink); }
+.magbtn:hover{ color:var(--ink); border-color:var(--hair); }
 
 /* interactive zoom */
 .zoombox{
@@ -736,7 +736,7 @@ kbd{
     </section>
 
     <!-- difference -->
-    <section class="card reveal" id="diffCard" style="display:none">
+    <section class="card reveal foldable" id="diffCard" style="display:none">
       <div class="cardhead">
         <div class="headleft">
           <button class="collbtn" data-coll="diff" aria-expanded="true" title="Collapse panel" aria-label="Collapse Difference panel"></button>
@@ -757,7 +757,7 @@ kbd{
     </section>
 
     <!-- band energy -->
-    <section class="card reveal" id="bandsCard" style="display:none">
+    <section class="card reveal foldable" id="bandsCard" style="display:none">
       <div class="cardhead">
         <div class="headleft">
           <button class="collbtn" data-coll="bands" aria-expanded="true" title="Collapse panel" aria-label="Collapse Band energy panel"></button>
@@ -774,7 +774,7 @@ kbd{
     </section>
 
     <!-- tone character -->
-    <section class="card reveal" id="toneCard" style="display:none">
+    <section class="card reveal foldable" id="toneCard" style="display:none">
       <div class="cardhead">
         <div class="headleft">
           <button class="collbtn" data-coll="tone" aria-expanded="true" title="Collapse panel" aria-label="Collapse Tone character panel"></button>
@@ -792,7 +792,7 @@ kbd{
     </section>
 
     <!-- EQ match (M2.5) -->
-    <section class="card reveal" id="eqCard" style="display:none">
+    <section class="card reveal foldable" id="eqCard" style="display:none">
       <div class="cardhead">
         <div class="headleft">
           <button class="collbtn" data-coll="eq" aria-expanded="true" title="Collapse panel" aria-label="Collapse EQ match panel"></button>
@@ -835,7 +835,7 @@ kbd{
     </section>
 
     <!-- spectrogram (M2) -->
-    <section class="card reveal" id="sgramCard" style="display:none">
+    <section class="card reveal foldable" id="sgramCard" style="display:none">
       <div class="cardhead">
         <div class="headleft">
           <button class="collbtn" data-coll="sgram" aria-expanded="true" title="Collapse panel" aria-label="Collapse Spectrogram panel"></button>
@@ -881,7 +881,7 @@ kbd{
     </section>
 
     <!-- envelope overlay (M2) -->
-    <section class="card reveal" id="envCard" style="display:none">
+    <section class="card reveal foldable" id="envCard" style="display:none">
       <div class="cardhead">
         <div class="headleft">
           <button class="collbtn" data-coll="env" aria-expanded="true" title="Collapse panel" aria-label="Collapse Envelope panel"></button>
@@ -4461,7 +4461,8 @@ function attachCrosshair(wrap,canvas,xline,readout,isDiff){
     const x=e.clientX-rect.left, y=e.clientY-rect.top, w=rect.width;
     const hitsArr=isDiff?diffHits:specHits;
     const hot=hitsArr.some(hh=>x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h);
-    canvas.style.cursor=hot?"pointer":"crosshair";
+    // "help" = documentation behind this click; don't fight a drag's grabbing cursor
+    if(!(e.buttons&1)) canvas.style.cursor=hot?"help":"crosshair";
     if(x<PLOT.mL||x>w-PLOT.mR||!anyLoaded()){
       xline.style.display="none"; readout.style.display="none"; return;
     }
@@ -6247,10 +6248,14 @@ function boot(){
     b.addEventListener("click",e=>{ e.stopPropagation(); toggleCollapse(b.dataset.coll); });
   });
   for(const k in COLL_CARDS){
-    // A folded card's whole header is a reopen target; an expanded header
-    // keeps live controls, so only the chevron folds it.
-    COLL_CARDS[k].querySelector(".cardhead").addEventListener("click",()=>{
-      if(collState[k]) toggleCollapse(k);
+    // The whole header folds/unfolds — but an expanded header holds live
+    // controls, so clicks on those (or a text selection) must not fold the card.
+    COLL_CARDS[k].querySelector(".cardhead").addEventListener("click",e=>{
+      if(!collState[k]){
+        if(e.target.closest("button,.seg,.switch,select,label,a,input")) return;
+        if(window.getSelection&&String(window.getSelection())) return;
+      }
+      toggleCollapse(k);
     });
   }
   magClose.addEventListener("click",closeMag);

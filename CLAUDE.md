@@ -27,6 +27,13 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   All built on explicit user request 2026-08-19/20. User rejected renaming A/B to file
   names, and deferred task-based entry points to M3. Do not start M3 (live input) or
   M4 (chain measure) until the user has tested and said so.
+- **UX batch 3 (2026-08-20, session 9) STAGED, not yet built** — see the SPEC session-9
+  entry: M2.6a global level-match + Difference-toggle removal + control-scope audit;
+  M2.6b bottom-axis Strings toggle with per-string docs, top-axis/peak-label declutter;
+  M2.6c region-boundary Hz labels in the lane; M2.6d cursor/collapse affordance audit;
+  M2.6e per-card exports (300-dpi PNG / JSON / CSV, EQ-match JSON). Execution starts
+  after the settings-persistence discussion the user requested (possible M2.6f);
+  one commit per submilestone.
 - 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four

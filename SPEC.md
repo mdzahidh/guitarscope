@@ -402,3 +402,51 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
 - Decision: playback everywhere sources the analyzed mono mix, never the original
   multichannel file — the tool's claim is "this is what the analyzer sees," and a
   stereo original would sound different from every number on screen.
+
+### 2026-08-20 — UX batch 3 staged as submilestones M2.6a–e (session 9)
+- **User message with eight items (a–h), to be staged into submilestones, merged into
+  this SPEC, then executed one at a time with a commit per submilestone:**
+  - (a) Level-match is global — even the card Play buttons obey it — so its UI must
+    live somewhere that makes that scope obvious; audit every setting's placement so
+    position expresses scope.
+  - (b) The "Difference" toggle is probably superfluous — the Difference card already
+    only appears with two inputs.
+  - (c) Open-string labels on the top axis + frequency labels on the plot are
+    cluttered. Replace with a **toggle** for open-string labels on the **bottom** axis
+    (no frequency labels on the plots), each label clickable for detail docs (e.g.
+    D#2 → exact frequency).
+  - (d) Label region start/end frequencies directly below the lane ticks in a smaller
+    but clearly readable font, no overlaps — Guitar anatomy is the stress case.
+  - (e) Elements that open documentation on click should signal it with a meaningful
+    mouse cursor.
+  - (f) The collapse/expand control is too small to notice — make it obvious; audit
+    whether each UI element's presentation expresses its function.
+  - (g) Every card gets meaningful export/save: visualization cards add a **300 dpi
+    PNG** (clean, reflecting exactly what the card shows); line-plot cards add **JSON**
+    (guitar details, tuning, current region definitions, enabled visualization
+    options) and a simpler **CSV** of the plot data.
+  - (h) EQ match keeps "Copy settings" and adds a more detailed **JSON** export.
+- **Staging (executed in this order, one commit each):**
+  - **M2.6a — control scope & placement (a+b):** one global Level-match switch in the
+    header (replacing the spectrum-card and spectrogram-card twins; one state drives
+    plots, spectrograms, band table, verdict, playback); both Difference toggles
+    removed — difference views exist whenever two sources do, and folding the card is
+    how you dismiss one; full placement audit of the remaining controls.
+  - **M2.6b — axis declutter & string docs (c):** top-axis string labels and on-plot
+    peak frequency text removed; new Strings toggle puts tuning-aware open-string
+    labels on the bottom axis of the frequency-domain line plots, click-for-docs
+    (exact fundamental at current tuning and A4, harmonics, glossary link).
+  - **M2.6c — region boundary frequencies (d):** start/end Hz under the lane ticks,
+    smaller font, collision-managed; Anatomy (overlapping row-1 regions,
+    tuning-reactive bounds) is the acceptance test.
+  - **M2.6d — affordance audit (e+f):** help cursor + hover affordance on every
+    click-for-docs surface (canvas hit-zones included), obvious collapse affordance,
+    and a sweep of remaining controls (magnify, color chips, letter chips).
+  - **M2.6e — exports everywhere (g+h):** shared export layer; per-card PNG at a true
+    300 dpi (pHYs-stamped) rendered clean from the card's own scene builders; JSON +
+    CSV on line-plot cards; table cards export their table; EQ match adds JSON
+    alongside Copy settings.
+- **Settings persistence (raised by the user, discussion before implementation):** how
+  to persist user settings beyond today's `gsTheme` / `gsColors` / `gsVocab` /
+  `gsCollapse`. To be designed with the user before any code; will slot in as M2.6f
+  once agreed. Current inventory and the proposal live in the session-9 report.

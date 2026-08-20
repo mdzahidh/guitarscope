@@ -780,6 +780,13 @@ kbd{
               <div class="cardsub" id="diffSub">A − B, dB</div>
             </div>
           </div>
+          <div class="controls">
+            <div class="exports">
+              <button class="btn" id="diffPngBtn" disabled>PNG</button>
+              <button class="btn" id="diffCsvBtn" disabled>CSV</button>
+              <button class="btn" id="diffJsonBtn" disabled>JSON</button>
+            </div>
+          </div>
         </div>
         <div class="subbody">
           <div class="plotwrap" id="diffWrap">
@@ -799,6 +806,13 @@ kbd{
               <div class="cardsub" id="bandsSub">share of total 60 Hz–20 kHz energy · Δ in dB</div>
             </div>
           </div>
+          <div class="controls">
+            <div class="exports">
+              <button class="btn" id="bandsPngBtn" disabled>PNG</button>
+              <button class="btn" id="bandsCsvBtn" disabled>CSV</button>
+              <button class="btn" id="bandsJsonBtn" disabled>JSON</button>
+            </div>
+          </div>
         </div>
         <div class="subbody">
           <table class="datatable" id="bandsTable"></table>
@@ -815,6 +829,13 @@ kbd{
           <div>
             <div class="cardtitle">Tone character</div>
             <div class="cardsub">named descriptors, each backed by a measurement — click any term for its formula</div>
+          </div>
+        </div>
+        <div class="controls">
+          <div class="exports">
+            <button class="btn" id="tonePngBtn" disabled>PNG</button>
+            <button class="btn" id="toneCsvBtn" disabled>CSV</button>
+            <button class="btn" id="toneJsonBtn" disabled>JSON</button>
           </div>
         </div>
       </div>
@@ -853,6 +874,7 @@ kbd{
             </select>
           </div>
           <button class="btn" id="eqCopyBtn" title="Copy the fitted settings as plain text">Copy settings</button>
+          <button class="btn" id="eqJsonBtn" title="Download EQ match as JSON">JSON</button>
         </div>
       </div>
       <div class="cardbody">
@@ -886,6 +908,10 @@ kbd{
               <button data-al="file">File time</button>
               <button data-al="onset">First onset</button>
             </div>
+          </div>
+          <div class="exports">
+            <button class="btn" id="sgramPngBtn" disabled>PNG</button>
+            <button class="btn" id="sgramJsonBtn" disabled>JSON</button>
           </div>
         </div>
       </div>
@@ -922,6 +948,13 @@ kbd{
           <div>
             <div class="cardtitle">Envelope</div>
             <div class="cardsub" id="envSub">amplitude envelope in dB re full scale, A/B aligned at each file's first onset · tick marks show detected onsets</div>
+          </div>
+        </div>
+        <div class="controls">
+          <div class="exports">
+            <button class="btn" id="envPngBtn" disabled>PNG</button>
+            <button class="btn" id="envJsonBtn" disabled>JSON</button>
+            <button class="btn" id="envCsvBtn" disabled>CSV</button>
           </div>
         </div>
       </div>
@@ -3825,7 +3858,13 @@ const smoothSeg=el("smoothSeg"), vocabSel=el("vocabSel"),
       lmSwitch=el("lmSwitch"), lmToggle=el("lmToggle"),
       stringsSwitch=el("stringsSwitch"), stringsToggle=el("stringsToggle"),
       harmonicsSwitch=el("harmonicsSwitch"), harmonicsToggle=el("harmonicsToggle"),
-      pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn");
+      pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn"),
+      diffPngBtn=el("diffPngBtn"), diffCsvBtn=el("diffCsvBtn"), diffJsonBtn=el("diffJsonBtn"),
+      bandsPngBtn=el("bandsPngBtn"), bandsCsvBtn=el("bandsCsvBtn"), bandsJsonBtn=el("bandsJsonBtn"),
+      tonePngBtn=el("tonePngBtn"), toneCsvBtn=el("toneCsvBtn"), toneJsonBtn=el("toneJsonBtn"),
+      sgramPngBtn=el("sgramPngBtn"), sgramJsonBtn=el("sgramJsonBtn"),
+      envPngBtn=el("envPngBtn"), envCsvBtn=el("envCsvBtn"), envJsonBtn=el("envJsonBtn"),
+      eqJsonBtn=el("eqJsonBtn");
 const verdictCard=el("verdictCard"), verdictPara=el("verdictPara");
 const freqCard=el("freqCard"), freqSpec=el("freqSpec"), freqDiff=el("freqDiff"), freqBands=el("freqBands");
 const specWrap=el("specWrap"), specCanvas=el("specCanvas"),
@@ -5420,6 +5459,12 @@ function updateVisibility(){
     if(b.dataset.mag==="diff") b.style.display=both?"":"none";
   });
   pngBtn.disabled=csvBtn.disabled=jsonBtn.disabled=!n;
+  diffPngBtn.disabled=diffCsvBtn.disabled=diffJsonBtn.disabled=!both;
+  bandsPngBtn.disabled=bandsCsvBtn.disabled=bandsJsonBtn.disabled=!n;
+  tonePngBtn.disabled=toneCsvBtn.disabled=toneJsonBtn.disabled=!n;
+  sgramPngBtn.disabled=sgramJsonBtn.disabled=!n;
+  envPngBtn.disabled=envCsvBtn.disabled=envJsonBtn.disabled=!n;
+  eqCopyBtn.disabled=eqJsonBtn.disabled=!both;
   lmToggle.disabled=!both;
   lmSwitch.classList.toggle("disabled",!both);
   // diff/bands sub-sections live inside #freqCard now — outer card gates n
@@ -5809,6 +5854,33 @@ function tuningLabel(){
     ? TUNINGS[state.tuning].name
     : "custom "+(state.customOffset>=0?"+":"")+state.customOffset+" st";
 }
+// 300-dpi PNG helper: inject pHYs chunk (dots per meter) so the file prints at 300 dpi
+function _crc32(buf){
+  let c=~0; for(let i=0;i<buf.length;i++){ c^=buf[i]; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; } return ~c>>>0;
+}
+async function _pngWithDpi(blob, dpi){
+  const dpm=Math.round(dpi/0.0254);
+  const ab=await blob.arrayBuffer(); const u=new Uint8Array(ab);
+  // find end of IHDR (first chunk after 8-byte signature)
+  let pos=8; const dv=new DataView(u.buffer);
+  const len=dv.getUint32(pos); const type=String.fromCharCode(u[pos+4],u[pos+5],u[pos+6],u[pos+7]);
+  pos+=4+4+len+4; // skip IHDR
+  const head=u.slice(0,pos); const tail=u.slice(pos);
+  const chunk=new Uint8Array(4+4+9+4); const cdv=new DataView(chunk.buffer);
+  cdv.setUint32(0,9); chunk[4]=112;chunk[5]=72;chunk[6]=89;chunk[7]=115;
+  cdv.setUint32(8,dpm); cdv.setUint32(12,dpm); chunk[20]=1;
+  const crc=_crc32(chunk.slice(4,21)); cdv.setUint32(21,crc);
+  const out=new Uint8Array(head.length+chunk.length+tail.length);
+  out.set(head,0); out.set(chunk,head.length); out.set(tail,head.length+chunk.length);
+  return new Blob([out],{type:"image/png"});
+}
+function _exportPngCanvas(cv, name){
+  cv.toBlob(async b=>{
+    if(!b) return;
+    const dpiBlob=await _pngWithDpi(b, 300);
+    download(dpiBlob, name);
+  },"image/png");
+}
 function exportPNG(){
   if(!anyLoaded()) return;
   const W=1240, H=830, SC=2;
@@ -5853,8 +5925,74 @@ function exportPNG(){
   ctx.textAlign="right";
   ctx.fillText("made with GuitarScope",W-40,H-24);
   ctx.textAlign="left";
-  cv.toBlob(b=>{ if(b) download(b,"guitarscope_"+exportBaseName()+".png"); },"image/png");
+  _exportPngCanvas(cv, "guitarscope_"+exportBaseName()+".png");
 }
+// Per-card 300-dpi PNG / JSON / CSV (M2.6h): spectrum/diff/bands live per sub-section
+function _cardPng(name, draw){
+  const W=1240, H=720, SC=2;
+  const cv=document.createElement("canvas");
+  cv.width=W*SC; cv.height=H*SC;
+  const ctx=cv.getContext("2d");
+  ctx.scale(SC,SC);
+  ctx.fillStyle=cssColor("panel");
+  ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=cssColor("ink");
+  ctx.font="600 16px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  ctx.fillText("GuitarScope · "+name, 28, 36);
+  ctx.font="11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  ctx.fillStyle=cssColor("mut");
+  ctx.fillText(new Date().toISOString().slice(0,10)+" · "+state.mode+" · "+tuningLabel()+" · A4 "+state.a4+" Hz", 28, 52);
+  ctx.save(); ctx.translate(0,64);
+  draw(ctx,W,H-80);
+  ctx.restore();
+  _exportPngCanvas(cv, "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".png");
+}
+function exportDiffPNG(){ if(!bothLoaded()) return; _cardPng("Difference A-B", (ctx,W,H)=>{ drawDiffScene(ctx,W,H,buildDiffModel()); }); }
+function exportBandsPNG(){
+  if(!anyLoaded()) return;
+  const W=900, H=640, SC=2; const cv=document.createElement("canvas");
+  cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
+  ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText("GuitarScope · Band energy",28,32);
+  const rows=document.querySelectorAll("#bandsTable tr"); let y=60; ctx.font="11px -apple-system, sans-serif";
+  rows.forEach(tr=>{ const t=tr.innerText.replace(/\s+/g," ").trim(); if(t){ ctx.fillStyle=tr.classList.contains("grp")?cssColor("mut"):cssColor("ink"); ctx.fillText(t.slice(0,120),28,y); y+=14; if(y>H-20) return; }});
+  _exportPngCanvas(cv, "guitarscope-bands_"+exportBaseName()+".png");
+}
+function exportTonePNG(){
+  if(!anyLoaded()) return;
+  const W=900, H=680, SC=2; const cv=document.createElement("canvas");
+  cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
+  ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText("GuitarScope · Tone character",28,32);
+  let y=58; ctx.font="11.5px -apple-system, sans-serif";
+  document.querySelectorAll("#toneRows .tonerow").forEach(row=>{ const t=row.innerText.replace(/\s+/g," ").trim().slice(0,140); ctx.fillStyle=cssColor("mut"); ctx.fillText(t,28,y); y+=16; });
+  const prose=document.getElementById("prosePara")?.innerText||""; if(prose){ ctx.fillStyle=cssColor("dim"); ctx.font="11px -apple-system, sans-serif"; prose.split("\n").slice(0,6).forEach(line=>{ ctx.fillText(line.slice(0,140),28,y); y+=13; }); }
+  _exportPngCanvas(cv, "guitarscope-tone_"+exportBaseName()+".png");
+}
+function exportSgramPNG(){
+  if(!anyLoaded()) return;
+  const W=1240,H=900,SC=2; const cv=document.createElement("canvas");
+  cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
+  ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText("GuitarScope · Spectrogram",28,32);
+  const sc=sgramScale(); let y=60;
+  for(let i=0;i<2;i++){
+    const m=sgramModelFor(i,sc); if(!m) continue;
+    ctx.save(); ctx.translate(0,y);
+    const hh=380; drawSpectrogramScene(ctx,W,hh,m); ctx.restore(); y+=hh+18;
+    if(y>H-40) break;
+  }
+  if(sgDiffVisible()){
+    const m=buildSgramDiffModel(); if(m){ ctx.save(); ctx.translate(0,y); drawSgramDiffScene(ctx,W,380,m); ctx.restore(); }
+  }
+  _exportPngCanvas(cv, "guitarscope-sgram_"+exportBaseName()+".png");
+}
+function exportEnvPNG(){
+  if(!anyLoaded()) return;
+  _cardPng("Envelope", (ctx,W,H)=>{ const m=buildEnvModel(); if(m) drawEnvelopeScene(ctx,W,H,m); });
+}
+function exportEqFacePng(){ if(!bothLoaded()) return; _cardPng("EQ face", (ctx,W,H)=>{ const m=buildEqModels(); if(m) drawEqFaceScene(ctx,W,H,m.face); }); }
+function exportEqRespPng(){ if(!bothLoaded()) return; _cardPng("EQ response", (ctx,W,H)=>{ const m=buildEqModels(); if(m) drawEqRespScene(ctx,W,H,m.resp); }); }
 function exportCSV(){
   if(!anyLoaded()) return;
   const a=dispTarget[0], b=dispTarget[1];
@@ -5874,6 +6012,103 @@ function exportCSV(){
       (a&&b?(a[k]-b[k]).toFixed(2):""));
   }
   download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope_"+exportBaseName()+".csv");
+}
+function exportDiffCSV(){
+  if(!bothLoaded()) return;
+  const a=dispTarget[0], b=dispTarget[1]; if(!a||!b) return;
+  const L=["# GuitarScope difference A-B (dB)", "# created: "+new Date().toISOString()];
+  L.push("# smoothing "+(state.smooth?"1/"+state.smooth+" oct":"off")+" · level-match "+(state.lm?fmtDb(state.lmOffset,2)+" on B":"off"));
+  L.push("frequency_hz,a_minus_b_db");
+  for(let k=0;k<GRID.length;k++) L.push(GRID[k].toFixed(2)+","+(a[k]-b[k]).toFixed(2));
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-diff_"+exportBaseName()+".csv");
+}
+function exportBandsCSV(){
+  if(!anyLoaded()) return;
+  const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix;
+  const L=["# GuitarScope band energy — "+vocab.label, "# created: "+new Date().toISOString()];
+  L.push("band,f0_hz,f1_hz,a_share_pct,b_share_pct,delta_db");
+  for(const r of vocab.regions){
+    const f0=regionF(r.f0), f1=regionF(r.f1);
+    let aShare="", bShare="", dDb="", pA=null, pB=null;
+    for(let i=0;i<2;i++){
+      const s=state.slots[i];
+      if(s&&s.welch){
+        const pBand=bandPower(s.welch.power,s.welch.df,f0,f1);
+        const pTot=bandPower(s.welch.power,s.welch.df,60,20000);
+        const share=pTot>0? (pBand/pTot*100):0;
+        if(i===0){ aShare=share.toFixed(2); pA=pBand; } else { bShare=share.toFixed(2); pB=pBand; }
+      }
+    }
+    if(pA!=null&&pB!=null&&pA>0&&pB>0) dDb=(10*Math.log10(pA/pB)).toFixed(2);
+    L.push([r.label,f0.toFixed(1),f1.toFixed(1),aShare,bShare,dDb].join(","));
+  }
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-bands_"+exportBaseName()+".csv");
+}
+function exportToneCSV(){
+  if(!anyLoaded()) return;
+  const cand=(typeof proseCandidates==="function"?proseCandidates():[]);
+  const L=["# GuitarScope tone character", "# created: "+new Date().toISOString()];
+  L.push("descriptor,a_value,b_value");
+  document.querySelectorAll("#toneRows .tonerow").forEach(row=>{
+    const name=row.querySelector(".tonename")?.innerText.replace(/\s+/g," ").trim()||"";
+    const aval=row.querySelector(".vlab.a")?.innerText.replace(/\s+/g," ").trim()||"";
+    const bval=row.querySelector(".vlab.b")?.innerText.replace(/\s+/g," ").trim()||"";
+    L.push('"'+name.replace(/"/g,'""')+'","'+aval.replace(/"/g,'""')+'","'+bval.replace(/"/g,'""')+'"');
+  });
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-tone_"+exportBaseName()+".csv");
+}
+function exportEnvCSV(){
+  if(!anyLoaded()) return;
+  const m=buildEnvModel(); if(!m||!m.curves) return;
+  const L=["# GuitarScope envelope (per-curve, first-onset aligned at 0 s)", "# created: "+new Date().toISOString()];
+  const maxLen=Math.max(...m.curves.map(c=>c.pts?c.pts.length:0));
+  L.push("time_s,"+m.curves.map(c=>c.label.replace(/,/g," ")+"_db").join(","));
+  for(let i=0;i<maxLen;i++){
+    const t=m.curves[0]?.pts?.[i]?.t ?? "";
+    const row=[typeof t==="number"?t.toFixed(4):""];
+    for(const c of m.curves) row.push(c.pts&&c.pts[i]!=null? c.pts[i].db.toFixed(2):"");
+    L.push(row.join(","));
+  }
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-env_"+exportBaseName()+".csv");
+}
+function _exportCardJson(name, payload){
+  const base={ app:"GuitarScope", type:"export", card:name, created:new Date().toISOString(),
+    state:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset, a4:state.a4, smooth:state.smooth, lm:state.lm, lmOffset:state.lmOffset, strings:state.strings, harmonics:state.harmonics, vocab:state.vocab, sgAlign:state.sgAlign, eqDir:state.eqDir, eqDevice:state.eqDevice },
+    guitars:state.slots.map((s,i)=> s?{slot:SLOT_LETTER[i], name:s.name, sampleRate:s.info.sampleRate, container:s.info.container}:null).filter(Boolean),
+    regions:(VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix).regions.map(r=>({key:r.key,label:r.label,f0:regionF(r.f0),f1:regionF(r.f1)})),
+    ...payload };
+  download(new Blob([JSON.stringify(base,null,2)],{type:"application/json"}),
+    "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".json");
+}
+function exportDiffJSON(){
+  if(!bothLoaded()) return;
+  const a=dispTarget[0], b=dispTarget[1]; const arr=[];
+  for(let k=0;k<GRID.length;k++) arr.push({f:GRID[k], db:a[k]-b[k]});
+  _exportCardJson("Difference A-B", {grid:GRID.slice(), diff:arr});
+}
+function exportBandsJSON(){
+  if(!anyLoaded()) return;
+  const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix;
+  _exportCardJson("Band energy", {table: vocab.regions.map(r=>({label:r.label,f0:regionF(r.f0),f1:regionF(r.f1)}))});
+}
+function exportToneJSON(){
+  if(!anyLoaded()) return;
+  const rows=[]; document.querySelectorAll("#toneRows .tonerow").forEach(r=> rows.push(r.innerText.replace(/\s+/g," ").trim()));
+  _exportCardJson("Tone character", {rows, prose:document.getElementById("prosePara")?.innerText||""});
+}
+function exportSgramJSON(){
+  if(!anyLoaded()) return;
+  const info=state.slots.map((s,i)=> s&&s.tvis&&s.tvis.sg?{slot:SLOT_LETTER[i], nFrames:s.tvis.sg.nFrames, hop:s.tvis.sg.hop, gridN:s.tvis.sg.gridN}:null).filter(Boolean);
+  _exportCardJson("Spectrogram", {frames:info, sgAlign:state.sgAlign});
+}
+function exportEnvJSON(){
+  if(!anyLoaded()) return;
+  const m=buildEnvModel();
+  _exportCardJson("Envelope", {curves: m?.curves?.map(c=>({label:c.label, count:c.pts?.length||0}))||[]});
+}
+function exportEqJSON(){
+  const d=eqFitData(); if(!d) return;
+  _exportCardJson("EQ match", {device:d.device, settings:d.settings, target:d.target?.slice?.(0,20), achieved:d.achieved?.slice?.(0,20)});
 }
 function sanitizeMetrics(m){
   return JSON.parse(JSON.stringify(m,(k,v)=>(typeof v==="number"&&!isFinite(v))?null:v));
@@ -5895,7 +6130,7 @@ function exportJSON(){
     created:new Date().toISOString(),
     settings:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
                a4:state.a4, smooth:state.smooth, lm:state.lm, sgAlign:state.sgAlign,
-               eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab },
+               eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab, strings:state.strings, harmonics:state.harmonics },
     files };
   download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
     "guitarscope_"+exportBaseName()+".json");
@@ -6287,9 +6522,24 @@ function boot(){
     updateEqSub(); renderEqNote(); renderFooter(); requestDraw();
   });
   eqCopyBtn.addEventListener("click",copyEqSettings);
+  eqJsonBtn.addEventListener("click",exportEqJSON);
   pngBtn.addEventListener("click",exportPNG);
   csvBtn.addEventListener("click",exportCSV);
   jsonBtn.addEventListener("click",exportJSON);
+  diffPngBtn.addEventListener("click",exportDiffPNG);
+  diffCsvBtn.addEventListener("click",exportDiffCSV);
+  diffJsonBtn.addEventListener("click",exportDiffJSON);
+  bandsPngBtn.addEventListener("click",exportBandsPNG);
+  bandsCsvBtn.addEventListener("click",exportBandsCSV);
+  bandsJsonBtn.addEventListener("click",exportBandsJSON);
+  tonePngBtn.addEventListener("click",exportTonePNG);
+  toneCsvBtn.addEventListener("click",exportToneCSV);
+  toneJsonBtn.addEventListener("click",exportToneJSON);
+  sgramPngBtn.addEventListener("click",exportSgramPNG);
+  sgramJsonBtn.addEventListener("click",exportSgramJSON);
+  envPngBtn.addEventListener("click",exportEnvPNG);
+  envCsvBtn.addEventListener("click",exportEnvCSV);
+  envJsonBtn.addEventListener("click",exportEnvJSON);
   demoBtn.addEventListener("click",()=>loadDemo());
 
   glossaryBtn.addEventListener("click",()=>setGloss(true));

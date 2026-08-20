@@ -635,11 +635,9 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   (the same math as `renderBandsTable`); `toneCsv` scrapes the live tone rows
   and prose; `envCsv` dumps `buildEnvModel` points; `sgramJson`/`envJson` wrap
   frame counts (alignment is UI, not exported); `eqJson` dumps `eqFitData()`;
-  per-card and snapshot JSONs carry `guitars`, `regions`, and data-relevant
-  `state` (`mode`/`tuning`/`a4`/`smooth`/`lm`/`vocab`/`eqDevice`/`eqDir`) via
-  `_exportCardJson` — `strings`/`stringHarmonics`/`sgAlign` are UI-only and
-  deliberately excluded from all CSV/JSON/PNG exports (PNGs suppress string
-  guides during `buildSpecModel`/`buildDiffModel`).
+  per-card JSONs are scoped via `_cardStateFor(name)` — Frequency cards carry
+  `mode`/`tuning`/`a4`/`smooth`/`lm`/`vocab`, Tone carries `mode`/`smooth`/`lm`,
+  Sgram/Env carry `mode`, EQ carries full `mode`/`tuning`/`a4`/`smooth`/`lm`/`vocab`/`eqDevice`/`eqDir`; `regions` only for frequency cards; `strings`/`stringHarmonics`/`sgAlign` are UI-only and excluded from all exports (PNGs suppress string guides). Snapshot (global) still carries full data-relevant settings.
 
 ## M2.6i (session 12): versioned `gsSettings` — one store, one reset
 

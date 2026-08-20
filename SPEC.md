@@ -720,3 +720,8 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
 ### 2026-08-21 — Export data-only rule (user request)
 
 - **Exports are data-only, not UI.** CSV, JSON (per-card and snapshot), and PNG now exclude purely UI state: `strings` (open-string axis guides), `stringHarmonics` (per-string harmonic toggles, 6×4), and `sgAlign` (spectrogram time-axis alignment). `_exportCardJson` and snapshot `settings` no longer carry `strings`/`stringHarmonics`/`sgAlign`; PNG builders (`exportPNG`, `_cardPng` for Difference/Envelope/EQ, and `exportSgramPNG`) suppress string guides (temporarily `state.strings=false` during `buildSpecModel`/`buildDiffModel`) so images show only data, not the UI overlay. `mode`/`tuning`/`customOffset`/`A4`/`smooth`/`lm`/`vocab`/`eqDevice`/`eqDir` remain (they define the measurement). Applies to CSV/JSON/PNG alike; `gsSettings` (UI persistence) is unchanged.
+
+### 2026-08-21 — Per-card export scoping + EQ export placement (user request)
+
+- **EQ Copy/JSON in consistent exports area.** `EQ match` cardhead now wraps `Copy settings` + `JSON` in `<div class="exports">` like every other card's `PNG`/`CSV`/`JSON` row (previously two bare buttons in `controls`).
+- **Per-card state scoping.** `_exportCardJson` now via `_cardStateFor(name)`: Frequency Analysis (Spectrum/Difference/Bands) exports `mode`/`tuning`/`customOffset`/`A4`/`smooth`/`lm`/`lmOffset`/`vocab`; Tone exports only `mode`/`smooth`/`lm`/`lmOffset`; Spectrogram/Envelope export only `mode`; EQ exports `mode`/`tuning`/`customOffset`/`A4`/`smooth`/`lm`/`lmOffset`/`vocab`/`eqDir`/`eqDevice`. `regions` array only for Frequency Analysis cards; Tone/Sgram/Env/EQ omit it. Snapshot (global) still carries full data-relevant settings.

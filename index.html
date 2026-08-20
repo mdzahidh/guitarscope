@@ -873,8 +873,10 @@ kbd{
               <option value="logicChEq">Logic Channel EQ</option>
             </select>
           </div>
-          <button class="btn" id="eqCopyBtn" title="Copy the fitted settings as plain text">Copy settings</button>
-          <button class="btn" id="eqJsonBtn" title="Download EQ match as JSON">JSON</button>
+          <div class="exports">
+            <button class="btn" id="eqCopyBtn" title="Copy the fitted settings as plain text">Copy settings</button>
+            <button class="btn" id="eqJsonBtn" title="Download EQ match as JSON">JSON</button>
+          </div>
         </div>
       </div>
       <div class="cardbody">
@@ -6122,11 +6124,23 @@ function exportEnvCSV(){
   }
   download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-env_"+exportBaseName()+".csv");
 }
+function _cardStateFor(name){
+  // Only include settings that actually affect that card's data (no UI-only, no cross-card bleed)
+  const n=name.toLowerCase();
+  const full={ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset, a4:state.a4, smooth:state.smooth, lm:state.lm, lmOffset:state.lmOffset, vocab:state.vocab, eqDir:state.eqDir, eqDevice:state.eqDevice };
+  if(n.includes("tone")) return { mode:full.mode, smooth:full.smooth, lm:full.lm, lmOffset:full.lmOffset };
+  if(n.includes("spectrogram")||n.includes("envelope")) return { mode:full.mode };
+  if(n.includes("eq")) return { mode:full.mode, tuning:full.tuning, customOffset:full.customOffset, a4:full.a4, smooth:full.smooth, lm:full.lm, lmOffset:full.lmOffset, vocab:full.vocab, eqDir:full.eqDir, eqDevice:full.eqDevice };
+  // Spectrum / Difference / Band energy — frequency analysis
+  return { mode:full.mode, tuning:full.tuning, customOffset:full.customOffset, a4:full.a4, smooth:full.smooth, lm:full.lm, lmOffset:full.lmOffset, vocab:full.vocab };
+}
 function _exportCardJson(name, payload){
+  const st=_cardStateFor(name);
+  const wantRegions = !name.toLowerCase().includes("tone") && !name.toLowerCase().includes("spectrogram") && !name.toLowerCase().includes("envelope") && !name.toLowerCase().includes("eq");
   const base={ app:"GuitarScope", type:"export", card:name, created:new Date().toISOString(),
-    state:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset, a4:state.a4, smooth:state.smooth, lm:state.lm, lmOffset:state.lmOffset, vocab:state.vocab, eqDir:state.eqDir, eqDevice:state.eqDevice },
+    state:st,
     guitars:state.slots.map((s,i)=> s?{slot:SLOT_LETTER[i], name:s.name, sampleRate:s.info.sampleRate, container:s.info.container}:null).filter(Boolean),
-    regions:(VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix).regions.map(r=>({key:r.key,label:r.label,f0:regionF(r.f0),f1:regionF(r.f1)})),
+    ...(wantRegions?{regions:(VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix).regions.map(r=>({key:r.key,label:r.label,f0:regionF(r.f0),f1:regionF(r.f1)}))}:{}),
     ...payload };
   download(new Blob([JSON.stringify(base,null,2)],{type:"application/json"}),
     "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".json");

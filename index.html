@@ -664,6 +664,10 @@ kbd{
         <label class="switch" id="lmSwitch"><input type="checkbox" id="lmToggle"><span class="tk"></span><span class="lbl">Level-match</span></label>
       </div>
       <div class="field">
+        <label>Strings</label>
+        <label class="switch" id="stringsSwitch"><input type="checkbox" id="stringsToggle"><span class="tk"></span><span class="lbl">On axis</span></label>
+      </div>
+      <div class="field">
         <label>Theme</label>
         <div class="seg" id="themeSeg" role="group" aria-label="Color theme">
           <button data-theme="bright" class="on">Bright</button>
@@ -942,6 +946,7 @@ kbd{
     <h3>Keyboard shortcuts</h3>
     <div class="shortcutrow"><span><kbd>1</kbd>–<kbd>4</kbd></span><span>smoothing off · 1/12 · 1/6 · 1/3</span></div>
     <div class="shortcutrow"><span><kbd>L</kbd></span><span>level-match</span></div>
+    <div class="shortcutrow"><span><kbd>S</kbd></span><span>open-string axis</span></div>
     <div class="shortcutrow"><span><kbd>M</kbd></span><span>electric / acoustic mode</span></div>
     <div class="shortcutrow"><span><kbd>G</kbd></span><span>glossary</span></div>
     <div class="shortcutrow"><span><kbd>E</kbd></span><span>export PNG</span></div>
@@ -2500,7 +2505,7 @@ const GLOSSARY=[
   { key:"helmholtz", name:"Helmholtz / air resonance", cat:"Physics", hook:"the body's breathing mode, ~90–120 Hz",
     musician:"The acoustic guitar's “whoomp” — the low resonance you hear humming into the soundhole. It gives an acoustic its low-end bloom, and it's what a feedback-buster plug removes.",
     science:"The air in the body cavity plus the soundhole acts as a Helmholtz resonator: f = (c/2π)·√(A/(V·L′)), typically 90–120 Hz on steel-string guitars (≈ F♯2–B2), shifted by the flexible top.",
-    measure:"In Acoustic mode: the most prominent peak between 70 and 130 Hz on a fixed 1/12-octave-smoothed curve (prominence ≥ 3 dB), labelled on the plot with frequency and nearest note.",
+    measure:"In Acoustic mode: the most prominent peak between 70 and 130 Hz on a fixed 1/12-octave-smoothed curve (prominence ≥ 3 dB), marked on the plot with a dot — click it to see the frequency and nearest note here.",
     values(state){ return _vals(state, s=>s.metrics.air ? fmtHz(s.metrics.air.f)+"  ·  "+noteStr(s.metrics.air.f, state.a4) : null); } },
 
   { key:"top-resonance", name:"Top resonance", cat:"Physics", hook:"the soundboard's main mode, ~140–260 Hz",
@@ -2512,8 +2517,8 @@ const GLOSSARY=[
   { key:"resonance-peak", name:"Resonance peak", cat:"Physics", hook:"a bump the instrument adds",
     musician:"Frequencies the guitar (or cab, or room) likes: notes there ring louder and longer than their neighbours.",
     science:"A local maximum of the frequency response caused by a weakly-damped mode — body mode, cavity mode, speaker-cone mode.",
-    measure:"Peak picking on a FIXED 1/6-octave-smoothed dB curve (so annotations don't move when you change display smoothing): local maxima with ≥ 6 dB prominence, parabolic refinement, the six most prominent kept, labelled with frequency + nearest note.",
-    values(state){ return _vals(state, s=>s.metrics.peaks && s.metrics.peaks.length ? s.metrics.peaks.slice(0,3).map(p=>fmtHz(p.f)).join(" · ")+(s.metrics.peaks.length>3?" …":"") : null); } },
+    measure:"Peak picking on a FIXED 1/6-octave-smoothed dB curve (so annotations don't move when you change display smoothing): local maxima with ≥ 6 dB prominence, parabolic refinement, the six most prominent kept, each marked with a dot on the plot — click a dot to see its frequency + nearest note here.",
+    values(state){ return _vals(state, s=>s.metrics.peaks && s.metrics.peaks.length ? s.metrics.peaks.slice(0,3).map(p=>fmtHz(p.f)+" ("+noteStr(p.f,state.a4)+")").join(" · ")+(s.metrics.peaks.length>3?" …":"") : null); } },
 
   { key:"cents", name:"Cents", cat:"Physics", hook:"1⁄100 of a semitone",
     musician:"Fine tuning units: 100 cents to a fret. Most players hear a few cents of error on sustained notes; ±5¢ is respectable tuning.",
@@ -2595,7 +2600,7 @@ function termHtml(key, text){
    Term "links" inside canvases are recorded as hit rectangles.
    ============================================================ */
 
-const PLOT={ mL:52, mR:18, mT:46, mB:34 }; // mT holds the EQ-region lane (y 4–20) + tuning labels
+const PLOT={ mL:52, mR:18, mT:34, mB:34 }; // mT holds the EQ-region lane; mB holds Hz ticks + string labels
 const CSS_COLORS={};
 function cssColor(name){
   if(!CSS_COLORS[name]){
@@ -2686,7 +2691,9 @@ function drawAxes(ctx, w, h, yMin, yMax, yStep){
     ctx.strokeStyle=cssRGBA("grid-rgb",0.06); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
     ctx.fillStyle=cssColor("dim");
-    ctx.fillText(fLabel(f), x, PLOT.mT+pH+7);
+    // clamp the last label inside the plot so it can't run into the "Hz" unit
+    const lw=ctx.measureText(fLabel(f)).width;
+    ctx.fillText(fLabel(f), Math.min(x, PLOT.mL+pW-lw/2-2), PLOT.mT+pH+7);
   }
   ctx.textAlign="right"; ctx.textBaseline="middle";
   for(let v=Math.ceil(yMin/yStep)*yStep; v<=yMax; v+=yStep){
@@ -2731,11 +2738,14 @@ function drawRegionShading(ctx, w, h){
   ctx.restore();
 }
 
-// ---------- tuning markers ----------
-function drawTuning(ctx, w, h, markers, hits){
+// ---------- open-string axis (Strings toggle) ----------
+// Dotted verticals at each open string's fundamental, note names on the bottom
+// axis below the Hz ticks. Clicking a label opens that string's documentation.
+function drawStringAxis(ctx, w, h, markers, hits){
+  if(!markers||!markers.length) return;
   const pH=h-PLOT.mT-PLOT.mB;
   ctx.save();
-  ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="bottom";
+  ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="top";
   let lastX=-100;
   for(const m of markers){
     if(m.f<XV.f0 || m.f>XV.f1) continue;
@@ -2746,9 +2756,9 @@ function drawTuning(ctx, w, h, markers, hits){
     ctx.setLineDash([]);
     if(x-lastX>16){ // avoid label pile-up for close strings
       ctx.fillStyle=cssColor("mut");
-      ctx.fillText(m.name, x, PLOT.mT-4);
+      ctx.fillText(m.name, x, PLOT.mT+pH+20);
       const tw=ctx.measureText(m.name).width;
-      if(hits) hits.push({x:x-tw/2-3, y:PLOT.mT-16, w:tw+6, h:14, term:"fundamental"});
+      if(hits) hits.push({x:x-tw/2-3, y:PLOT.mT+pH+18, w:tw+6, h:14, string:m.si});
       lastX=x;
     }
   }
@@ -2826,8 +2836,8 @@ function drawEqLane(ctx, w, hits){
   for(const r of vocab.regions){
     const f0=regionF(r.f0), f1=regionF(r.f1);
     if(f1<=XV.f0 || f0>=XV.f1) continue;
-    // One row keeps the original geometry (yMid 12.5); two rows pack tighter,
-    // both above the tuning labels (glyphs start ≈ y32 for baseline mT−4).
+    // One row keeps the original geometry (yMid 12.5); two rows pack tighter
+    // (rows at 7.5/21.5 — bottom row ends ≈ y28.5, above the plot top mT 34).
     const yMid=twoRows?(r.row?21.5:7.5):12.5, yTick0=yMid-4, yTick1=yMid+4;
     const x0=Math.max(xL, xOfF(f0,w)), x1=Math.min(xR, xOfF(f1,w));
     ctx.strokeStyle=cssRGBA("ink-rgb",0.18);
@@ -2891,13 +2901,10 @@ function drawCurve(ctx, w, h, grid, db, yMin, yMax, color, fillAlpha){
 }
 
 // ---------- peak & resonance annotations ----------
-function rectsOverlap(a,b){
-  return a.x<b.x+b.w && b.x<a.x+a.w && a.y<b.y+b.h && b.y<a.y+a.h;
-}
-// occ: occupied label rectangles (legend, status chip, labels already placed).
-// Each label tries its preferred side of the dot first, then flips and steps
-// away until it lands clear; the chosen rect is added to occ.
-function drawPeakDots(ctx, w, h, peaks, grid, db, yMin, yMax, color, hits, occ){
+// Dots only — no on-plot text. Each dot is a click target opening the glossary
+// entry that documents it (resonance-peak, helmholtz, top-resonance), where the
+// current frequencies/notes are printed.
+function drawPeakDots(ctx, w, h, peaks, grid, db, yMin, yMax, color, hits){
   const pH=h-PLOT.mT-PLOT.mB;
   const yOf=v=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,v))-yMin)/(yMax-yMin))*pH;
   const dbAt=f=>{
@@ -2905,29 +2912,12 @@ function drawPeakDots(ctx, w, h, peaks, grid, db, yMin, yMax, color, hits, occ){
     return db[Math.max(0,Math.min(db.length-1,i))];
   };
   ctx.save();
-  ctx.font=FONT_XS; ctx.textAlign="center";
   peaks.forEach(p=>{
     if(p.f<XV.f0||p.f>XV.f1) return;
     const x=xOfF(p.f,w), y=yOf(dbAt(p.f));
     ctx.fillStyle=color;
     ctx.beginPath(); ctx.arc(x,y,2.4,0,2*Math.PI); ctx.fill();
-    if(p.labelText){
-      const tw=ctx.measureText(p.labelText).width;
-      const cands = p.labelUp===false
-        ? [y+16, y-10, y+28, y-22, y+40]
-        : [y-10, y+16, y-22, y+28, y-34];
-      let ly=cands[0], rect=null;
-      for(const cy of cands){
-        if(cy-10<PLOT.mT-14) continue; // keep labels off the string-marker row
-        const r={x:x-tw/2-3, y:cy-10, w:tw+6, h:13};
-        if(!occ || !occ.some(o=>rectsOverlap(o,r))){ ly=cy; rect=r; break; }
-      }
-      if(!rect) rect={x:x-tw/2-3, y:ly-10, w:tw+6, h:13};
-      ctx.fillStyle=withAlpha(color,0.85);
-      ctx.fillText(p.labelText, x, ly);
-      if(occ) occ.push(rect);
-      if(hits) hits.push({x:rect.x, y:rect.y, w:rect.w, h:rect.h, term:p.term||"resonance-peak"});
-    }
+    if(hits) hits.push({x:x-8, y:y-8, w:16, h:16, term:p.term||"resonance-peak"});
   });
   ctx.restore();
 }
@@ -2979,24 +2969,21 @@ function drawSpectrumScene(ctx, w, h, model, hits){
   if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
   drawRegionShading(ctx, w, h);
   drawAxes(ctx, w, h, model.yMin, model.yMax, model.yStep||10);
-  drawTuning(ctx, w, h, model.markers, hits);
+  drawStringAxis(ctx, w, h, model.markers, hits);
   drawEqLane(ctx, w, hits);
   for(const c of model.curves){
     drawCurve(ctx, w, h, model.grid, c.db, model.yMin, model.yMax, c.color, 0.10);
   }
-  // legend + chip first so peak labels can dodge their rectangles
-  const occ=[
-    drawLegend(ctx, w, model.curves.map(c=>({color:c.color, label:c.label}))),
-    drawStatusChip(ctx, w, model.statusText),
-  ];
+  drawLegend(ctx, w, model.curves.map(c=>({color:c.color, label:c.label})));
+  drawStatusChip(ctx, w, model.statusText);
   for(const c of model.curves){
     if(c.annotations && c.annotations.length)
-      drawPeakDots(ctx, w, h, c.annotations, model.grid, c.db, model.yMin, model.yMax, c.color, hits, occ);
+      drawPeakDots(ctx, w, h, c.annotations, model.grid, c.db, model.yMin, model.yMax, c.color, hits);
   }
 }
 
 // ---------- difference scene ----------
-function drawDiffScene(ctx, w, h, model){
+function drawDiffScene(ctx, w, h, model, hits){
   ctx.clearRect(0,0,w,h);
   setXView(model.fv?model.fv[0]:FMIN, model.fv?model.fv[1]:FMAX);
   drawRegionShading(ctx, w, h); // same vocabulary shading as the spectrum plot
@@ -3027,7 +3014,8 @@ function drawDiffScene(ctx, w, h, model){
     ctx.strokeStyle=cssRGBA("ink-rgb",0.28); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(PLOT.mL,yOf(0)); ctx.lineTo(PLOT.mL+pW,yOf(0)); ctx.stroke();
   }
-  drawEqLane(ctx, w, null); // diff canvas has no glossary click handler — no hit rects
+  drawStringAxis(ctx, w, h, model.markers, hits);
+  drawEqLane(ctx, w, hits); // lane + string labels are click targets here too
 
   const {grid, diff}=model;
   ctx.save();
@@ -3077,7 +3065,7 @@ function tTickLabel(t, step){
 
 // ---------- string-frequency markers (M2.5) ----------
 // Open-string fundamentals of the selected tuning, dashed across the
-// time–frequency image in drawTuning's idiom. Every string is named: the
+// time–frequency image (dotted, like the line plots' Strings axis). Every string is named: the
 // labels sit OUTSIDE the plot in the right margin (over data they were
 // illegible), each tied to its line by a tick; low strings crowd together
 // on a log axis, so labels stack downward with a minimum spacing and the
@@ -3751,7 +3739,7 @@ const GRID=makeLogGrid(700,60,20000);
 
 // ---------- state (contract shared with the glossary) ----------
 const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
-              a4:440, smooth:6, lm:false, lmOffset:null,
+              a4:440, smooth:6, lm:false, lmOffset:null, strings:false,
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
@@ -3767,6 +3755,7 @@ const modeSeg=el("modeSeg"), tuningSel=el("tuningSel"),
       a4Input=el("a4Input"), glossaryBtn=el("glossaryBtn"), themeSeg=el("themeSeg");
 const smoothSeg=el("smoothSeg"), vocabSel=el("vocabSel"),
       lmSwitch=el("lmSwitch"), lmToggle=el("lmToggle"),
+      stringsSwitch=el("stringsSwitch"), stringsToggle=el("stringsToggle"),
       pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn");
 const verdictCard=el("verdictCard"), verdictPara=el("verdictPara");
 const specWrap=el("specWrap"), specCanvas=el("specCanvas"),
@@ -4009,6 +3998,7 @@ let diffYMax=9, diffBuf=null;
 const anim={from:[null,null],fromRange:null,toRange:yRange,buf:[null,null],start:0};
 let rafId=0;
 const specHits=[];
+const diffHits=[];
 
 function updateCurves(animate){
   const to=[displayedDb(0),displayedDb(1)];
@@ -4106,9 +4096,9 @@ function statusText(){
   return t;
 }
 function tuningMarkers(){
-  return tuningMidi(state.tuning,state.customOffset).map(mi=>{
+  return tuningMidi(state.tuning,state.customOffset).map((mi,si)=>{
     const f=midiToFreq(mi,state.a4);
-    return {f,name:noteInfo(f,state.a4).name};
+    return {f,name:noteInfo(f,state.a4).name,si,midi:mi};
   });
 }
 // Refresh the Anatomy vocabulary's string-derived bounds (block 3's VOCAB_TUNING)
@@ -4120,27 +4110,20 @@ function syncVocabTuning(){
   VOCAB_TUNING.fretTopF=VOCAB_TUNING.highF*Math.pow(2,24/12);
 }
 syncVocabTuning(); // state defaults are valid here
-function annotationsFor(slot,i){
-  const m=slot.metrics||{}, anns=[], a4=state.a4;
+function annotationsFor(slot){
+  const m=slot.metrics||{}, anns=[];
   let peaks=(m.peaks||[]).slice();
   if(state.mode==="acoustic"){
     if(m.air){
-      anns.push({f:m.air.f,term:"helmholtz",labelUp:i===0,
-        labelText:"Air "+Math.round(m.air.f)+" Hz · "+noteInfo(m.air.f,a4).name});
+      anns.push({f:m.air.f,term:"helmholtz"});
       peaks=peaks.filter(p=>Math.abs(Math.log2(p.f/m.air.f))>1/6);
     }
     if(m.top){
-      anns.push({f:m.top.f,term:"top-resonance",labelUp:i===0,
-        labelText:"Top "+Math.round(m.top.f)+" Hz · "+noteInfo(m.top.f,a4).name});
+      anns.push({f:m.top.f,term:"top-resonance"});
       peaks=peaks.filter(p=>Math.abs(Math.log2(p.f/m.top.f))>1/6);
     }
   }
-  const byProm=peaks.slice().sort((a,b)=>b.prom-a.prom);
-  const labeled=new Set(byProm.slice(0,3));
-  for(const p of peaks){
-    anns.push({f:p.f,term:"resonance-peak",labelUp:i===0,
-      labelText:labeled.has(p)?(fmtHz(p.f,1)+" · "+noteInfo(p.f,a4).name):null});
-  }
+  for(const p of peaks) anns.push({f:p.f,term:"resonance-peak"});
   return anns;
 }
 function buildSpecModel(forExport){
@@ -4151,7 +4134,7 @@ function buildSpecModel(forExport){
     if(!s||!db) continue;
     curves.push({db,color:COLORS[i],
       label:SLOT_LETTER[i]+" · "+shortName(s.name,26),
-      annotations:annotationsFor(s,i)});
+      annotations:annotationsFor(s)});
   }
   const r=forExport?anim.toRange:yRange;
   const z=ZOOMS.spec;
@@ -4162,7 +4145,7 @@ function buildSpecModel(forExport){
   }
   return { exportBg:!!forExport,
            yMin, yMax, yStep, fv:zoomXf("spec"),
-           markers:tuningMarkers(), grid:GRID,
+           markers:state.strings?tuningMarkers():[], grid:GRID,
            curves, statusText:st };
 }
 function diffVisible(){ return bothLoaded(); }
@@ -4352,6 +4335,7 @@ function buildDiffModel(){
     fv:zoomXf("diff"),
     yLo:z&&z.y0!=null?z.y0:null, yHi:z&&z.y0!=null?z.y1:null,
     statusText:st,
+    markers:state.strings?tuningMarkers():[],
     colorA:COLORS[0],colorB:COLORS[1],
     nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)};
 }
@@ -4361,10 +4345,11 @@ function drawAll(){
   drawSpectrumScene(ctx,w,h,buildSpecModel(false),specHits);
   // Folded panels (progressive disclosure) skip model building and canvas
   // work entirely — their canvases are display:none; unfolding requestDraws.
+  diffHits.length=0;
   const dm=collState.diff?null:buildDiffModel();
   if(dm){
     const d=setupCanvas(diffCanvas);
-    drawDiffScene(d.ctx,d.w,d.h,dm);
+    drawDiffScene(d.ctx,d.w,d.h,dm,diffHits);
   }
   const scale=collState.sgram?null:sgramScale();
   if(scale) for(let i=0;i<2;i++){
@@ -4445,10 +4430,9 @@ function attachCrosshair(wrap,canvas,xline,readout,isDiff){
   wrap.addEventListener("mousemove",e=>{
     const rect=canvas.getBoundingClientRect();
     const x=e.clientX-rect.left, y=e.clientY-rect.top, w=rect.width;
-    if(!isDiff){
-      const hot=specHits.some(hh=>x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h);
-      canvas.style.cursor=hot?"pointer":"crosshair";
-    }
+    const hitsArr=isDiff?diffHits:specHits;
+    const hot=hitsArr.some(hh=>x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h);
+    canvas.style.cursor=hot?"pointer":"crosshair";
     if(x<PLOT.mL||x>w-PLOT.mR||!anyLoaded()){
       xline.style.display="none"; readout.style.display="none"; return;
     }
@@ -5538,10 +5522,8 @@ function regionForKey(key){
   for(const v of VOCABS) for(const r of v.regions) if(r.key===key) return r;
   return null;
 }
-function auditionHtml(key){
-  const r=regionForKey(key);
-  if(!r||(!canPlay(0)&&!canPlay(1))) return "";
-  const f0=regionF(r.f0), f1=regionF(r.f1);
+function auditionBlock(f0,f1){
+  if(!canPlay(0)&&!canPlay(1)) return "";
   let btns="";
   for(const i of [0,1]) if(canPlay(i))
     btns+='<button class="btn popplay" data-slot="'+i+'" data-f0="'+f0+'" data-f1="'+f1+
@@ -5552,6 +5534,11 @@ function auditionHtml(key){
   return '<div class="pop-sec"><div class="pop-label">Audition</div>'+
     '<div class="pop-audit">'+btns+'<span class="pop-audnote" title="4th-order Butterworth band-pass over the analyzed mono mix">band-pass '+
     fmtHz(f0)+'–'+fmtHz(f1)+', 24 dB/oct'+lm+'</span></div></div>';
+}
+function auditionHtml(key){
+  const r=regionForKey(key);
+  if(!r) return "";
+  return auditionBlock(regionF(r.f0),regionF(r.f1));
 }
 function setPopPlayUI(btn){
   popover.querySelectorAll(".popplay.playing").forEach(x=>{
@@ -5596,12 +5583,7 @@ function termContentHtml(key){
   if(!t) return "";
   return '<div class="pop-term">'+esc(t.name)+'</div><div class="pop-cat">'+esc(t.cat)+'</div>'+termSections(t);
 }
-function openPopover(key,anchor){
-  const html=termContentHtml(key);
-  if(!html) return;
-  stopPlayback(); // a reopen replaces the buttons; never leave orphaned audio
-  popover.innerHTML=html+auditionHtml(key);
-  popover.classList.add("open");
+function placePopover(anchor){
   const pw=popover.offsetWidth, ph=popover.offsetHeight;
   const vw=window.innerWidth, vh=window.innerHeight;
   let left=(anchor.left+anchor.right)/2-pw/2;
@@ -5611,6 +5593,54 @@ function openPopover(key,anchor){
   if(top<12) top=12;
   popover.style.left=left+"px";
   popover.style.top=top+"px";
+}
+function openPopover(key,anchor){
+  const html=termContentHtml(key);
+  if(!html) return;
+  stopPlayback(); // a reopen replaces the buttons; never leave orphaned audio
+  popover.innerHTML=html+auditionHtml(key);
+  popover.classList.add("open");
+  placePopover(anchor);
+}
+// ---------- per-string documentation (Strings-axis labels) ----------
+const STRING_ORD=["6th","5th","4th","3rd","2nd","1st"]; // index 0 = lowest string
+function stringContentHtml(si){
+  const midi=tuningMidi(state.tuning,state.customOffset)[si];
+  if(midi==null) return "";
+  const f=midiToFreq(midi,state.a4);
+  const name=noteInfo(f,state.a4).name;
+  const tun=state.tuning==="custom"
+    ? "E standard "+(state.customOffset>0?"+":"")+state.customOffset+" st"
+    : TUNINGS[state.tuning].name;
+  let rows="";
+  for(let hh=1;hh<=5;hh++){
+    const hf=f*hh;
+    rows+='<div class="pop-val"><span class="dot" style="background:var(--dim)"></span>'+
+      '<span class="l">'+(hh===1?"Fundamental":"Harmonic "+hh)+'</span>'+
+      '<span class="v">'+esc(fmtHz(hf)+"  ·  "+noteInfo(hf,state.a4).name)+'</span></div>';
+  }
+  return '<div class="pop-term">'+esc(name)+' — open '+STRING_ORD[si]+' string</div>'+
+    '<div class="pop-cat">'+esc(tun)+' · string '+(6-si)+' of 6</div>'+
+    '<div class="pop-sec"><div class="pop-label">Musician’s ear</div><p>The dotted line marks this open string’s pitch — the '+
+      '<button class="term" data-term="fundamental">fundamental</button> you hear when it rings open. '+
+      'Everything the string adds above that line is its '+
+      '<button class="term" data-term="harmonic-series">harmonic series</button>.</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">The physics</div><p>Equal temperament places every pitch at '+
+      'A4 × 2^((MIDI − 69)⁄12). This string is MIDI note '+midi+' with your A4 reference at '+
+      state.a4.toFixed(1)+' Hz.</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">How GuitarScope places it</div><div class="pop-formula">f = '+
+      state.a4.toFixed(1)+' × 2^(('+midi+' − 69)⁄12) = '+esc(fmtHz(f))+'</div></div>'+
+    '<div class="pop-sec"><div class="pop-label">Current values</div><div class="pop-vals">'+rows+'</div></div>';
+}
+function openStringPopover(si,anchor){
+  const html=stringContentHtml(si);
+  if(!html) return;
+  stopPlayback();
+  const f=midiToFreq(tuningMidi(state.tuning,state.customOffset)[si],state.a4);
+  // audition a 1/3-octave band centred on the open-string fundamental
+  popover.innerHTML=html+auditionBlock(f*Math.pow(2,-1/6),f*Math.pow(2,1/6));
+  popover.classList.add("open");
+  placePopover(anchor);
 }
 function closePopover(){ popover.classList.remove("open"); stopPlayback(); }
 let popPinned=false;   // ?pop= test hook: keep the popover through the capture resize
@@ -6133,6 +6163,11 @@ function boot(){
     try{ localStorage.setItem("gsVocab",state.vocab); }catch(_e){} // persist only explicit choices
     renderVerdict(); renderBandsTable(); requestDraw();
   });
+  stringsToggle.addEventListener("change",()=>{
+    state.strings=stringsToggle.checked;
+    try{ localStorage.setItem("gsStrings",state.strings?"1":"0"); }catch(_e){} // persist only explicit choices
+    requestDraw();
+  });
   eqDirSeg.addEventListener("click",e=>{
     const b=e.target.closest("button[data-dir]");
     if(!b) return;
@@ -6191,19 +6226,26 @@ function boot(){
   magClose.addEventListener("click",closeMag);
   magModal.addEventListener("click",e=>{ if(e.target===magModal) closeMag(); });
 
-  // term popovers: canvas hits are handled first, then document-level .term buttons
-  specCanvas.addEventListener("click",e=>{
-    const rect=specCanvas.getBoundingClientRect();
-    const x=e.clientX-rect.left, y=e.clientY-rect.top;
-    for(const hh of specHits){
-      if(x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h){
-        e._gsTermHandled=true;
-        openPopover(hh.term,{left:rect.left+hh.x, right:rect.left+hh.x+hh.w,
-                             top:rect.top+hh.y, bottom:rect.top+hh.y+hh.h});
-        return;
+  // term popovers: canvas hits are handled first, then document-level .term buttons.
+  // A hit with a `string` index opens the per-string docs; a `term` opens the glossary.
+  function attachHitClicks(canvas,hitsArr){
+    canvas.addEventListener("click",e=>{
+      const rect=canvas.getBoundingClientRect();
+      const x=e.clientX-rect.left, y=e.clientY-rect.top;
+      for(const hh of hitsArr){
+        if(x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h){
+          e._gsTermHandled=true;
+          const anchor={left:rect.left+hh.x, right:rect.left+hh.x+hh.w,
+                        top:rect.top+hh.y, bottom:rect.top+hh.y+hh.h};
+          if(hh.string!=null) openStringPopover(hh.string,anchor);
+          else openPopover(hh.term,anchor);
+          return;
+        }
       }
-    }
-  });
+    });
+  }
+  attachHitClicks(specCanvas,specHits);
+  attachHitClicks(diffCanvas,diffHits);
   popover.addEventListener("click",e=>{
     const b=e.target.closest?e.target.closest(".popplay"):null;
     if(!b) return;
@@ -6232,6 +6274,10 @@ function boot(){
       case "l": case "L":
         if(!lmToggle.disabled){ lmToggle.checked=!lmToggle.checked;
           lmToggle.dispatchEvent(new Event("change")); }
+        break;
+      case "s": case "S":
+        stringsToggle.checked=!stringsToggle.checked;
+        stringsToggle.dispatchEvent(new Event("change"));
         break;
       case "m": case "M":
         setMode(state.mode==="electric"?"acoustic":"electric"); break;
@@ -6330,6 +6376,10 @@ function boot(){
     if(v&&VOCAB_BY_ID[v]) setVocab(v);
   }catch(_e){}
   try{
+    const s=localStorage.getItem("gsStrings");
+    if(s!=null){ state.strings=s==="1"; stringsToggle.checked=state.strings; }
+  }catch(_e){}
+  try{
     const j=JSON.parse(localStorage.getItem("gsCollapse"));
     if(j&&typeof j==="object") for(const k in j)
       if(k in COLL_CARDS&&typeof j[k]==="boolean"){ collState[k]=j[k]; collTouched[k]=j[k]; }
@@ -6371,6 +6421,10 @@ function boot(){
   }
   const vc=location.search.match(/[?&]vocab=([a-z]+)(?:&|$)/i);                     // test hook
   if(vc&&VOCAB_BY_ID[vc[1].toLowerCase()]){ setVocab(vc[1].toLowerCase()); requestDraw(); }
+  const stg=location.search.match(/[?&]strings=(0|1)(?:&|$)/i);                     // test hook
+  if(stg){ state.strings=stg[1]==="1"; stringsToggle.checked=state.strings; requestDraw(); }
+  const md=location.search.match(/[?&]mode=(electric|acoustic)(?:&|$)/i);           // test hook
+  if(md) setMode(md[1].toLowerCase());
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook
   const cb=location.search.match(/[?&]cb=([0-9a-f]{6})(?:&|$)/i);                   // test hook
   if(ca||cb){ // session-only accent overrides (not persisted unless later edited)

@@ -27,13 +27,20 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   All built on explicit user request 2026-08-19/20. User rejected renaming A/B to file
   names, and deferred task-based entry points to M3. Do not start M3 (live input) or
   M4 (chain measure) until the user has tested and said so.
-- **UX batch 3 (2026-08-20, session 9): M2.6a BUILT** — global Level-match switch in
-  the header (Comparison field; spectrum/sgram twins and both Difference toggles +
-  "d" key + `?diff` hook deleted — difference views exist whenever two sources do,
-  fold the card to dismiss); Regions selector also moved to the header (cross-card
-  scope); Difference plot now prints the spectrum's status chip (smoothing/lm/zoom);
-  snapshots write `lm` only, readers treat old `sgLm` as `lm`. **Remaining: M2.6b**
-  bottom-axis Strings toggle (persisted) with per-string docs + declutter; **M2.6c**
+- **UX batch 3 (2026-08-20, session 9): M2.6a + M2.6b BUILT** — M2.6a: global
+  Level-match switch in the header (Comparison field; spectrum/sgram twins and both
+  Difference toggles + "d" key + `?diff` hook deleted — difference views exist
+  whenever two sources do, fold the card to dismiss); Regions selector also moved to
+  the header (cross-card scope); Difference plot now prints the spectrum's status
+  chip (smoothing/lm/zoom); snapshots write `lm` only, readers treat old `sgLm` as
+  `lm`. M2.6b: header Strings toggle (default off, `gsStrings`, "S" key) puts
+  open-string note labels on the **bottom** axis of both frequency line plots as
+  dotted verticals, click-for-docs (per-string popover: ET formula with MIDI + A4
+  substituted, harmonics 2–5 with note names, ±1/6-oct audition); top-axis tuning
+  labels and ALL on-plot frequency text removed — peak/annotation dots are dots-only
+  click targets, glossary values now print Hz + nearest note; Difference-plot lane
+  and string labels clickable; PLOT.mT 46→34; sgram right-edge markers unchanged
+  (different axis); snapshots don't carry the toggle. **Remaining: M2.6c**
   region-boundary Hz labels; **M2.6d** cursor/collapse affordance audit; **M2.6e**
   per-card exports (300-dpi PNG / JSON / CSV, EQ-match JSON); **M2.6f** versioned
   `gsSettings` persistence (user agreed: mode/tuning+offset/A4/EQ device/smoothing +
@@ -72,7 +79,9 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   (annotation-lane vocabulary), `?ca=RRGGBB`/`?cb=RRGGBB` (session-only guitar-color
   overrides), `?open=all|key,key` (unfold collapsed panels: diff|bands|tone|eq|sgram|
   env — **full-page screenshots need `?open=all`** now that eq/sgram/env start
-  folded), `?pop=<glosskey>` (pin a glossary/region popover open for capture).
+  folded), `?pop=<glosskey>` (pin a glossary/region popover open for capture),
+  `?strings=1|0` (bottom-axis open-string labels), `?mode=electric|acoustic`
+  (instrument mode, for headless acoustic checks).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
@@ -114,7 +123,13 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   (old snapshots' `sgLm` arms it too), dropping to one source re-arms it. Difference
   views have no toggle — they exist whenever two sources do (fold the card to
   dismiss). Both line plots print the status chip (smoothing · level-match · zoom);
-  the header Regions field holds the vocabulary selector. EQ match: least-squares fit of RBJ
+  the header Regions field holds the vocabulary selector. **Strings axis (M2.6b):**
+  header toggle (default off, `gsStrings`, "S" key) draws open-string fundamentals as
+  dotted verticals labeled on the **bottom** axis of both frequency line plots; labels
+  click to a per-string docs popover (ET formula, harmonics, ±1/6-oct audition). No
+  frequency text on plots — peak/annotation markers are dots-only click targets and
+  the glossary values print Hz + nearest note; the sgram's right-edge string markers
+  are a separate always-on axis. EQ match: least-squares fit of RBJ
   analog-magnitude band models against the **1/6-oct-smoothed** difference (never the
   raw comb) on 140 log points; device trim absorbs the broadband level gap; "Copy
   settings" exports the same `eqFitData()` as plain text. The annotation lane

@@ -453,6 +453,49 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   follows the shifted cells. Text fixed to match the code; lesson: prose that states
   what code does belongs next to a test or a re-read at every behavior change.
 
+## M2.6b (session 9): strings axis, per-string docs, plot declutter
+
+- **The declutter trade: numbers move from the plot into the popovers.** All on-plot
+  frequency text is gone — peak labels, annotation-dot captions, and the top-axis
+  open-string row. The dots stay as click targets (16×16 hit rects around r≈2.4 dots),
+  and the glossary "Current values" rows now print each peak's Hz *and* nearest note
+  (`fmtHz(p.f)+" ("+noteStr(p.f,state.a4)+")"`), so no information was deleted, only
+  relocated behind a click. This is why the house rule "every visible number
+  defensible" survives: fewer visible numbers, same defensibility per number.
+- **One hit-rect array per canvas, tagged unions for dispatch.** The spectrum already
+  kept `hits[]` of `{x0,y0,x1,y1,term}` for glossary clicks; string labels push
+  `{…,string:si}` into the same array, and `attachHitClicks` dispatches on which key
+  is present (`hh.string!=null ? openStringPopover : openPopover`). The Difference
+  plot gained its own `diffHits[]` and the same attach call — don't invent a second
+  event system per overlay type; one array + tagged records scales.
+- **Strings axis lives on the bottom, under the Hz ticks.** `drawStringAxis` draws
+  dotted verticals at each open-string fundamental (tuning + custom offset + A4 all
+  reactive) and note-name labels *below* the Hz tick row, skipping any label closer
+  than 16 px to the previous one (at 1440 px only B3/E4 ever crowd, and only in
+  drop-C-like tunings). The spectrogram's right-edge string markers are a *different
+  axis* (log-f is vertical there) and stay always-on — the toggle governs the two
+  frequency line plots only.
+- **Per-string popover reuses the glossary scaffolding wholesale.** `openStringPopover`
+  builds content via `stringContentHtml(si)` (ET formula with MIDI + A4 substituted,
+  harmonics 2–5 with note names, cross-links via `data-term`) and positions with the
+  extracted `placePopover(anchor)`; audition reuses `auditionBlock(f0,f1)` — the
+  region-popover player with bare bounds (±1/6 oct around the fundamental). New
+  popover kinds should follow this pattern: content function + placePopover +
+  auditionBlock, no new popover machinery.
+- **`PLOT.mT` 46→34.** The top margin existed for the top-axis string labels; with
+  them gone the legend/status chip still clears the plot frame at 34 (verified by
+  screenshot in both themes — check the legend row before trimming further).
+- **Last x-tick clamp.** The center-aligned "20k" tick label overhung the plot's right
+  edge into the left-aligned "Hz" unit, rendering "20kz" (pre-existing at HEAD, found
+  during M2.6b screenshot review). `drawAxes` now clamps the final label:
+  `Math.min(x, PLOT.mL+pW-lw/2-2)` with `lw=measureText(...)`. The Difference plot
+  has its own tick loop with no unit suffix and never collided.
+- **Persistence per the session-9 user decision:** `gsStrings` stores only explicit
+  toggle flips (like `gsVocab`/`gsCollapse`); snapshots deliberately don't carry the
+  toggle — it's viewer preference, not analysis state. `?strings=1|0` and
+  `?mode=electric|acoustic` exist for headless capture; the latter because instrument
+  mode is a user toggle (never detected), so tests need a way to set it.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

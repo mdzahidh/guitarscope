@@ -487,3 +487,36 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   "Persisting" means across close/reopen of index.html — plain browser localStorage
   semantics (per-browser, per-profile; Chrome pools all `file://` pages into one
   origin, hence the `gs` prefix). Implementation is M2.6f, after M2.6b–e.
+
+### 2026-08-20 — M2.6b built: Strings axis toggle, per-string docs, plot declutter (session 9)
+
+- **Strings toggle (user item c).** New header field ("Strings · On axis", default
+  off, persisted as `gsStrings` per the user's persistence decision #3; "S" keyboard
+  shortcut; `?strings=1|0` test hook). When on, the two frequency-domain line plots
+  (Spectrum and Difference) draw the open-string fundamentals of the current tuning
+  as dotted verticals with note-name labels on the **bottom** axis, in a row below
+  the Hz ticks. Labels are tuning- and A4-reactive and skip when closer than 16 px.
+  The old always-on **top**-axis tuning labels are gone.
+- **On-plot text removed.** Peak/annotation markers are now dots only — no frequency
+  strings on the plot. Every dot is a click target: resonance-peak dots open the
+  existing glossary entries, whose "Current values" now print frequency **and**
+  nearest note so nothing was lost in the declutter; acoustic-mode Air/Top dots keep
+  their glossary links. The last x-tick label now clamps inside the plot so it can't
+  run into the "Hz" axis unit (pre-existing "20kz" collision, caught in review).
+- **Per-string documentation (user item c, "clicking on D#2").** Clicking a string
+  label (or its dotted line's hit zone) opens a popover built like the glossary's:
+  musician's-ear prose, the equal-temperament formula with the string's MIDI number
+  and the current A4 substituted, the resolved fundamental, harmonics 2–5 with their
+  note names, cross-links to the fundamental/harmonic-series glossary entries, and
+  an audition row that band-passes the analyzed mix ±1/6 octave around the
+  fundamental. Works on both plots; the Difference plot's lane and string labels are
+  now clickable like the spectrum's.
+- **Scope decisions:** the spectrogram's right-edge string markers (M2.5) are a
+  different axis and stay always-on; snapshots deliberately don't carry the toggle
+  (viewer preference, like colors and fold state); top plot margin trimmed 46 → 34 px
+  since the top axis row no longer exists. A `?mode=electric|acoustic` test hook was
+  added for headless acoustic-mode verification.
+- Verification: 100/100 DSP tests; extraction tests for the string-popover builder
+  (17 cases: tunings, drop D, custom offset, A4=432 propagation) and the refactored
+  audition block; headless screenshots bright/dark × strings on/off × acoustic ×
+  single-guitar × Difference plot, plus zoomed crops of the axis rows.

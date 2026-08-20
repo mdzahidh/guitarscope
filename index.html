@@ -2816,61 +2816,50 @@ function drawRegionShading(ctx, w, h){
 // Dotted verticals at each open string's fundamental, note names on the bottom
 // axis below the Hz ticks. Clicking a label opens that string's documentation.
 // When harmonics are on, low overtones (2×–4×) draw lighter, still clickable.
+// 6 distinct colors — fundamental and its harmonics share the same hue; harmonics are denser but lighter.
 function drawStringAxis(ctx, w, h, markers, hits){
   if(!markers||!markers.length) return;
   const pH=h-PLOT.mT-PLOT.mB;
   ctx.save();
-  // first pass: verticals for all markers
+  // first pass: verticals — color-coded per string, denser dash, fundamentals more opaque
   for(const m of markers){
     if(m.f<XV.f0 || m.f>XV.f1) continue;
     const x=xOfF(m.f,w);
     const isHarm=m.harm&&m.harm>1;
-    ctx.strokeStyle=cssRGBA("ink-rgb",isHarm?0.16:0.32);
-    ctx.setLineDash(isHarm?[1,5]:[2,4]); ctx.lineWidth=1;
+    ctx.strokeStyle=_stringColor(m.si, isHarm?0.48:0.85);
+    ctx.setLineDash(isHarm?[2,3]:[3,3]); ctx.lineWidth=isHarm?1:1.4;
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
     ctx.setLineDash([]);
   }
-  // second pass: labels — fundamentals first (priority), then harmonics lighter
+  // second pass: labels — fundamentals only (harmonics share color, ordering implies overtone)
   ctx.textAlign="center"; ctx.textBaseline="top";
-  let lastX=-100; const fundXs=[];
   ctx.font=FONT_XS;
+  let lastX=-100;
   for(const m of markers){
     if(m.harm!==1) continue;
     if(m.f<XV.f0 || m.f>XV.f1) continue;
     const x=xOfF(m.f,w);
     if(x-lastX>16){
-      ctx.fillStyle=cssColor("mut");
+      ctx.fillStyle=_stringColor(m.si, 1);
       ctx.fillText(m.name, x, PLOT.mT+pH+20);
       const tw=ctx.measureText(m.name).width;
       if(hits) hits.push({x:x-tw/2-3, y:PLOT.mT+pH+18, w:tw+6, h:14, string:m.si});
-      lastX=x; fundXs.push(x);
+      lastX=x;
+    } else if(hits){
+      // still clickable even when label skipped
+      const tw=ctx.measureText(m.name).width;
+      hits.push({x:x-tw/2-3, y:PLOT.mT+pH+18, w:tw+6, h:14, string:m.si});
     }
   }
-  // harmonics: smaller, dimmer, one line lower (32 px) so rows don't collide; "×2" suffix clarifies
-  ctx.font=FONT_XXS;
-  let lastHX=-100;
-  for(const m of markers){
-    if(!m.harm||m.harm<=1) continue;
-    if(m.f<XV.f0 || m.f>XV.f1) continue;
-    const x=xOfF(m.f,w);
-    // skip if too close to any fundamental label (fundamentals win) or previous harmonic label
-    let nearFund=false;
-    for(const fx of fundXs) if(Math.abs(x-fx)<14){ nearFund=true; break; }
-    if(nearFund || x-lastHX<14) {
-      if(hits) hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
-      continue;
+  // harmonics: no labels — color alone ties them to their fundamental; keep line hits
+  if(hits){
+    for(const m of markers){
+      if(!m.harm||m.harm<=1) continue;
+      if(m.f<XV.f0 || m.f>XV.f1) continue;
+      const x=xOfF(m.f,w);
+      hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
     }
-    ctx.fillStyle=cssColor("dim");
-    const label=m.name+"×"+m.harm;
-    ctx.fillText(label, x, PLOT.mT+pH+26);
-    const tw=ctx.measureText(label).width;
-    if(hits) hits.push({x:x-tw/2-3, y:PLOT.mT+pH+24, w:tw+6, h:10, string:m.si});
-    // also keep the line hit for the vertical itself
-    if(hits) hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
-    lastHX=x;
   }
-  // harmonics that were skipped for labeling still need a hit for the line itself (if not already added)
-  // (those with nearFund already pushed a line hit above)
   ctx.restore();
 }
 
@@ -5780,6 +5769,11 @@ function openPopover(key,anchor){
 }
 // ---------- per-string documentation (Strings-axis labels) ----------
 const STRING_ORD=["6th","5th","4th","3rd","2nd","1st"]; // index 0 = lowest string
+const STRING_COLORS=["#e74c3c","#e67e22","#27ae60","#3498db","#8e44ad","#d64582"]; // 6 distinct, data colors (not theme)
+function _hexRgb(h){ return [1,3,5].map(k=>parseInt(h.slice(k,k+2),16)); }
+function _stringColor(si, alpha){
+  const [r,g,b]=_hexRgb(STRING_COLORS[si%6]); return `rgba(${r},${g},${b},${alpha})`;
+}
 function stringContentHtml(si){
   const midi=tuningMidi(state.tuning,state.customOffset)[si];
   if(midi==null) return "";

@@ -27,13 +27,17 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   All built on explicit user request 2026-08-19/20. User rejected renaming A/B to file
   names, and deferred task-based entry points to M3. Do not start M3 (live input) or
   M4 (chain measure) until the user has tested and said so.
-- **UX batch 3 (2026-08-20, session 9) STAGED, not yet built** — see the SPEC session-9
-  entry: M2.6a global level-match + Difference-toggle removal + control-scope audit;
-  M2.6b bottom-axis Strings toggle with per-string docs, top-axis/peak-label declutter;
-  M2.6c region-boundary Hz labels in the lane; M2.6d cursor/collapse affordance audit;
-  M2.6e per-card exports (300-dpi PNG / JSON / CSV, EQ-match JSON). Execution starts
-  after the settings-persistence discussion the user requested (possible M2.6f);
-  one commit per submilestone.
+- **UX batch 3 (2026-08-20, session 9): M2.6a BUILT** — global Level-match switch in
+  the header (Comparison field; spectrum/sgram twins and both Difference toggles +
+  "d" key + `?diff` hook deleted — difference views exist whenever two sources do,
+  fold the card to dismiss); Regions selector also moved to the header (cross-card
+  scope); Difference plot now prints the spectrum's status chip (smoothing/lm/zoom);
+  snapshots write `lm` only, readers treat old `sgLm` as `lm`. **Remaining: M2.6b**
+  bottom-axis Strings toggle (persisted) with per-string docs + declutter; **M2.6c**
+  region-boundary Hz labels; **M2.6d** cursor/collapse affordance audit; **M2.6e**
+  per-card exports (300-dpi PNG / JSON / CSV, EQ-match JSON); **M2.6f** versioned
+  `gsSettings` persistence (user agreed: mode/tuning+offset/A4/EQ device/smoothing +
+  Strings; NOT level-match; footer reset). One commit per submilestone.
 - 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
@@ -62,7 +66,7 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 
 - Open `index.html` in a browser. `?demo` auto-loads the built-in demo pair
   (`?demo=a`/`=b` loads one side only). Other test hooks: `?theme=bright|dark`,
-  `?sgalign=file|onset`, `?mag=<viewkey>`, `?guide`, `?diff` (difference pane on),
+  `?sgalign=file|onset`, `?mag=<viewkey>`, `?guide`,
   `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp|sga|sgb|sgd; data units —
   sg keys take x in display-time seconds, y in Hz), `?vocab=eq|anatomy|solo|mix`
   (annotation-lane vocabulary), `?ca=RRGGBB`/`?cb=RRGGBB` (session-only guitar-color
@@ -103,10 +107,14 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale,
   difference pane onset-aligned, diverging colormap, p98 scale; individual panes get
   a Free / File-time / First-onset time-axis choice; envelope overlay
-  aligned at each file's first onset. The four comparison toggles (level-match,
-  difference, sgram level-match, sgram difference) **auto-latch on when both slots
-  fill** — an explicit user flip this session is never overridden, snapshots pre-prime
-  the latch, dropping to one source re-arms it. EQ match: least-squares fit of RBJ
+  aligned at each file's first onset. **One global Level-match switch** (header
+  Comparison field, M2.6a) drives plots, band table, verdict, spectrogram cells +
+  shared scale, and playback gain; it **auto-latches on when both slots fill** — an
+  explicit user flip this session is never overridden, snapshots pre-prime the latch
+  (old snapshots' `sgLm` arms it too), dropping to one source re-arms it. Difference
+  views have no toggle — they exist whenever two sources do (fold the card to
+  dismiss). Both line plots print the status chip (smoothing · level-match · zoom);
+  the header Regions field holds the vocabulary selector. EQ match: least-squares fit of RBJ
   analog-magnitude band models against the **1/6-oct-smoothed** difference (never the
   raw comb) on 140 log points; device trim absorbs the broadband level gap; "Copy
   settings" exports the same `eqFitData()` as plain text. The annotation lane

@@ -651,6 +651,19 @@ kbd{
         <input type="number" id="a4Input" value="440" min="415" max="466" step="0.1"> <span style="font-size:11px;color:var(--dim)">Hz</span>
       </div>
       <div class="field">
+        <label for="vocabSel">Regions</label>
+        <select id="vocabSel" aria-label="Frequency-region vocabulary">
+          <option value="eq">EQ speak</option>
+          <option value="anatomy">Guitar anatomy</option>
+          <option value="solo">Solo EQ words</option>
+          <option value="mix" selected>Band-mix zones</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Comparison</label>
+        <label class="switch" id="lmSwitch"><input type="checkbox" id="lmToggle"><span class="tk"></span><span class="lbl">Level-match</span></label>
+      </div>
+      <div class="field">
         <label>Theme</label>
         <div class="seg" id="themeSeg" role="group" aria-label="Color theme">
           <button data-theme="bright" class="on">Bright</button>
@@ -694,17 +707,6 @@ kbd{
               <button data-sm="3">1/3</button>
             </div>
           </div>
-          <div class="ctlgroup">
-            <span>Regions</span>
-            <select id="vocabSel" aria-label="Frequency-region vocabulary">
-              <option value="eq">EQ speak</option>
-              <option value="anatomy">Guitar anatomy</option>
-              <option value="solo">Solo EQ words</option>
-              <option value="mix" selected>Band-mix zones</option>
-            </select>
-          </div>
-          <label class="switch" id="lmSwitch"><input type="checkbox" id="lmToggle"><span class="tk"></span><span class="lbl">Level-match</span></label>
-          <label class="switch" id="diffSwitch"><input type="checkbox" id="diffToggle"><span class="tk"></span><span class="lbl">Difference</span></label>
           <div class="exports">
             <button class="btn" id="pngBtn" disabled>PNG</button>
             <button class="btn" id="csvBtn" disabled>CSV</button>
@@ -847,8 +849,6 @@ kbd{
               <button data-al="onset">First onset</button>
             </div>
           </div>
-          <label class="switch" id="sgLmSwitch"><input type="checkbox" id="sgLmToggle"><span class="tk"></span><span class="lbl">Level-match</span></label>
-          <label class="switch" id="sgDiffSwitch"><input type="checkbox" id="sgDiffToggle"><span class="tk"></span><span class="lbl">Difference</span></label>
         </div>
       </div>
       <div class="cardbody">
@@ -941,7 +941,6 @@ kbd{
   <div class="inner">
     <h3>Keyboard shortcuts</h3>
     <div class="shortcutrow"><span><kbd>1</kbd>–<kbd>4</kbd></span><span>smoothing off · 1/12 · 1/6 · 1/3</span></div>
-    <div class="shortcutrow"><span><kbd>D</kbd></span><span>difference view</span></div>
     <div class="shortcutrow"><span><kbd>L</kbd></span><span>level-match</span></div>
     <div class="shortcutrow"><span><kbd>M</kbd></span><span>electric / acoustic mode</span></div>
     <div class="shortcutrow"><span><kbd>G</kbd></span><span>glossary</span></div>
@@ -984,8 +983,8 @@ kbd{
       <li>Set the input gain once, with the louder guitar: strum hard, aim the meter around
         −12 dB with peaks safely under 0 — then <b>don't touch it</b> for the other take.</li>
       <li>If clipping happens, lower the gain and redo both takes. A clipped take is unusable.</li>
-      <li>Different pickup outputs are fine — the Level-match toggle removes broadband level
-        differences in the analysis; distortion cannot be removed.</li>
+      <li>Different pickup outputs are fine — the Level-match switch in the top bar removes
+        broadband level differences in the analysis; distortion cannot be removed.</li>
     </ul>
 
     <h4>What to play</h4>
@@ -2538,7 +2537,7 @@ const GLOSSARY=[
   { key:"level-match", name:"Level-match", cat:"Method", hook:"same total energy, fair fight",
     musician:"Louder always sounds better — so to compare tone honestly, make both takes equally loud first.",
     science:"Gain applied to one signal so both have equal total energy in the analysis band; tonal differences then appear as shape differences, not level differences.",
-    measure:"Offset = 10·log₁₀(ΣP_A ⁄ ΣP_B) over 60 Hz–20 kHz, applied to B's curve (and its table/descriptor dB values) when the toggle is on. The applied offset is printed in the footer.",
+    measure:"Offset = 10·log₁₀(ΣP_A ⁄ ΣP_B) over 60 Hz–20 kHz. The switch in the top bar is global: when on, the offset is applied to B everywhere — spectrum and difference curves, band-table and descriptor dB values, spectrogram cells, and playback gain. The applied offset is printed in the footer.",
     values(state){ return state.lmOffset!=null ? [{slot:-1,label:"Current offset on B", value:fmtDb(state.lm ? state.lmOffset : 0, 2)+(state.lm?"":" (off)")}] : []; } },
 
   { key:"dbfs", name:"dB re full scale", cat:"Method", hook:"the vertical axis",
@@ -2556,7 +2555,7 @@ const GLOSSARY=[
   { key:"spectrogram", name:"Spectrogram", cat:"Method", hook:"how the tone moves through time",
     musician:"The film where the LTAS is the photograph: time runs left to right, low notes at the bottom, and color shows where the energy is at each instant — pick attacks are vertical streaks, ringing strings horizontal stripes.",
     science:"Short-time Fourier transform power over time and frequency on a log-frequency axis, colored with a perceptually-uniform colormap (magma) so equal color steps mean roughly equal data steps. Rainbow maps are never used — their artificial hue edges invent detail that isn't in the data.",
-    measure:"2048-sample Hann windows; hop adapts so a file spans ≤ 1400 columns (never below 256 samples). Each display cell takes the MAX of the FFT bins it covers on a 256-point log grid (60 Hz–20 kHz) — max, not mean, so a sine reads the same 0 dB however many bins a cell spans. A and B share one color scale (level-match not applied); its dB range is printed on the colorbar.",
+    measure:"2048-sample Hann windows; hop adapts so a file spans ≤ 1400 columns (never below 256 samples). Each display cell takes the MAX of the FFT bins it covers on a 256-point log grid (60 Hz–20 kHz) — max, not mean, so a sine reads the same 0 dB however many bins a cell spans. A and B share one color scale; the global level-match offset, when on, shifts B's cells and the shared scale alike (noted on B's pane). The scale's dB range is printed on the colorbar.",
     values(state){ return _vals(state, s=>s.tvis&&s.tvis.sg ? s.tvis.sg.nFrames+" cols · hop "+(s.tvis.sg.hop/s.info.sampleRate*1000).toFixed(1)+" ms" : null); } },
 
   { key:"onset", name:"Onset", cat:"Method", hook:"where each note starts",
@@ -3060,11 +3059,7 @@ function drawDiffScene(ctx, w, h, model){
   ctx.fillText("▲ "+model.nameA+" louder", PLOT.mL+8, PLOT.mT+10);
   ctx.fillStyle=withAlpha(model.colorB,0.8);
   ctx.fillText("▼ "+model.nameB+" louder", PLOT.mL+8, PLOT.mT+pH-10);
-  if(model.zoomNote){
-    ctx.textAlign="right";
-    ctx.fillStyle=cssColor("mut");
-    ctx.fillText(model.zoomNote, PLOT.mL+pW-8, PLOT.mT+10);
-  }
+  drawStatusChip(ctx, w, model.statusText); // smoothing + level-match + zoom (house rule)
   ctx.restore();
 }
 
@@ -3756,8 +3751,8 @@ const GRID=makeLogGrid(700,60,20000);
 
 // ---------- state (contract shared with the glossary) ----------
 const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
-              a4:440, smooth:6, lm:false, lmOffset:null, diff:false,
-              sgLm:false, sgDiff:false, sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
+              a4:440, smooth:6, lm:false, lmOffset:null,
+              sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
 
@@ -3772,7 +3767,6 @@ const modeSeg=el("modeSeg"), tuningSel=el("tuningSel"),
       a4Input=el("a4Input"), glossaryBtn=el("glossaryBtn"), themeSeg=el("themeSeg");
 const smoothSeg=el("smoothSeg"), vocabSel=el("vocabSel"),
       lmSwitch=el("lmSwitch"), lmToggle=el("lmToggle"),
-      diffSwitch=el("diffSwitch"), diffToggle=el("diffToggle"),
       pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn");
 const verdictCard=el("verdictCard"), verdictPara=el("verdictPara");
 const specWrap=el("specWrap"), specCanvas=el("specCanvas"),
@@ -3789,9 +3783,7 @@ const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"), sgramSub=el("sgramSu
       sgramCanvases=[el("sgramCanvasA"),el("sgramCanvasB")],
       sgramXlines=[el("sgramXlineA"),el("sgramXlineB")],
       sgramReadouts=[el("sgramReadoutA"),el("sgramReadoutB")];
-const sgLmSwitch=el("sgLmSwitch"), sgLmToggle=el("sgLmToggle"),
-      sgDiffSwitch=el("sgDiffSwitch"), sgDiffToggle=el("sgDiffToggle"),
-      sgAlignSeg=el("sgAlignSeg"),
+const sgAlignSeg=el("sgAlignSeg"),
       sgramWrapD=el("sgramWrapD"), sgramCanvasD=el("sgramCanvasD"),
       sgramXlineD=el("sgramXlineD"), sgramReadoutD=el("sgramReadoutD");
 const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
@@ -4173,16 +4165,16 @@ function buildSpecModel(forExport){
            markers:tuningMarkers(), grid:GRID,
            curves, statusText:st };
 }
-function diffVisible(){ return bothLoaded()&&state.diff; }
+function diffVisible(){ return bothLoaded(); }
 function bothSgLoaded(){
   return !!(state.slots[0]&&state.slots[0].tvis&&state.slots[0].tvis.sg&&
             state.slots[1]&&state.slots[1].tvis&&state.slots[1].tvis.sg);
 }
-function sgDiffVisible(){ return bothSgLoaded()&&state.sgDiff; }
+function sgDiffVisible(){ return bothSgLoaded(); }
 function sgLmDb(){
-  // spectrogram level-match: same broadband offset as the spectrum toggle,
-  // applied to B's cells only (and to B's side of the difference)
-  return (state.sgLm&&state.lmOffset!=null&&bothSgLoaded())?state.lmOffset:0;
+  // the one global level-match switch, seen from the spectrogram: the same
+  // broadband offset, applied to B's cells only (and to B's side of the difference)
+  return (state.lm&&state.lmOffset!=null&&bothSgLoaded())?state.lmOffset:0;
 }
 function sgramScale(){
   // one color scale shared by A and B, anchored to the louder file's hottest cell
@@ -4352,10 +4344,14 @@ function buildDiffModel(){
   if(!diffBuf) diffBuf=new Float64Array(GRID.length);
   for(let k=0;k<GRID.length;k++) diffBuf[k]=dispDb[0][k]-dispDb[1][k];
   const z=ZOOMS.diff;
+  // The Smoothing control lives on the Spectrum card but shapes this curve too
+  // (diff of the smoothed displays) — so the diff plot prints the same status chip.
+  let st=statusText();
+  if(z) st+=" · "+zoomNoteFor("diff");
   return {grid:GRID,diff:diffBuf,yMax:diffYMax,
     fv:zoomXf("diff"),
     yLo:z&&z.y0!=null?z.y0:null, yHi:z&&z.y0!=null?z.y1:null,
-    zoomNote:zoomNoteFor("diff"),
+    statusText:st,
     colorA:COLORS[0],colorB:COLORS[1],
     nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)};
 }
@@ -5105,7 +5101,7 @@ function renderProse(){
   const cands=proseCandidates();
   const text=cands.length
     ? cands.slice(0,4).map(c=>c.html).join(" ")
-    : "These two spectra are closely matched — no difference clears GuitarScope's reporting thresholds. Try turning smoothing off, or the difference view with "+termHtml("level-match","level-match")+" on, to hunt for finer detail.";
+    : "These two spectra are closely matched — no difference clears GuitarScope's reporting thresholds. Try turning smoothing off, or the Difference plot with "+termHtml("level-match","level-match")+" on, to hunt for finer detail.";
   prosePara.style.display="";
   prosePara.innerHTML='<span class="lead">Reading the measurements</span>'+text;
 }
@@ -5205,8 +5201,7 @@ function renderFooter(){
     (state.lm&&state.lmOffset!=null?fmtDb(state.lmOffset,2)+" on B":"off"));
   const sgS=state.slots.find(s=>s&&s.tvis&&s.tvis.sg);
   if(sgS) parts.push(termHtml("spectrogram","spectrogram")+": "+sgS.tvis.sg.win+
-    "-pt Hann · "+sgS.tvis.sg.gridN+" log cells · max power per cell"+
-    (sgLmDb()?" · level-match "+fmtDb(sgLmDb(),2)+" on B":""));
+    "-pt Hann · "+sgS.tvis.sg.gridN+" log cells · max power per cell");
   if(bothLoaded()) parts.push("EQ match: "+EQ_DEVICE_BY_ID[state.eqDevice].name+
     " · LS fit, 140-pt log grid");
   paramsLine.innerHTML=parts.join('<span class="sep">·</span>');
@@ -5345,10 +5340,9 @@ function updateVisibility(){
   specEmpty.style.display=n?"none":"";
   magBtns.forEach(b=>{ if(b.dataset.mag==="spec") b.style.display=n?"":"none"; });
   pngBtn.disabled=csvBtn.disabled=jsonBtn.disabled=!n;
-  lmToggle.disabled=diffToggle.disabled=!both;
+  lmToggle.disabled=!both;
   lmSwitch.classList.toggle("disabled",!both);
-  diffSwitch.classList.toggle("disabled",!both);
-  diffCard.style.display=(both&&state.diff)?"":"none";
+  diffCard.style.display=both?"":"none";
   bandsCard.style.display=n?"":"none";
   toneCard.style.display=n?"":"none";
   eqCard.style.display=both?"":"none";
@@ -5365,11 +5359,8 @@ function updateVisibility(){
   sgramWraps[0].style.display=hasT[0]?"":"none";
   sgramWraps[1].style.display=hasT[1]?"":"none";
   const bothT=hasT[0]&&hasT[1];
-  sgLmToggle.disabled=sgDiffToggle.disabled=!bothT;
-  sgLmSwitch.classList.toggle("disabled",!bothT);
-  sgDiffSwitch.classList.toggle("disabled",!bothT);
   sgAlignSeg.querySelectorAll("button").forEach(b=>{ b.disabled=!bothT; });
-  sgramWrapD.style.display=(bothT&&state.sgDiff)?"":"none";
+  sgramWrapD.style.display=bothT?"":"none";
   updateSgramSub();
   envWrap.style.display=(hasT[0]||hasT[1])?"":"none";
   sgramNote.style.display=missT.length?"":"none";
@@ -5386,21 +5377,17 @@ function renderAnalysis(){
   renderBandsTable(); renderToneRows(); renderProse(); renderToneNote();
   renderFooter(); updateDiffSub(); updateEqSub(); renderEqNote();
 }
-// Two loaded sources mean "compare": the first time both slots fill, the four
-// comparison toggles (level-match, difference, and their spectrogram twins) come
-// on by themselves. A toggle the user has explicitly flipped this session stays
-// theirs; snapshots pre-prime the latch so saved settings win; dropping back to
-// one source re-arms the latch for the next pairing.
+// Two loaded sources mean "compare": the first time both slots fill, the global
+// level-match switch comes on by itself. A switch the user has explicitly flipped
+// this session stays theirs; snapshots pre-prime the latch so saved settings win;
+// dropping back to one source re-arms the latch for the next pairing.
 let comparePrimed=false;
-const compareTouched={lm:false,diff:false,sgLm:false,sgDiff:false};
+const compareTouched={lm:false};
 function applyCompareDefaults(){
   if(!bothLoaded()){ comparePrimed=false; return; }
   if(comparePrimed) return;
   comparePrimed=true;
   if(!compareTouched.lm){ state.lm=true; lmToggle.checked=true; }
-  if(!compareTouched.diff){ state.diff=true; diffToggle.checked=true; }
-  if(!compareTouched.sgLm){ state.sgLm=true; sgLmToggle.checked=true; }
-  if(!compareTouched.sgDiff){ state.sgDiff=true; sgDiffToggle.checked=true; }
 }
 function afterDataChange(animate){
   stopPlayback(); // whatever was sounding may no longer match any slot
@@ -5782,8 +5769,7 @@ function exportJSON(){
   const snap={ app:"GuitarScope", type:"snapshot", version:1,
     created:new Date().toISOString(),
     settings:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
-               a4:state.a4, smooth:state.smooth, lm:state.lm, diff:state.diff,
-               sgLm:state.sgLm, sgDiff:state.sgDiff, sgAlign:state.sgAlign,
+               a4:state.a4, smooth:state.smooth, lm:state.lm, sgAlign:state.sgAlign,
                eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab },
     files };
   download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
@@ -5828,12 +5814,8 @@ function applySnapshot(snap){
   customOffsetWrap.style.display=state.tuning==="custom"?"":"none";
   if(isFinite(st.a4)&&st.a4>=415&&st.a4<=466){ state.a4=+st.a4; a4Input.value=state.a4; }
   if([0,12,6,3].includes(st.smooth)) setSmoothUI(st.smooth);
-  state.lm=!!st.lm; lmToggle.checked=state.lm;
-  // pre-diff-field snapshots: a saved pair defaults to the compare view (item c)
-  state.diff=st.diff!=null?!!st.diff:snap.files.length>1;
-  diffToggle.checked=state.diff;
-  state.sgLm=!!st.sgLm; sgLmToggle.checked=state.sgLm;
-  state.sgDiff=!!st.sgDiff; sgDiffToggle.checked=state.sgDiff;
+  // pre-M2.6a snapshots stored separate spectrum/spectrogram switches — either counts
+  state.lm=!!(st.lm||st.sgLm); lmToggle.checked=state.lm;
   setSgAlign(["off","file","onset"].includes(st.sgAlign)?st.sgAlign:"off");
   if(st.eqDir===0||st.eqDir===1){
     state.eqDir=st.eqDir;
@@ -6136,22 +6118,9 @@ function boot(){
     state.lm=lmToggle.checked; compareTouched.lm=true;
     stopPlayback(); // the applied gain would no longer match what's printed
     updateCurves(true);
-    renderVerdict(); renderBandsTable(); renderFooter(); updateDiffSub();
-  });
-  diffToggle.addEventListener("change",()=>{
-    state.diff=diffToggle.checked; compareTouched.diff=true;
-    updateVisibility();
-    requestDraw();
-  });
-  sgLmToggle.addEventListener("change",()=>{
-    state.sgLm=sgLmToggle.checked; compareTouched.sgLm=true;
-    updateSgramSub(); renderFooter();
-    requestDraw();
-  });
-  sgDiffToggle.addEventListener("change",()=>{
-    state.sgDiff=sgDiffToggle.checked; compareTouched.sgDiff=true;
-    updateVisibility();
-    requestDraw();
+    renderVerdict(); renderBandsTable(); renderFooter();
+    updateDiffSub(); updateSgramSub();
+    requestDraw(); // spectrogram B/difference read the offset at draw time
   });
   sgAlignSeg.addEventListener("click",e=>{
     const b=e.target.closest("button[data-al]");
@@ -6260,10 +6229,6 @@ function boot(){
       case "2": setSmooth(12); break;
       case "3": setSmooth(6); break;
       case "4": setSmooth(3); break;
-      case "d": case "D":
-        if(!diffToggle.disabled){ diffToggle.checked=!diffToggle.checked;
-          diffToggle.dispatchEvent(new Event("change")); }
-        break;
       case "l": case "L":
         if(!lmToggle.disabled){ lmToggle.checked=!lmToggle.checked;
           lmToggle.dispatchEvent(new Event("change")); }
@@ -6380,9 +6345,6 @@ function boot(){
   const al=location.search.match(/[?&]sgalign=(file|onset)(?:&|$)/i);   // test hook
   if(al) setSgAlign(al[1].toLowerCase());
   if(/[?&]guide(?:&|$)/i.test(location.search)) guideModal.classList.add("open");   // test hook
-  if(/[?&]diff(?:&|$)/i.test(location.search)){                                     // test hook
-    state.diff=true; diffToggle.checked=true; updateVisibility();
-  }
   const op=location.search.match(/[?&]open=([a-z,]+)(?:&|$)/i);                     // test hook
   if(op){        // session-only unfold: "all" or a comma list of panel keys
     const ks=op[1].toLowerCase()==="all"?Object.keys(COLL_CARDS):op[1].toLowerCase().split(",");

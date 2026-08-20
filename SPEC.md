@@ -450,3 +450,40 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   to persist user settings beyond today's `gsTheme` / `gsColors` / `gsVocab` /
   `gsCollapse`. To be designed with the user before any code; will slot in as M2.6f
   once agreed. Current inventory and the proposal live in the session-9 report.
+
+### 2026-08-20 — M2.6a built: global level-match, Difference toggles removed, control-scope audit (session 9)
+
+- **One Level-match switch, in the top bar.** The spectrum-card switch and the
+  spectrogram-card twin are gone; a single header field ("Comparison · Level-match")
+  drives everything the offset touches: both line plots, band table Δ, verdict strip,
+  spectrogram B pane + shared color scale, the difference pane, and card playback
+  gain. Auto-latch semantics carry over unchanged: flips on by itself the first time
+  both slots fill, an explicit user flip this session always wins, snapshots pre-prime
+  the latch, dropping to one source re-arms it. Disabled (greyed) with fewer than two
+  sources.
+- **Difference toggles removed (user item b).** The spectrum-card Difference switch,
+  the spectrogram Difference switch, the "d" keyboard shortcut, and the `?diff` URL
+  hook are deleted. Difference views now exist exactly when two sources do; folding
+  the card is how you dismiss one. Snapshot back-compat: old files' `diff`/`sgLm`/
+  `sgDiff` fields are ignored on read except that a stored `sgLm` also arms the
+  unified `lm`; new snapshots write only `lm`.
+- **Control-scope audit (user item a).** Regions (vocabulary selector) also moved to
+  the header — it drives spectrum + Difference shading and the Band Energy rows, so
+  its scope is cross-card. Smoothing stays on the Spectrum card: it shapes only the
+  two adjacent line plots, and to keep that placement honest the **Difference plot now
+  prints the same status chip as the spectrum** ("1/6-oct smoothing · level-match
+  +x.x dB on B · zoom …") — it previously printed only a zoom note, which broke the
+  "smoothing state is always printed on the plot" house rule. Time-axis stays on the
+  spectrogram card (pane-local). Footer prints the applied offset once (duplicate
+  spectrogram line removed). Glossary level-match/spectrogram texts rewritten to state
+  the global scope; the spectrogram entry had claimed the shared scale ignores
+  level-match, which was factually wrong (the scale follows B's shifted cells) — fixed.
+- **Settings persistence — user decisions recorded (pre-M2.6f):** (1) persist the
+  class-2 analysis facts: instrument mode, tuning + custom offset, A4, EQ device,
+  smoothing; (2) level-match stays session-only (the auto-latch covers the common
+  case); (3) the M2.6b Strings toggle will persist; (4) consolidate into one versioned
+  `gsSettings` JSON with migrations on read, written only on explicit user actions,
+  plus a footer "Reset saved settings" control and a what's-remembered line.
+  "Persisting" means across close/reopen of index.html — plain browser localStorage
+  semantics (per-browser, per-profile; Chrome pools all `file://` pages into one
+  origin, hence the `gs` prefix). Implementation is M2.6f, after M2.6b–e.

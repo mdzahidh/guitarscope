@@ -417,6 +417,42 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   Function(...deps, src + "return {…}")`), same spirit as `tests/dsp.test.js` — the
   code that ships is the code under test, no copies to drift.
 
+## M2.6a (session 9): one level-match, no difference toggles
+
+- **Control placement = control scope.** The user's audit rule: where a setting sits
+  should say what it governs. Level-match was never a spectrum-card setting — the
+  offset feeds both line plots, the band table's Δ, the verdict prose, the
+  spectrogram's B pane *and* its shared color scale, the difference pane, and card
+  playback gain. So there is now exactly one switch, in the header's "Comparison"
+  field, and `state.lm` is the only truth (`state.sgLm`/`state.diff`/`state.sgDiff`
+  are gone). The Regions vocabulary selector moved up for the same reason (it drives
+  spectrum + Difference shading and the Band Energy rows). Smoothing deliberately
+  stays on the Spectrum card: it shapes only the two adjacent line plots — and to
+  keep that placement honest the Difference plot now renders the same status chip
+  as the spectrum (`statusText()` + zoom note) instead of a bare zoom note. Before
+  this it printed no smoothing state at all, a silent house-rule violation.
+- **Difference views need no switch.** They appear exactly when two analyzed sources
+  exist (`diffVisible()`/`sgDiffVisible()` are now just `bothLoaded()`-style gates);
+  progressive disclosure (fold the card) is the dismissal mechanism. The "d"
+  shortcut, its modal row, and the `?diff` URL hook went with the toggles.
+- **Latch simplification.** `compareTouched` shrank to `{lm}`; `applyCompareDefaults`
+  arms only the one switch. Semantics unchanged: auto-on when both slots fill, an
+  explicit flip wins for the session, snapshots pre-prime (`comparePrimed=true`),
+  dropping to one source re-arms.
+- **Snapshot back-compat without a version bump.** Old snapshots stored `lm`, `diff`,
+  `sgLm`, `sgDiff`. Readers now do `state.lm=!!(st.lm||st.sgLm)` — either old switch
+  counts as "the user wanted level-matching" — and ignore the difference flags; new
+  snapshots write `lm` only. Version stays 1: readers tolerate missing fields, so no
+  migration machinery is warranted.
+- **No `_sgDiff` cache invalidation needed for lm.** The spectrogram difference image
+  cache keys on the underlying cell data; the level-match offset is applied at draw
+  time (`sgLmDb()` read inside the draw path), so flipping the switch only needs
+  `requestDraw()`, not a rebuild.
+- **A found factual bug:** the glossary's spectrogram entry claimed the shared color
+  scale ignores level-match. `sgramScale()` adds `sgLmDb()` to B's max — the scale
+  follows the shifted cells. Text fixed to match the code; lesson: prose that states
+  what code does belongs next to a test or a re-read at every behavior change.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

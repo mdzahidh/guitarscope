@@ -542,6 +542,7 @@ kbd{
   transition:color var(--dur) var(--ease);
 }
 .zoomreset:hover{ color:var(--ink); }
+.zoomreset.sg{ right:150px; }  /* clear of the spectrogram colorbar + its dB labels */
 .mag .mhead .mhctl{ display:flex; gap:10px; align-items:center; }
 .modal .inner.mag{
   display:flex; flex-direction:column;
@@ -863,7 +864,7 @@ kbd{
     <div class="shortcutrow"><span><kbd>G</kbd></span><span>glossary</span></div>
     <div class="shortcutrow"><span><kbd>E</kbd></span><span>export PNG</span></div>
     <div class="shortcutrow"><span><kbd>Esc</kbd></span><span>close panels</span></div>
-    <div class="shortcutrow"><span>drag a box</span><span>zoom line plot to selection</span></div>
+    <div class="shortcutrow"><span>drag a box</span><span>zoom plot to selection</span></div>
     <div class="shortcutrow"><span><kbd>Shift</kbd> + drag</span><span>pan a zoomed plot</span></div>
     <div class="shortcutrow"><span><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + scroll</span><span>zoom frequency / time axis</span></div>
     <div class="shortcutrow"><span>double-click</span><span>reset zoom</span></div>
@@ -2998,7 +2999,8 @@ function drawStringMarkers(ctx, pW, pH, markers, yOfF){
   if(!markers || !markers.length) return;
   const items=markers.filter(m=>m.f>FMIN&&m.f<FMAX)
     .sort((a,b)=>b.f-a.f)                              // top of plot first
-    .map(m=>({name:m.name, y:Math.round(yOfF(m.f))}));
+    .map(m=>({name:m.name, y:Math.round(yOfF(m.f))}))
+    .filter(it=>it.y>=SGPLOT.mT&&it.y<=SGPLOT.mT+pH);  // frequency zoom may push lines off-plot
   if(!items.length) return;
   const MIN=10, top=SGPLOT.mT+8, bot=SGPLOT.mT+pH-5;
   const ly=items.map(it=>it.y);
@@ -3071,8 +3073,10 @@ function drawSpectrogramScene(ctx, w, h, model){
   // Onset-aligned: d0 = -firstOnset, so display t = 0 is the first onset.
   const view=model.view||{T0:0,T1:dur,d0:0};
   const span=view.T1-view.T0;
+  const fw=model.fWin||{F0:FMIN,F1:FMAX};   // frequency window (zoom); full range by default
+  const fSpan=Math.log(fw.F1/fw.F0);
   const xOfT=td=>SGPLOT.mL+((td-view.T0)/span)*pW;
-  const yOfF=f=>SGPLOT.mT+(1-Math.log(f/FMIN)/LOGSPAN)*pH;
+  const yOfF=f=>SGPLOT.mT+(1-Math.log(f/fw.F0)/fSpan)*pH;
   ctx.clearRect(0,0,w,h);
   if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
   ctx.save();
@@ -3082,15 +3086,17 @@ function drawSpectrogramScene(ctx, w, h, model){
   ctx.save();
   ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
   ctx.imageSmoothingEnabled=true;
-  ctx.drawImage(image, xOfT(view.d0), SGPLOT.mT, (dur/span)*pW, pH);
+  const iy=yOfF(FMAX);   // image always spans FMIN–FMAX; the clip crops the zoom window
+  ctx.drawImage(image, xOfT(view.d0), iy, (dur/span)*pW, yOfF(FMIN)-iy);
   ctx.restore();
   ctx.strokeStyle=cssColor("hair"); ctx.lineWidth=1;
   ctx.strokeRect(SGPLOT.mL+0.5, SGPLOT.mT+0.5, pW-1, pH-1);
 
   // frequency ticks sit outside the image so gridlines never tint the colormap
   ctx.font=FONT_S; ctx.textAlign="right"; ctx.textBaseline="middle";
-  for(const f of X_MAJOR){
+  for(const f of xTicksFor(fw.F0,fw.F1).major){
     const y=yOfF(f);
+    if(y<SGPLOT.mT-0.5||y>SGPLOT.mT+pH+0.5) continue;
     ctx.strokeStyle=cssRGBA("grid-rgb",0.25);
     ctx.beginPath(); ctx.moveTo(SGPLOT.mL-4,y); ctx.lineTo(SGPLOT.mL,y); ctx.stroke();
     ctx.fillStyle=cssColor("dim");
@@ -3123,12 +3129,13 @@ function drawSpectrogramScene(ctx, w, h, model){
     ctx.strokeStyle=color; ctx.lineWidth=1.5;
     for(const t of onsets){
       const x=xOfT(t+view.d0);
+      if(x<SGPLOT.mL||x>SGPLOT.mL+pW) continue;   // time zoom may exclude an onset
       ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT); ctx.lineTo(x,SGPLOT.mT+7); ctx.stroke();
     }
   }
 
   // honest boundary when the file's rate can't measure to 20 kHz
-  if(sg.nyquist<FMAX){
+  if(sg.nyquist<fw.F1&&sg.nyquist>fw.F0){
     const y=yOfF(sg.nyquist);
     ctx.strokeStyle=cssRGBA("ink-rgb",0.35); ctx.lineWidth=1; ctx.setLineDash([4,4]);
     ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
@@ -3166,6 +3173,11 @@ function drawSpectrogramScene(ctx, w, h, model){
     ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint"); ctx.textAlign="right";
     ctx.fillText(model.statusText, cbX-20, 15.5);
   }
+  if(model.zoomNote){   // active window always printed (house rule); bottom margin — top is full
+    ctx.font=FONT_XS; ctx.fillStyle=cssColor("mut");
+    ctx.textAlign="right"; ctx.textBaseline="top";
+    ctx.fillText(model.zoomNote, SGPLOT.mL+pW, SGPLOT.mT+pH+19);
+  }
   ctx.restore();
 }
 
@@ -3199,8 +3211,12 @@ function drawSgramDiffScene(ctx, w, h, model){
   const {dsg, image, S}=model;
   const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
   const dur=dsg.duration, t0=dsg.t0;
-  const xOfT=tau=>SGPLOT.mL+((tau-t0)/dur)*pW;
-  const yOfF=f=>SGPLOT.mT+(1-Math.log(f/FMIN)/LOGSPAN)*pH;
+  const view=model.view||{T0:t0,T1:t0+dur};
+  const span=view.T1-view.T0;
+  const fw=model.fWin||{F0:FMIN,F1:FMAX};   // frequency window (zoom); full range by default
+  const fSpan=Math.log(fw.F1/fw.F0);
+  const xOfT=tau=>SGPLOT.mL+((tau-view.T0)/span)*pW;
+  const yOfF=f=>SGPLOT.mT+(1-Math.log(f/fw.F0)/fSpan)*pH;
   ctx.clearRect(0,0,w,h);
   if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
   ctx.save();
@@ -3208,15 +3224,17 @@ function drawSgramDiffScene(ctx, w, h, model){
   ctx.save();
   ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
   ctx.imageSmoothingEnabled=true;
-  ctx.drawImage(image, SGPLOT.mL, SGPLOT.mT, pW, pH);
+  const iy=yOfF(FMAX);   // image always spans FMIN–FMAX; the clip crops the zoom window
+  ctx.drawImage(image, xOfT(t0), iy, (dur/span)*pW, yOfF(FMIN)-iy);
   ctx.restore();
   ctx.strokeStyle=cssColor("hair"); ctx.lineWidth=1;
   ctx.strokeRect(SGPLOT.mL+0.5, SGPLOT.mT+0.5, pW-1, pH-1);
 
   // frequency ticks (same axis as the A/B panes)
   ctx.font=FONT_S; ctx.textAlign="right"; ctx.textBaseline="middle";
-  for(const f of X_MAJOR){
+  for(const f of xTicksFor(fw.F0,fw.F1).major){
     const y=yOfF(f);
+    if(y<SGPLOT.mT-0.5||y>SGPLOT.mT+pH+0.5) continue;
     ctx.strokeStyle=cssRGBA("grid-rgb",0.25);
     ctx.beginPath(); ctx.moveTo(SGPLOT.mL-4,y); ctx.lineTo(SGPLOT.mL,y); ctx.stroke();
     ctx.fillStyle=cssColor("dim");
@@ -3224,9 +3242,9 @@ function drawSgramDiffScene(ctx, w, h, model){
   }
 
   // time ticks — t = 0 is each file's own first onset, so t can be negative
-  const step=timeTickStep(dur);
+  const step=timeTickStep(span);
   ctx.textAlign="center"; ctx.textBaseline="top";
-  for(let k=Math.ceil((t0-1e-9)/step); k*step<=t0+dur+1e-9; k++){
+  for(let k=Math.ceil((view.T0-1e-9)/step); k*step<=view.T1+1e-9; k++){
     const t=k*step, x=xOfT(t);
     ctx.strokeStyle=cssRGBA("grid-rgb",0.25);
     ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT+pH); ctx.lineTo(x,SGPLOT.mT+pH+4); ctx.stroke();
@@ -3272,7 +3290,7 @@ function drawSgramDiffScene(ctx, w, h, model){
   }
 
   // honest boundary at the lower of the two Nyquists
-  if(model.nyquistMin<FMAX){
+  if(model.nyquistMin<fw.F1&&model.nyquistMin>fw.F0){
     const y=yOfF(model.nyquistMin);
     ctx.strokeStyle=cssRGBA("ink-rgb",0.35); ctx.lineWidth=1; ctx.setLineDash([4,4]);
     ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
@@ -3321,6 +3339,11 @@ function drawSgramDiffScene(ctx, w, h, model){
   if(model.statusText){
     ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint"); ctx.textAlign="right";
     ctx.fillText(model.statusText, cbX-20, 15.5);
+  }
+  if(model.zoomNote){   // active window always printed (house rule); bottom margin — top is full
+    ctx.font=FONT_XS; ctx.fillStyle=cssColor("mut");
+    ctx.textAlign="right"; ctx.textBaseline="top";
+    ctx.fillText(model.zoomNote, SGPLOT.mL+pW, SGPLOT.mT+pH+19);
   }
   ctx.restore();
 }
@@ -3971,18 +3994,22 @@ function requestDraw(){
 // same model builders, so it shares each view's zoom. Metrics, band table and
 // tone panel never read this; the current window is printed on the plot so
 // exports stay defensible.
-const ZOOMS={spec:null, diff:null, env:null, eqresp:null};
+const ZOOMS={spec:null, diff:null, env:null, eqresp:null, sga:null, sgb:null, sgd:null};
 function zoomXf(key){ const z=ZOOMS[key]; return z&&z.x0!=null?[z.x0,z.x1]:null; }
 function zoomNoteFor(key){
   const z=ZOOMS[key];
   if(!z) return null;
+  const sg=key.slice(0,2)==="sg";        // spectrogram panes: time × frequency
   const parts=[];
-  if(z.x0!=null) parts.push(key==="env"
+  if(z.x0!=null) parts.push((key==="env"||sg)
     ? z.x0.toFixed(2)+" – "+z.x1.toFixed(2)+" s"
     : fmtHz(z.x0)+" – "+fmtHz(z.x1));
   if(z.y0!=null){
-    const d=(z.y1-z.y0)<10?1:0;
-    parts.push(z.y0.toFixed(d)+" … "+z.y1.toFixed(d)+" dB");
+    if(sg) parts.push(fmtHz(z.y0)+" – "+fmtHz(z.y1));
+    else{
+      const d=(z.y1-z.y0)<10?1:0;
+      parts.push(z.y0.toFixed(d)+" … "+z.y1.toFixed(d)+" dB");
+    }
   }
   return "zoom "+parts.join(" · ");
 }
@@ -4095,6 +4122,13 @@ function sgramView(i){
   }
   return {T0,T1,d0:-tv.firstOnset};
 }
+function sgramZoomWin(key,T0,T1){
+  // Merge a pane's zoom (x = display time in s, y = frequency in Hz) over its
+  // full window. Model builders and crosshairs both read this, so they agree.
+  const z=ZOOMS[key];
+  return { T0:z&&z.x0!=null?z.x0:T0, T1:z&&z.x0!=null?z.x1:T1,
+           F0:z&&z.y0!=null?z.y0:FMIN, F1:z&&z.y0!=null?z.y1:FMAX };
+}
 function sgramModelFor(i,scale){
   const s=state.slots[i], tv=s&&s.tvis;
   if(!tv||!tv.sg) return null;
@@ -4103,7 +4137,11 @@ function sgramModelFor(i,scale){
   if(!s._sgImage||s._sgImage.key!==key)
     s._sgImage={key, canvas:sgramImage(tv.sg,scale.dbMax,scale.dbMin,off)};
   const view=sgramView(i);
-  return { sg:tv.sg, image:s._sgImage.canvas, view,
+  const zKey=i===0?"sga":"sgb";
+  const zw=sgramZoomWin(zKey,view.T0,view.T1);
+  return { sg:tv.sg, image:s._sgImage.canvas,
+    view:{T0:zw.T0,T1:zw.T1,d0:view.d0}, fWin:{F0:zw.F0,F1:zw.F1},
+    zoomNote:zoomNoteFor(zKey),
     name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
     dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(),
     statusText:tv.sg.win+"-pt Hann · max per log cell"
@@ -4130,7 +4168,10 @@ function buildSgramDiffModel(){
   const d=sgramDiffData();
   if(!d) return null;
   const t0=state.slots[0].tvis, t1=state.slots[1].tvis, off=sgLmDb();
+  const zw=sgramZoomWin("sgd",d.dsg.t0,d.dsg.t0+d.dsg.duration);
   return { dsg:d.dsg, image:d.image, S:d.S,
+    view:{T0:zw.T0,T1:zw.T1}, fWin:{F0:zw.F0,F1:zw.F1},
+    zoomNote:zoomNoteFor("sgd"),
     colorA:COLORS[0], colorB:COLORS[1], markers:tuningMarkers(),
     onsetsA:t0.onsets.map(t=>t-t0.firstOnset),
     onsetsB:t1.onsets.map(t=>t-t1.firstOnset),
@@ -4369,10 +4410,11 @@ function attachSgramCrosshair(i){
     const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
     if(x<SGPLOT.mL||x>w-SGPLOT.mR||y<SGPLOT.mT||y>h-SGPLOT.mB){ hide(); return; }
     const view=sgramView(i);
-    const td=view.T0+(x-SGPLOT.mL)/pW*(view.T1-view.T0);  // display time
+    const zw=sgramZoomWin(i===0?"sga":"sgb",view.T0,view.T1);
+    const td=zw.T0+(x-SGPLOT.mL)/pW*(zw.T1-zw.T0);        // display time
     const t=td-view.d0;                                    // file time
     const inFile=t>=-1e-9&&t<=sg.duration+1e-9;
-    const fr=Math.exp((1-(y-SGPLOT.mT)/pH)*LOGSPAN)*FMIN;
+    const fr=Math.exp((1-(y-SGPLOT.mT)/pH)*Math.log(zw.F1/zw.F0))*zw.F0;
     const rate=s.info.sampleRate;
     const f=Math.max(0,Math.min(sg.nFrames-1,Math.round((t*rate-sg.win/2)/sg.hop)));
     const gi=Math.max(0,Math.min(sg.gridN-1,
@@ -4408,8 +4450,9 @@ function attachSgramDiffCrosshair(){
     const w=rect.width, h=rect.height;
     const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
     if(x<SGPLOT.mL||x>w-SGPLOT.mR||y<SGPLOT.mT||y>h-SGPLOT.mB){ hide(); return; }
-    const t=dsg.t0+(x-SGPLOT.mL)/pW*dsg.duration;
-    const fr=Math.exp((1-(y-SGPLOT.mT)/pH)*LOGSPAN)*FMIN;
+    const zw=sgramZoomWin("sgd",dsg.t0,dsg.t0+dsg.duration);
+    const t=zw.T0+(x-SGPLOT.mL)/pW*(zw.T1-zw.T0);
+    const fr=Math.exp((1-(y-SGPLOT.mT)/pH)*Math.log(zw.F1/zw.F0))*zw.F0;
     const f=Math.max(0,Math.min(dsg.nFrames-1,Math.round((t-dsg.t0)*dsg.frameRate)));
     const gi=Math.max(0,Math.min(dsg.gridN-1,
       Math.round(Math.log(fr/FMIN)/LOGSPAN*(dsg.gridN-1))));
@@ -4473,7 +4516,9 @@ function attachEnvCrosshair(){
 // leaves that axis unchanged), shift+drag pans, ctrl/cmd+wheel zooms the x
 // axis around the cursor, double-click resets. All coordinates convert to
 // DATA units at the gesture boundary, so the state survives resizes and is
-// shared with the magnified overlay through the model builders.
+// shared with the magnified overlay through the model builders. The same
+// engine drives the spectrogram panes (sga/sgb/sgd: x = time s, y = log-Hz;
+// SGPLOT margins instead of PLOT, resolved per gesture via margins()).
 const MIN_XRATIO=1.05, MIN_TSPAN=0.05, MIN_YSPAN=1;
 const ZOOM_UIS=[];
 function setZoom(key,z){ ZOOMS[key]=z; drawAll(); }
@@ -4510,6 +4555,21 @@ function zoomAxes(key){
     ax.y0=m.resp.yLo!=null?m.resp.yLo:-m.resp.yMax;
     ax.y1=m.resp.yHi!=null?m.resp.yHi:m.resp.yMax;
     ax.yF0=-m.resp.yMax; ax.yF1=m.resp.yMax;
+  }else if(key==="sga"||key==="sgb"){
+    // spectrogram panes: x = display time (linear s), y = frequency (log Hz)
+    const i=key==="sga"?0:1, s=state.slots[i];
+    if(!(s&&s.tvis&&s.tvis.sg)) return null;
+    const v=sgramView(i);
+    return {logX:false, logY:true,
+            x0:z&&z.x0!=null?z.x0:v.T0, x1:z&&z.x0!=null?z.x1:v.T1, xF0:v.T0, xF1:v.T1,
+            y0:z&&z.y0!=null?z.y0:FMIN, y1:z&&z.y0!=null?z.y1:FMAX, yF0:FMIN, yF1:FMAX};
+  }else if(key==="sgd"){
+    const d=sgDiffVisible()?sgramDiffData():null;
+    if(!d) return null;
+    const t0=d.dsg.t0, t1=t0+d.dsg.duration;
+    return {logX:false, logY:true,
+            x0:z&&z.x0!=null?z.x0:t0, x1:z&&z.x0!=null?z.x1:t1, xF0:t0, xF1:t1,
+            y0:z&&z.y0!=null?z.y0:FMIN, y1:z&&z.y0!=null?z.y1:FMAX, yF0:FMIN, yF1:FMAX};
   }else return null;
   return ax;
 }
@@ -4523,6 +4583,8 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
     btn.className="zoomreset";
     btn.textContent="reset zoom";
     btn.title="Reset zoom (or double-click the plot)";
+    const k0=keyFn();
+    if(k0&&k0.slice(0,2)==="sg") btn.classList.add("sg");
     wrap.appendChild(btn);
     show="flex";
   }
@@ -4530,27 +4592,30 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
   ZOOM_UIS.push({keyFn,btn,show});
 
   let drag=null, suppress=false;
+  function margins(){ const k=keyFn(); return (k&&k.slice(0,2)==="sg")?SGPLOT:PLOT; }
   function plotBox(){
+    const m=margins();   // captured per gesture in pb — drag handlers reuse it
     const r=canvas.getBoundingClientRect();
-    return {left:r.left, top:r.top, w:r.width, h:r.height,
-            pW:r.width-PLOT.mL-PLOT.mR, pH:r.height-PLOT.mT-PLOT.mB};
+    return {left:r.left, top:r.top, w:r.width, h:r.height, m,
+            pW:r.width-m.mL-m.mR, pH:r.height-m.mT-m.mB};
   }
   function dataX(ax,pb,px){
-    const fr=Math.max(0,Math.min(1,(px-PLOT.mL)/pb.pW));
+    const fr=Math.max(0,Math.min(1,(px-pb.m.mL)/pb.pW));
     return ax.logX ? ax.x0*Math.pow(ax.x1/ax.x0,fr) : ax.x0+fr*(ax.x1-ax.x0);
   }
   function dataY(ax,pb,py){
-    const fr=Math.max(0,Math.min(1,(py-PLOT.mT)/pb.pH));
-    return ax.y1-fr*(ax.y1-ax.y0);
+    const fr=Math.max(0,Math.min(1,(py-pb.m.mT)/pb.pH));
+    return ax.logY ? ax.y1*Math.pow(ax.y0/ax.y1,fr) : ax.y1-fr*(ax.y1-ax.y0);
   }
   function selRect(d,px,py){
-    const x0=Math.max(PLOT.mL,Math.min(d.px0,px)),
-          x1=Math.min(d.pb.w-PLOT.mR,Math.max(d.px0,px)),
-          y0=Math.max(PLOT.mT,Math.min(d.py0,py)),
-          y1=Math.min(d.pb.h-PLOT.mB,Math.max(d.py0,py));
+    const m=d.pb.m;
+    const x0=Math.max(m.mL,Math.min(d.px0,px)),
+          x1=Math.min(d.pb.w-m.mR,Math.max(d.px0,px)),
+          y0=Math.max(m.mT,Math.min(d.py0,py)),
+          y1=Math.min(d.pb.h-m.mB,Math.max(d.py0,py));
     const thinX=(x1-x0)<8, thinY=(y1-y0)<8;
-    return {sx0:thinX?PLOT.mL:x0, sx1:thinX?d.pb.w-PLOT.mR:x1,
-            sy0:thinY?PLOT.mT:y0, sy1:thinY?d.pb.h-PLOT.mB:y1,
+    return {sx0:thinX?m.mL:x0, sx1:thinX?d.pb.w-m.mR:x1,
+            sy0:thinY?m.mT:y0, sy1:thinY?d.pb.h-m.mB:y1,
             thinX, thinY};
   }
   function doPan(d,px,py){
@@ -4568,9 +4633,15 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
       }
     }
     if(z.y0!=null){
-      let dy=(py-d.py0)/d.pb.pH*(ax.y1-ax.y0);
-      dy=Math.max(ax.yF0-z.y0,Math.min(ax.yF1-z.y1,dy));
-      nz.y0=z.y0+dy; nz.y1=z.y1+dy;
+      if(ax.logY){
+        let k=Math.pow(ax.y1/ax.y0,(py-d.py0)/d.pb.pH);
+        k=Math.max(ax.yF0/z.y0,Math.min(ax.yF1/z.y1,k));
+        nz.y0=z.y0*k; nz.y1=z.y1*k;
+      }else{
+        let dy=(py-d.py0)/d.pb.pH*(ax.y1-ax.y0);
+        dy=Math.max(ax.yF0-z.y0,Math.min(ax.yF1-z.y1,dy));
+        nz.y0=z.y0+dy; nz.y1=z.y1+dy;
+      }
     }
     setZoom(d.key,nz);
   }
@@ -4583,7 +4654,7 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
     if(!ax) return;
     const pb=plotBox();
     const px=e.clientX-pb.left, py=e.clientY-pb.top;
-    if(px<PLOT.mL||px>pb.w-PLOT.mR||py<PLOT.mT||py>pb.h-PLOT.mB) return;
+    if(px<pb.m.mL||px>pb.w-pb.m.mR||py<pb.m.mT||py>pb.h-pb.m.mB) return;
     const z0=ZOOMS[key]?Object.assign({},ZOOMS[key]):null;
     drag={key, ax, pb, px0:px, py0:py, pan:e.shiftKey, moved:false, z0};
     if(drag.pan) canvas.style.cursor="grabbing";
@@ -4638,12 +4709,21 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
     }
     if(!s.thinY){
       let y1=dataY(ax,d.pb,s.sy0), y0=dataY(ax,d.pb,s.sy1);
-      if(y1-y0<MIN_YSPAN){
-        const c=(y0+y1)/2;
-        y0=c-MIN_YSPAN/2; y1=c+MIN_YSPAN/2;
+      if(ax.logY){
+        if(y1/y0<MIN_XRATIO){
+          const c=Math.sqrt(y0*y1), r=Math.sqrt(MIN_XRATIO);
+          y0=c/r; y1=c*r;
+        }
+        if(y0<ax.yF0){ y1*=ax.yF0/y0; y0=ax.yF0; }
+        if(y1>ax.yF1){ y0*=ax.yF1/y1; y1=ax.yF1; }
+      }else{
+        if(y1-y0<MIN_YSPAN){
+          const c=(y0+y1)/2;
+          y0=c-MIN_YSPAN/2; y1=c+MIN_YSPAN/2;
+        }
+        if(y0<ax.yF0){ y1+=ax.yF0-y0; y0=ax.yF0; }
+        if(y1>ax.yF1){ y0-=y1-ax.yF1; y1=ax.yF1; }
       }
-      if(y0<ax.yF0){ y1+=ax.yF0-y0; y0=ax.yF0; }
-      if(y1>ax.yF1){ y0-=y1-ax.yF1; y1=ax.yF1; }
       nz.y0=Math.max(ax.yF0,y0); nz.y1=Math.min(ax.yF1,y1);
     }
     setZoom(d.key,nz);
@@ -4660,7 +4740,7 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
     if(!ax) return;
     const pb=plotBox();
     const px=e.clientX-pb.left, py=e.clientY-pb.top;
-    if(px<PLOT.mL||px>pb.w-PLOT.mR||py<PLOT.mT||py>pb.h-PLOT.mB) return;
+    if(px<pb.m.mL||px>pb.w-pb.m.mR||py<pb.m.mT||py>pb.h-pb.m.mB) return;
     e.preventDefault();
     const k=Math.exp(e.deltaY*0.0015);
     const nz=ZOOMS[key]?Object.assign({},ZOOMS[key])
@@ -4668,7 +4748,7 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
     if(ax.logX){
       const span=Math.log(ax.x1/ax.x0);
       const ns=Math.max(Math.log(MIN_XRATIO),Math.min(Math.log(ax.xF1/ax.xF0),span*k));
-      const fr=Math.max(0,Math.min(1,(px-PLOT.mL)/pb.pW));
+      const fr=Math.max(0,Math.min(1,(px-pb.m.mL)/pb.pW));
       const fc=ax.x0*Math.exp(fr*span);        // cursor keeps its frequency
       let x0=fc/Math.exp(fr*ns), x1=x0*Math.exp(ns);
       if(x0<ax.xF0){ x1*=ax.xF0/x0; x0=ax.xF0; }
@@ -4678,7 +4758,7 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
     }else{
       const span=ax.x1-ax.x0;
       const ns=Math.max(MIN_TSPAN,Math.min(ax.xF1-ax.xF0,span*k));
-      const fr=Math.max(0,Math.min(1,(px-PLOT.mL)/pb.pW));
+      const fr=Math.max(0,Math.min(1,(px-pb.m.mL)/pb.pW));
       const tc=ax.x0+fr*span;                  // cursor keeps its time
       let x0=tc-fr*ns, x1=x0+ns;
       if(x0<ax.xF0){ x1+=ax.xF0-x0; x0=ax.xF0; }
@@ -5733,6 +5813,9 @@ function boot(){
   attachZoom(envWrap, envCanvas, ()=>"env");
   attachZoom(eqRespWrap, eqRespCanvas, ()=>"eqresp");
   attachZoom(magWrap, magCanvas, ()=>(magKey&&(magKey in ZOOMS))?magKey:null, magReset);
+  attachZoom(sgramWraps[0], sgramCanvases[0], ()=>"sga");
+  attachZoom(sgramWraps[1], sgramCanvases[1], ()=>"sgb");
+  attachZoom(sgramWrapD, sgramCanvasD, ()=>"sgd");
 
   cards.forEach((card,i)=>{
     card.addEventListener("click",e=>{

@@ -380,6 +380,7 @@ table.datatable tr.grp td{
   margin-top:16px; padding-top:14px; border-top:1px solid var(--hair);
 }
 .prose .lead{ color:var(--dim); font-size:11px; letter-spacing:.12em; text-transform:uppercase; display:block; margin-bottom:6px; }
+.verdict{ margin-top:0; padding:14px 20px 15px; border-top:none; max-width:none; }
 .tonenote{ font-size:11.5px; color:var(--dim); margin-top:12px; font-variant-numeric:tabular-nums; }
 
 /* ---------- terms ---------- */
@@ -648,6 +649,11 @@ kbd{
       <input type="file" id="fileInput0" accept=".wav,.aif,.aiff,.mp3,.m4a,.mp4,.flac,.json,audio/*" hidden>
       <input type="file" id="fileInput1" accept=".wav,.aif,.aiff,.mp3,.m4a,.mp4,.flac,.json,audio/*" hidden>
     </div>
+
+    <!-- at a glance -->
+    <section class="card reveal" id="verdictCard" style="display:none">
+      <div class="prose verdict" id="verdictPara"></div>
+    </section>
 
     <!-- spectrum -->
     <section class="card" id="specCard">
@@ -3727,6 +3733,7 @@ const smoothSeg=el("smoothSeg"), vocabSel=el("vocabSel"),
       lmSwitch=el("lmSwitch"), lmToggle=el("lmToggle"),
       diffSwitch=el("diffSwitch"), diffToggle=el("diffToggle"),
       pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn");
+const verdictCard=el("verdictCard"), verdictPara=el("verdictPara");
 const specWrap=el("specWrap"), specCanvas=el("specCanvas"),
       specXline=el("specXline"), specReadout=el("specReadout"),
       specEmpty=el("specEmpty"), demoBtn=el("demoBtn");
@@ -4959,11 +4966,18 @@ function renderToneRows(){
   toneRows.innerHTML=toneDefs().map(toneRowHtml).join("");
 }
 
-function renderProse(){
+// Guitar name in slot color — same identity the plot legend uses.
+function slotNameHtml(i){
+  return '<b style="color:var(--slot-'+(i?"b":"a")+')">'+esc(shortName(state.slots[i].name,20))+"</b>";
+}
+
+// Ranked tone-contrast sentences, shared by the verdict strip (strongest one) and
+// the tone panel's prose paragraph (top four) — one source, so they cannot disagree.
+function proseCandidates(){
   const s0=state.slots[0], s1=state.slots[1];
-  if(!s0||!s1){ prosePara.style.display="none"; return; }
+  if(!s0||!s1) return [];
   const m=[s0.metrics||{},s1.metrics||{}];
-  const nm=i=>"<b>"+esc(shortName(state.slots[i].name,20))+"</b>";
+  const nm=slotNameHtml;
   const pair=(a,b)=>(a!=null&&b!=null&&isFinite(a)&&isFinite(b))?[a,b]:null;
   const cands=[];
   let p=pair(m[0].centroid,m[1].centroid);
@@ -5039,11 +5053,78 @@ function renderProse(){
       termHtml("dynamic-range","dynamic range")+" — "+p[hi].toFixed(1)+" dB against "+p[1-hi].toFixed(1)+" dB."});
   }
   cands.sort((a,b)=>b.score-a.score);
+  return cands;
+}
+
+function renderProse(){
+  if(!bothLoaded()){ prosePara.style.display="none"; return; }
+  const cands=proseCandidates();
   const text=cands.length
     ? cands.slice(0,4).map(c=>c.html).join(" ")
     : "These two spectra are closely matched — no difference clears GuitarScope's reporting thresholds. Try turning smoothing off, or the difference view with "+termHtml("level-match","level-match")+" on, to hunt for finer detail.";
   prosePara.style.display="";
   prosePara.innerHTML='<span class="lead">Reading the measurements</span>'+text;
+}
+
+// ---------- verdict strip ----------
+// The widest band gap in the active vocabulary — exactly the Band Energy table's
+// Δ math (level-match subtracted when on), so the strip can never contradict it.
+function biggestRegionDelta(){
+  const s0=state.slots[0], s1=state.slots[1];
+  if(!s0||!s1) return null;
+  const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
+  let best=null;
+  for(const r of vocab.regions){
+    const f0=regionF(r.f0), f1=regionF(r.f1);
+    const p0=bandPower(s0.welch.power,s0.welch.df,f0,f1);
+    const p1=bandPower(s1.welch.power,s1.welch.df,f0,f1);
+    const d=10*Math.log10(Math.max(p0,1e-30)/Math.max(p1,1e-30))
+            -(state.lm&&state.lmOffset!=null?state.lmOffset:0);
+    if(isFinite(d)&&(!best||Math.abs(d)>Math.abs(best.d))) best={r,f0,f1,d};
+  }
+  return best;
+}
+function renderVerdict(){
+  const n=(state.slots[0]?1:0)+(state.slots[1]?1:0);
+  if(!n) return; // updateVisibility keeps the card hidden
+  const parts=[];
+  if(n===1){
+    const i=state.slots[0]?0:1, m=state.slots[i].metrics||{};
+    let t="One guitar loaded — "+slotNameHtml(i);
+    const bits=[];
+    if(m.centroid!=null&&isFinite(m.centroid))
+      bits.push(termHtml("brightness","spectral centroid")+" "+fmtHz(m.centroid)+
+        " ("+esc(noteStr(m.centroid,state.a4))+")");
+    if(m.tilt!=null&&isFinite(m.tilt))
+      bits.push(termHtml("spectral-tilt","spectral tilt")+" "+m.tilt.toFixed(1)+" dB/oct");
+    if(m.f0!=null&&isFinite(m.f0))
+      bits.push("longest sustained note "+fmtHz(m.f0)+" ("+esc(noteStr(m.f0,state.a4))+")");
+    parts.push(t+(bits.length?": "+bits.join(" · ")+".":"."));
+    parts.push("Drop a second recording of the same riff to unlock the comparison views.");
+  }else{
+    const g=state.lmOffset;
+    if(g!=null&&isFinite(g)){
+      if(Math.abs(g)>=0.5){
+        parts.push(slotNameHtml(g>0?0:1)+" ran "+Math.abs(g).toFixed(1)+" dB louder overall — "+
+          (state.lm?termHtml("level-match","level-match")+" is on, so the plots below correct for it."
+                   :termHtml("level-match","level-match")+" is off, so that gap flows into every Δ below."));
+      }else{
+        parts.push("The two takes landed within "+Math.abs(g).toFixed(1)+" dB of each other overall — "+
+          "no meaningful "+termHtml("level-match","level")+" gap.");
+      }
+    }
+    const bd=biggestRegionDelta();
+    if(bd&&Math.abs(bd.d)>=1){
+      const label=bd.r.label.charAt(0)+bd.r.label.slice(1).toLowerCase();
+      parts.push("Their widest spectral gap is "+termHtml(bd.r.key,label)+" ("+rangeStr(bd.f0,bd.f1)+
+        "), where "+slotNameHtml(bd.d>0?0:1)+" runs "+Math.abs(bd.d).toFixed(1)+" dB hotter.");
+    }
+    const cands=proseCandidates();
+    if(cands.length) parts.push(cands[0].html);
+    else if(!bd||Math.abs(bd.d)<1)
+      parts.push("No tone difference clears GuitarScope's reporting thresholds — these two are closely matched.");
+  }
+  verdictPara.innerHTML='<span class="lead">At a glance</span>'+parts.join(" ");
 }
 
 function renderToneNote(){
@@ -5132,6 +5213,7 @@ function renderEqNote(){
 // ---------- master update ----------
 function updateVisibility(){
   const n=(state.slots[0]?1:0)+(state.slots[1]?1:0), both=n===2;
+  verdictCard.style.display=n?"":"none";
   specEmpty.style.display=n?"none":"";
   magBtns.forEach(b=>{ if(b.dataset.mag==="spec") b.style.display=n?"":"none"; });
   pngBtn.disabled=csvBtn.disabled=jsonBtn.disabled=!n;
@@ -5172,6 +5254,7 @@ function updateVisibility(){
   }
 }
 function renderAnalysis(){
+  renderVerdict();
   renderBandsTable(); renderToneRows(); renderProse(); renderToneNote();
   renderFooter(); updateDiffSub(); updateEqSub(); renderEqNote();
 }
@@ -5795,12 +5878,12 @@ function boot(){
   tuningSel.addEventListener("change",()=>{
     state.tuning=tuningSel.value;
     customOffsetWrap.style.display=state.tuning==="custom"?"":"none";
-    syncVocabTuning(); renderBandsTable();
+    syncVocabTuning(); renderVerdict(); renderBandsTable();
     requestDraw();
   });
   customOffsetEl.addEventListener("input",()=>{
     state.customOffset=parseInt(customOffsetEl.value,10)||0;
-    syncVocabTuning(); renderBandsTable();
+    syncVocabTuning(); renderVerdict(); renderBandsTable();
     requestDraw();
   });
   a4Input.addEventListener("change",()=>{
@@ -5814,7 +5897,7 @@ function boot(){
   lmToggle.addEventListener("change",()=>{
     state.lm=lmToggle.checked; compareTouched.lm=true;
     updateCurves(true);
-    renderBandsTable(); renderFooter(); updateDiffSub();
+    renderVerdict(); renderBandsTable(); renderFooter(); updateDiffSub();
   });
   diffToggle.addEventListener("change",()=>{
     state.diff=diffToggle.checked; compareTouched.diff=true;
@@ -5840,7 +5923,7 @@ function boot(){
   vocabSel.addEventListener("change",()=>{
     setVocab(vocabSel.value);
     try{ localStorage.setItem("gsVocab",state.vocab); }catch(_e){} // persist only explicit choices
-    renderBandsTable(); requestDraw();
+    renderVerdict(); renderBandsTable(); requestDraw();
   });
   eqDirSeg.addEventListener("click",e=>{
     const b=e.target.closest("button[data-dir]");

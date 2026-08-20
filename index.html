@@ -193,6 +193,23 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .ctlgroup > span{ font-size:11px; color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
 .exports{ display:flex; gap:6px; }
 
+/* progressive disclosure: analysis panels fold to their header line */
+.headleft{ display:flex; align-items:center; gap:10px; min-width:0; }
+.collbtn{
+  font:inherit; width:22px; height:22px; flex:none; padding:0;
+  display:inline-flex; align-items:center; justify-content:center;
+  color:var(--dim); background:transparent; border:1px solid transparent;
+  border-radius:6px; cursor:pointer;
+  transition:color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.collbtn::before{ content:"▾"; display:block; font-size:11px; transition:transform 200ms var(--ease); }
+.collbtn:hover{ color:var(--ink); border-color:var(--hair); }
+.card.collapsed .collbtn::before{ transform:rotate(-90deg); }
+.card.collapsed .cardbody{ display:none; }
+.card.collapsed .cardhead .controls{ display:none; }
+.card.collapsed .cardhead{ cursor:pointer; }
+.card.collapsed .cardhead:hover .cardtitle{ color:var(--ink); }
+
 /* section reveal */
 .reveal{ animation:reveal 240ms var(--ease); }
 @keyframes reveal{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:none;} }
@@ -715,9 +732,12 @@ kbd{
     <!-- difference -->
     <section class="card reveal" id="diffCard" style="display:none">
       <div class="cardhead">
-        <div>
-          <div class="cardtitle">Difference</div>
-          <div class="cardsub" id="diffSub">A − B, dB</div>
+        <div class="headleft">
+          <button class="collbtn" data-coll="diff" aria-expanded="true" title="Collapse panel" aria-label="Collapse Difference panel"></button>
+          <div>
+            <div class="cardtitle">Difference</div>
+            <div class="cardsub" id="diffSub">A − B, dB</div>
+          </div>
         </div>
       </div>
       <div class="cardbody">
@@ -733,9 +753,12 @@ kbd{
     <!-- band energy -->
     <section class="card reveal" id="bandsCard" style="display:none">
       <div class="cardhead">
-        <div>
-          <div class="cardtitle">Band energy</div>
-          <div class="cardsub" id="bandsSub">share of total 60 Hz–20 kHz energy · Δ in dB</div>
+        <div class="headleft">
+          <button class="collbtn" data-coll="bands" aria-expanded="true" title="Collapse panel" aria-label="Collapse Band energy panel"></button>
+          <div>
+            <div class="cardtitle">Band energy</div>
+            <div class="cardsub" id="bandsSub">share of total 60 Hz–20 kHz energy · Δ in dB</div>
+          </div>
         </div>
       </div>
       <div class="cardbody">
@@ -747,9 +770,12 @@ kbd{
     <!-- tone character -->
     <section class="card reveal" id="toneCard" style="display:none">
       <div class="cardhead">
-        <div>
-          <div class="cardtitle">Tone character</div>
-          <div class="cardsub">named descriptors, each backed by a measurement — click any term for its formula</div>
+        <div class="headleft">
+          <button class="collbtn" data-coll="tone" aria-expanded="true" title="Collapse panel" aria-label="Collapse Tone character panel"></button>
+          <div>
+            <div class="cardtitle">Tone character</div>
+            <div class="cardsub">named descriptors, each backed by a measurement — click any term for its formula</div>
+          </div>
         </div>
       </div>
       <div class="cardbody">
@@ -762,9 +788,12 @@ kbd{
     <!-- EQ match (M2.5) -->
     <section class="card reveal" id="eqCard" style="display:none">
       <div class="cardhead">
-        <div>
-          <div class="cardtitle">EQ match</div>
-          <div class="cardsub" id="eqSub">settings that reshape one guitar's spectrum toward the other's</div>
+        <div class="headleft">
+          <button class="collbtn" data-coll="eq" aria-expanded="true" title="Collapse panel" aria-label="Collapse EQ match panel"></button>
+          <div>
+            <div class="cardtitle">EQ match</div>
+            <div class="cardsub" id="eqSub">settings that reshape one guitar's spectrum toward the other's</div>
+          </div>
         </div>
         <div class="controls">
           <div class="ctlgroup">
@@ -802,9 +831,12 @@ kbd{
     <!-- spectrogram (M2) -->
     <section class="card reveal" id="sgramCard" style="display:none">
       <div class="cardhead">
-        <div>
-          <div class="cardtitle">Spectrogram</div>
-          <div class="cardsub" id="sgramSub">time–frequency energy, shared color scale across A and B · magma colormap</div>
+        <div class="headleft">
+          <button class="collbtn" data-coll="sgram" aria-expanded="true" title="Collapse panel" aria-label="Collapse Spectrogram panel"></button>
+          <div>
+            <div class="cardtitle">Spectrogram</div>
+            <div class="cardsub" id="sgramSub">time–frequency energy, shared color scale across A and B · magma colormap</div>
+          </div>
         </div>
         <div class="controls">
           <div class="ctlgroup">
@@ -847,9 +879,12 @@ kbd{
     <!-- envelope overlay (M2) -->
     <section class="card reveal" id="envCard" style="display:none">
       <div class="cardhead">
-        <div>
-          <div class="cardtitle">Envelope</div>
-          <div class="cardsub" id="envSub">amplitude envelope in dB re full scale, A/B aligned at each file's first onset · tick marks show detected onsets</div>
+        <div class="headleft">
+          <button class="collbtn" data-coll="env" aria-expanded="true" title="Collapse panel" aria-label="Collapse Envelope panel"></button>
+          <div>
+            <div class="cardtitle">Envelope</div>
+            <div class="cardsub" id="envSub">amplitude envelope in dB re full scale, A/B aligned at each file's first onset · tick marks show detected onsets</div>
+          </div>
         </div>
       </div>
       <div class="cardbody">
@@ -4328,31 +4363,33 @@ function drawAll(){
   const {ctx,w,h}=setupCanvas(specCanvas);
   specHits.length=0;
   drawSpectrumScene(ctx,w,h,buildSpecModel(false),specHits);
-  const dm=buildDiffModel();
+  // Folded panels (progressive disclosure) skip model building and canvas
+  // work entirely — their canvases are display:none; unfolding requestDraws.
+  const dm=collState.diff?null:buildDiffModel();
   if(dm){
     const d=setupCanvas(diffCanvas);
     drawDiffScene(d.ctx,d.w,d.h,dm);
   }
-  const scale=sgramScale();
+  const scale=collState.sgram?null:sgramScale();
   if(scale) for(let i=0;i<2;i++){
     const model=sgramModelFor(i,scale);
     if(!model) continue;
     const c=setupCanvas(sgramCanvases[i]);
     drawSpectrogramScene(c.ctx,c.w,c.h,model);
   }
-  if(sgDiffVisible()){
+  if(!collState.sgram&&sgDiffVisible()){
     const model=buildSgramDiffModel();
     if(model){
       const c=setupCanvas(sgramCanvasD);
       drawSgramDiffScene(c.ctx,c.w,c.h,model);
     }
   }
-  const em=buildEnvModel();
+  const em=collState.env?null:buildEnvModel();
   if(em){
     const c=setupCanvas(envCanvas);
     drawEnvelopeScene(c.ctx,c.w,c.h,em);
   }
-  if(bothLoaded()){
+  if(bothLoaded()&&!collState.eq){
     const eqm=buildEqModels();
     if(eqm){
       const f=setupCanvas(eqFaceCanvas);
@@ -5271,6 +5308,37 @@ function copyEqSettings(){
 }
 
 // ---------- master update ----------
+// ---------- progressive disclosure ----------
+// Six analysis panels fold to their header line; the at-a-glance verdict and
+// the spectrum never fold. The deeper instruments (EQ match, spectrogram,
+// envelope) start folded so a fresh comparison reads verdict → spectrum →
+// difference → band energy → tone character, with the rest one click away.
+// gsCollapse stores only panels the user has explicitly clicked, so a future
+// default change still reaches untouched panels; snapshots don't carry fold
+// state — it's reader preference, not analysis state. drawAll() skips the
+// canvas work of folded panels; unfolding requests a fresh draw.
+const COLL_CARDS={ diff:diffCard, bands:bandsCard, tone:toneCard,
+                   eq:eqCard, sgram:sgramCard, env:envCard };
+const COLL_DEFAULT={ diff:false, bands:false, tone:false, eq:true, sgram:true, env:true };
+const collState=Object.assign({},COLL_DEFAULT);
+const collTouched={};   // only these keys persist
+function applyCollapse(){
+  for(const k in COLL_CARDS){
+    const on=!!collState[k];
+    COLL_CARDS[k].classList.toggle("collapsed",on);
+    const b=COLL_CARDS[k].querySelector(".collbtn");
+    if(b){ b.setAttribute("aria-expanded",String(!on));
+           b.title=on?"Expand panel":"Collapse panel"; }
+  }
+}
+function toggleCollapse(key){
+  if(!(key in COLL_CARDS)) return;
+  collState[key]=!collState[key];
+  collTouched[key]=collState[key];
+  try{ localStorage.setItem("gsCollapse",JSON.stringify(collTouched)); }catch(_e){}
+  applyCollapse();
+  if(!collState[key]) requestDraw(); // this panel's canvases were skipped while folded
+}
 function updateVisibility(){
   const n=(state.slots[0]?1:0)+(state.slots[1]?1:0), both=n===2;
   verdictCard.style.display=n?"":"none";
@@ -6140,6 +6208,17 @@ function boot(){
     if(e.target===guideModal) guideModal.classList.remove("open");
   });
   magBtns.forEach(b=>b.addEventListener("click",()=>openMag(b.dataset.mag)));
+
+  document.querySelectorAll(".collbtn").forEach(b=>{
+    b.addEventListener("click",e=>{ e.stopPropagation(); toggleCollapse(b.dataset.coll); });
+  });
+  for(const k in COLL_CARDS){
+    // A folded card's whole header is a reopen target; an expanded header
+    // keeps live controls, so only the chevron folds it.
+    COLL_CARDS[k].querySelector(".cardhead").addEventListener("click",()=>{
+      if(collState[k]) toggleCollapse(k);
+    });
+  }
   magClose.addEventListener("click",closeMag);
   magModal.addEventListener("click",e=>{ if(e.target===magModal) closeMag(); });
 
@@ -6285,6 +6364,12 @@ function boot(){
     const v=localStorage.getItem("gsVocab");
     if(v&&VOCAB_BY_ID[v]) setVocab(v);
   }catch(_e){}
+  try{
+    const j=JSON.parse(localStorage.getItem("gsCollapse"));
+    if(j&&typeof j==="object") for(const k in j)
+      if(k in COLL_CARDS&&typeof j[k]==="boolean"){ collState[k]=j[k]; collTouched[k]=j[k]; }
+  }catch(_e){}
+  applyCollapse();
   renderCard(0); renderCard(1);
   buildGlossList("");
   updateVisibility();
@@ -6297,6 +6382,12 @@ function boot(){
   if(/[?&]guide(?:&|$)/i.test(location.search)) guideModal.classList.add("open");   // test hook
   if(/[?&]diff(?:&|$)/i.test(location.search)){                                     // test hook
     state.diff=true; diffToggle.checked=true; updateVisibility();
+  }
+  const op=location.search.match(/[?&]open=([a-z,]+)(?:&|$)/i);                     // test hook
+  if(op){        // session-only unfold: "all" or a comma list of panel keys
+    const ks=op[1].toLowerCase()==="all"?Object.keys(COLL_CARDS):op[1].toLowerCase().split(",");
+    for(const k of ks) if(k in COLL_CARDS) collState[k]=false;
+    applyCollapse(); requestDraw();
   }
   const mg=location.search.match(/[?&]mag=([a-z]+)(?:&|$)/i);                       // test hook
   if(mg) openMag(mg[1].toLowerCase());

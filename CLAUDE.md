@@ -57,13 +57,17 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   Difference sub-section exists only with two sources; Strings + Regions move from
   the global header into the card header (scope = this card), Level-match stays
   global; `gsCollapse`/`?open=` gain sub-section keys (`spec`/`diff`/`bands`);
-  magnify keys unchanged. **Remaining (restaged session 10): M2.6g** "Show
-  harmonics" sub-toggle under Strings (low harmonics per string on both line plots,
-  lighter than fundamentals, click-to-popover, persisted); **M2.6h** per-card
-  exports (300-dpi PNG / JSON / CSV, EQ-match JSON — design done pre-restage,
-  spectrum/diff/bands buttons per sub-section); **M2.6i** versioned `gsSettings`
-  persistence (user agreed: mode/tuning+offset/A4/EQ device/smoothing + Strings +
-  harmonics; NOT level-match; footer reset). One commit per submilestone.
+  magnify keys unchanged. **M2.6g BUILT (session 12):** "Show harmonics" sub-toggle
+  under Strings (harmonics 2–4 per string on both line plots, 0.16 vs 0.32 opacity,
+  dash [1,5] vs [2,4], clickable to per-string popover, `?harmonics=` hook,
+  persisted via `gsHarmonics`/`gsSettings`). **M2.6h BUILT (session 12):** per-card
+  300-dpi PNG (`pHYs` 11811 dpm) / JSON / CSV — Spectrum/Difference/Bands buttons
+  per sub-section inside merged card, plus Tone/Sgram/Env/EQ JSON+CSV/PNG;
+  PNGs render clean from scene builders via `_cardPng`/`_exportPngCanvas`.
+  **M2.6i BUILT (session 12):** versioned `gsSettings` (v1: mode/tuning+offset/A4/
+  smooth/EQ device+dir/vocab/Strings+Harmonics; NOT level-match) with migration
+  from legacy `gsVocab`/`gsStrings`/`gsHarmonics`, `saveSettings()` on explicit
+  actions, footer “Remembered … — Reset saved settings” (`resetSettingsBtn`).
 - 107/107 tests pass (`node tests/dsp.test.js`, including the M2.6e switch CSS contract). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four

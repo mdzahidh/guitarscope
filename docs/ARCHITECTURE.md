@@ -597,6 +597,69 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   sub-sections so any external or test hook referencing the old IDs doesn't
   break — they point at `freqDiff`/`freqBands`/`freqSpec`.
 
+## M2.6g (session 12): show harmonics — lighter overtones
+
+- **Overtones are annotation, like the fundamentals.** `stringAxisMarkers()` is
+  the single source of truth for the bottom-axis guides: fundamentals
+  (`harm:1`) plus, when `state.harmonics` is on, 2×–4× per string (filtered to
+  `FMIN–FMAX`). The array is sorted fundamentals-first so `drawStringAxis`'s
+  16 px label-skip guard gives priority to the named fundamentals; harmonics
+  never get a label (dots-only) to keep the axis readable with 18 extra
+  verticals. Both `buildSpecModel` and `buildDiffModel` read the same array, so
+  the two plots stay in lockstep.
+- **Lighter, still interactive.** Fundamentals: `0.32` ` [2,4]`; harmonics: `0.16`
+  `[1,5]`. The lighter stroke reads as secondary without vanishing on Bright.
+  Hit rects for harmonics are 8 px-wide strips covering the full plot height
+  (no label to click), dispatching to the same `openStringPopover(si)` — the
+  popover already documents harmonics 2–5, so the interaction is free.
+- **Persistence.** `state.harmonics` (default off) lives in `gsHarmonics` today
+  and in `gsSettings` v1 after M2.6i; the Frequency header's second switch is
+  `disabled` when Strings is off (`syncHarmonicsUI()`), and `?harmonics=0|1`
+  is the headless hook.
+
+## M2.6h (session 12): per-card 300-dpi PNG / JSON / CSV
+
+- **Buttons per sub-section, not per card.** The merged Frequency card's three
+  rows each own their export row (`spec` keeps its `PNG/CSV/Snapshot`, `diff`
+  and `bands` gain `PNG/CSV/JSON`); Tone, Sgram, Env, and EQ gain `PNG/JSON/CSV`
+  in their own headers. All buttons gate on `anyLoaded()` or `bothLoaded()` so
+  a single-guitar view doesn't offer a difference export for nothing.
+- **One true 300-dpi path.** Every PNG export renders clean from its scene
+  builder (`drawSpectrumScene`, `drawDiffScene`, `drawEnvelopeScene`, etc.) into
+  an offscreen canvas (`@2×` for retina, `W=1240` etc.), then injects a `pHYs`
+  chunk (`11811` dpm) via `_pngWithDpi` (`_crc32` is the PNG CRC). `Spectrum`
+  keeps its titled header+legend composition; `Bands`/`Tone` rasterize their
+  HTML tables (text only) — a table has no canvas scene to reuse.
+- **Data exports are defensible.** `diffCsv`/`diffJson` dump the displayed
+  `a−b` curve; `bandsCsv` recomputes `bandPower` shares per vocabulary region
+  (the same math as `renderBandsTable`); `toneCsv` scrapes the live tone rows
+  and prose; `envCsv` dumps `buildEnvModel` points; `sgramJson`/`envJson` wrap
+  frame counts and alignment; `eqJson` dumps `eqFitData()`; snapshot JSON now
+  also carries `strings`/`harmonics` so a reloaded snapshot restores the view
+  as the user saw it. All per-card JSONs carry `guitars`, `regions`, and the
+  current `state` snapshot via `_exportCardJson`.
+
+## M2.6i (session 12): versioned `gsSettings` — one store, one reset
+
+- **Scope.** `gsSettings` v1 stores the analysis-fact settings the user
+  *chose* (intent, not data): `mode`, `tuning`+`customOffset`, `a4`, `smooth`,
+  `eqDevice`/`eqDir`, `vocab`, `strings`, `harmonics`. `lm` (level-match) is
+  deliberately excluded — its auto-latch already handles the common case and
+  a saved `lm` would fight the latch. `gsTheme`/`gsColors`/`gsCollapse` stay
+  separate (viewer prefs with their own scopes).
+- **One write path.** `_settingsPayload()` builds `{v:1,…}`; `saveSettings()`
+  writes `gsSettings`; `loadSettings()` validates `v` and applies to `state`+UI
+  (selectors, switches, `syncHarmonicsUI`, `syncVocabTuning`). Legacy keys
+  `gsVocab`/`gsStrings`/`gsHarmonics` are read once for migration; new writes
+  also mirror to the legacy keys so a downgraded build doesn't lose them.
+  Writes happen only on explicit UI actions (click/change/keyboard `1-4`/`M`);
+  `applySnapshot` and programmatic `setSmoothUI`/`setVocab` never write.
+- **Footer affordance.** New `.settingsFoot` line prints what *is* remembered
+  and what *isn't* (“… — not level-match”) with a `Reset saved settings`
+  button that clears `gsSettings`+legacy keys, resets `state` to defaults,
+  syncs every control, and toasts. No snapshot carries fold/collapse state,
+  so resets never affect a snapshot reload.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

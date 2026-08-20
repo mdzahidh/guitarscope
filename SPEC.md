@@ -665,4 +665,54 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   node `--check` on all five script blocks; headless `?demo&open=all` and
   single-guitar `?demo=a` checked — outer card shows spectrum+bands, diff row
   hidden, strings/regions in the card header, smoothing in the spectrum row.
-- **Next:** M2.6g string harmonics, then h exports, i settings.
+
+### 2026-08-20 — M2.6g built: show harmonics (session 12)
+
+- **Harmonics sub-toggle.** Second switch in the Frequency analysis header,
+  “Harmonics — Show”, enabled only when Strings is on (`syncHarmonicsUI()`
+  disables and grays it). `state.harmonics` (default off) persists via
+  `gsHarmonics` (and `gsSettings` v1 after M2.6i) and `?harmonics=0|1` test hook.
+- **Rendering.** `stringAxisMarkers()` builds fundamentals + 2×–4× per string
+  (60–20 kHz filtered, fundamentals sorted first so their 16 px label guard wins).
+  `drawStringAxis()` draws fundamentals at `0.32` `[2,4]` with labels, harmonics
+  at `0.16` `[1,5]` without labels (dots-only) but with an 8 px hit rect,
+  both clickable to the per-string popover.
+- **Both line plots.** `buildSpecModel` and `buildDiffModel` now use
+  `stringAxisMarkers()` so Spectrum and Difference share the same toggles.
+
+### 2026-08-20 — M2.6h built: per-card exports (session 12)
+
+- **Buttons per sub-section.** Spectrum keeps `PNG/CSV/Snapshot`; Difference and
+  Bands sub-sections gain `PNG/CSV/JSON` inside the merged Frequency card;
+  Tone, Spectrogram, Envelope, and EQ gain `PNG/JSON/CSV` (EQ keeps Copy settings
+  plus new JSON). All buttons disable when their data scope isn’t met
+  (`diff` needs both, others need any, EQ needs both).
+- **300-dpi PNG.** All PNG exports inject a `pHYs` chunk (11811 dpm ≈ 300 dpi)
+  via `_pngWithDpi`/`_crc32` so the file prints at true 300 dpi. Spectrum PNG
+  is the existing composition (header + legend + `drawSpectrumScene`);
+  Difference/Bands/Tone/Sgram/Env/EQ use `_cardPng` which renders the scene
+  clean from its builder at `1240×720@2×` (or table text for Bands/Tone).
+- **CSV/JSON.** Spectrum CSV keeps its Welch grid; Difference CSV exports
+  `a_minus_b`; Bands CSV uses `bandPower` to compute share % and delta dB per
+  vocabulary region; Tone CSV scrapes the tone rows; Env CSV dumps `buildEnvModel`
+  points; JSON per card wraps the same payload with `state` (mode/tuning/A4/
+  vocab/strings/harmonics etc) and region definitions via `_exportCardJson`;
+  Snapshot JSON now also carries `strings`/`harmonics`.
+
+### 2026-08-20 — M2.6i built: versioned settings persistence (session 12)
+
+- **One versioned store.** `gsSettings` v1 consolidates the analysis-fact
+  settings the user explicitly chose: `mode`, `tuning`+`customOffset`, `A4`,
+  `smooth`, `eqDevice`+`eqDir`, `vocab`, `strings`, `harmonics` — **not**
+  `lm` (level-match stays session-only per the auto-latch rule, not a saved
+  preference). `SETTINGS_VER=1`, `_settingsPayload()`/`saveSettings()`/
+  `loadSettings()` with migration from legacy `gsVocab`/`gsStrings`/`gsHarmonics`.
+- **Write only on explicit actions.** `saveSettings()` is called from the click/
+  change handlers for mode, tuning, custom offset, A4, smoothing, vocab,
+  strings, harmonics, EQ device/dir, and the `1-4`/`M` keyboard shortcuts;
+  snapshot restores (`setSmoothUI`/`setVocab` etc) never write.
+- **Footer UI.** New `.settingsFoot` line under the params footer states what’s
+  remembered (“mode · tuning · A4 · EQ device · smoothing · Strings · Harmonics
+  — not level-match”) and a “Reset saved settings” button (`resetSettingsBtn`)
+  that clears `gsSettings`+legacy keys, resets state/UI to defaults, and toasts.
+- **Next:** M3 live input (deferred until user testing, per CLAUDE.md).

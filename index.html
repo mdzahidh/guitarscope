@@ -522,6 +522,8 @@ footer{
 }
 #paramsLine .sep{ color:var(--faint); padding:0 5px; }
 .footright{ font-size:11px; color:var(--faint); display:flex; gap:14px; align-items:baseline; white-space:nowrap; }
+.settingsFoot{ width:100%; margin-top:10px; padding-top:10px; border-top:1px solid var(--hair); font-size:11px; color:var(--dim); line-height:1.6; }
+.settingsFoot .sfInfo{ color:var(--dim); }
 kbd{
   font:inherit; font-size:10px; color:var(--mut); background:var(--panel2);
   border:1px solid var(--hair); border-bottom-width:2px; border-radius:5px;
@@ -974,6 +976,9 @@ kbd{
       <div class="footright">
         <button class="linkish" id="shortcutsBtn"><kbd>?</kbd> shortcuts</button>
         <span>GuitarScope · offline · files never leave this page</span>
+      </div>
+      <div class="settingsFoot" id="settingsFoot">
+        <span class="sfInfo">Remembered: mode · tuning · A4 · EQ device · smoothing · Strings · Harmonics — not level-match · <button class="linkish" id="resetSettingsBtn">Reset saved settings</button></span>
       </div>
     </footer>
 
@@ -3895,6 +3900,7 @@ const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSel=
 const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
 const guideModal=el("guideModal"), guideBtn=el("guideBtn"),
       guideLink=el("guideLink"), guideClose=el("guideClose");
+const resetSettingsBtn=el("resetSettingsBtn");
 const magModal=el("magModal"), magTitle=el("magTitle"),
       magCanvas=el("magCanvas"), magClose=el("magClose"),
       magWrap=el("magWrap"), magReset=el("magReset");
@@ -6161,6 +6167,80 @@ function setVocab(v){
   vocabSel.value=v;
   syncLaneHeight(); // two-row vocabularies need a taller lane (PLOT.mT 48 vs 34)
 }
+// ---------- settings persistence (M2.6i) ----------
+// Versioned gsSettings: mode, tuning+offset, A4, EQ device/dir, smoothing,
+// vocab, Strings, harmonics — NOT level-match. Written only on explicit
+// user actions, read on boot with migration from legacy keys.
+const SETTINGS_VER=1;
+function _settingsPayload(){
+  return {v:SETTINGS_VER, mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
+    a4:state.a4, smooth:state.smooth, eqDevice:state.eqDevice, eqDir:state.eqDir,
+    vocab:state.vocab, strings:state.strings, harmonics:state.harmonics};
+}
+function saveSettings(){
+  try{ localStorage.setItem("gsSettings", JSON.stringify(_settingsPayload())); }catch(_e){}
+}
+function loadSettings(){
+  try{
+    const raw=localStorage.getItem("gsSettings");
+    if(raw){
+      const j=JSON.parse(raw);
+      if(j&&j.v===SETTINGS_VER){
+        if(j.mode==="electric"||j.mode==="acoustic") state.mode=j.mode;
+        if(typeof j.tuning==="string"&&(TUNINGS[j.tuning]||j.tuning==="custom")) state.tuning=j.tuning;
+        if(typeof j.customOffset==="number") state.customOffset=j.customOffset|0;
+        if(isFinite(j.a4)&&j.a4>=415&&j.a4<=466) state.a4=+j.a4;
+        if([0,12,6,3].includes(j.smooth)) state.smooth=j.smooth;
+        if(typeof j.eqDevice==="string"&&EQ_DEVICE_BY_ID[j.eqDevice]) state.eqDevice=j.eqDevice;
+        if(j.eqDir===0||j.eqDir===1) state.eqDir=j.eqDir;
+        if(typeof j.vocab==="string"&&VOCAB_BY_ID[j.vocab]) state.vocab=j.vocab;
+        if(typeof j.strings==="boolean") state.strings=j.strings;
+        if(typeof j.harmonics==="boolean") state.harmonics=j.harmonics;
+        // apply to UI (decoupled from save)
+        modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===state.mode));
+        tuningSel.value=state.tuning; customOffsetWrap.style.display=state.tuning==="custom"?"":"none"; customOffsetEl.value=state.customOffset;
+        a4Input.value=state.a4;
+        setSmoothUI(state.smooth);
+        eqDevSel.value=state.eqDevice; eqDirSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.dir===state.eqDir));
+        setVocab(state.vocab); stringsToggle.checked=state.strings; harmonicsToggle.checked=state.harmonics;
+        try{ syncHarmonicsUI(); }catch(_e){}
+        syncVocabTuning();
+        return true;
+      }
+    }
+    // migration from legacy keys (gsVocab/gsStrings/gsHarmonics + current state for mode/tuning etc not previously persisted)
+    let migrated=false;
+    try{
+      const v=localStorage.getItem("gsVocab"); if(v&&VOCAB_BY_ID[v]){ state.vocab=v; setVocab(v); migrated=true; }
+      const s=localStorage.getItem("gsStrings"); if(s!=null){ state.strings=s==="1"; stringsToggle.checked=state.strings; migrated=true; }
+      const hh=localStorage.getItem("gsHarmonics"); if(hh!=null){ state.harmonics=hh==="1"; harmonicsToggle.checked=state.harmonics; migrated=true; }
+      if(migrated) try{ syncHarmonicsUI(); }catch(_e){}
+    }catch(_e){}
+    return migrated;
+  }catch(_e){ return false; }
+}
+function resetSettings(){
+  try{
+    localStorage.removeItem("gsSettings");
+    localStorage.removeItem("gsStrings");
+    localStorage.removeItem("gsHarmonics");
+    // keep gsVocab? spec says vocab is persisted separately but now also in gsSettings — clear it to default
+    // keep theme/colors/collapse as they are viewer prefs, not analysis settings
+  }catch(_e){}
+  state.mode="electric"; state.tuning="estd"; state.customOffset=0; state.a4=440;
+  state.smooth=6; state.eqDevice="ge7"; state.eqDir=0; state.vocab="mix";
+  state.strings=false; state.harmonics=false;
+  modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===state.mode));
+  tuningSel.value=state.tuning; customOffsetWrap.style.display="none"; customOffsetEl.value=state.customOffset;
+  a4Input.value=state.a4;
+  setSmoothUI(state.smooth);
+  eqDevSel.value=state.eqDevice; eqDirSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.dir===state.eqDir));
+  setVocab("mix"); stringsToggle.checked=false; harmonicsToggle.checked=false;
+  try{ syncHarmonicsUI(); }catch(_e){}
+  syncVocabTuning();
+  requestDraw(); renderAnalysis();
+  toast("Saved settings reset to defaults.");
+}
 function applySnapshot(snap){
   const st=snap.settings||{};
   if(st.mode==="electric"||st.mode==="acoustic"){
@@ -6450,22 +6530,22 @@ function boot(){
 
   modeSeg.addEventListener("click",e=>{
     const b=e.target.closest("button[data-mode]");
-    if(b) setMode(b.dataset.mode);
+    if(b){ setMode(b.dataset.mode); saveSettings(); }
   });
   smoothSeg.addEventListener("click",e=>{
     const b=e.target.closest("button[data-sm]");
-    if(b) setSmooth(+b.dataset.sm);
+    if(b){ setSmooth(+b.dataset.sm); saveSettings(); }
   });
   tuningSel.addEventListener("change",()=>{
     state.tuning=tuningSel.value;
     customOffsetWrap.style.display=state.tuning==="custom"?"":"none";
     syncVocabTuning(); renderVerdict(); renderBandsTable();
-    requestDraw();
+    requestDraw(); saveSettings();
   });
   customOffsetEl.addEventListener("input",()=>{
     state.customOffset=parseInt(customOffsetEl.value,10)||0;
     syncVocabTuning(); renderVerdict(); renderBandsTable();
-    requestDraw();
+    requestDraw(); saveSettings();
   });
   a4Input.addEventListener("change",()=>{
     let v=parseFloat(a4Input.value);
@@ -6473,7 +6553,7 @@ function boot(){
     v=Math.max(415,Math.min(466,v));
     a4Input.value=v; state.a4=v;
     syncVocabTuning();
-    requestDraw(); renderAnalysis();
+    requestDraw(); renderAnalysis(); saveSettings();
   });
   lmToggle.addEventListener("change",()=>{
     state.lm=lmToggle.checked; compareTouched.lm=true;
@@ -6491,7 +6571,9 @@ function boot(){
   });
   vocabSel.addEventListener("change",()=>{
     setVocab(vocabSel.value);
-    try{ localStorage.setItem("gsVocab",state.vocab); }catch(_e){} // persist only explicit choices
+    saveSettings();
+    // keep legacy key for migration readers that haven't upgraded yet
+    try{ localStorage.setItem("gsVocab",state.vocab); }catch(_e){}
     renderVerdict(); renderBandsTable(); requestDraw();
   });
   function syncHarmonicsUI(){
@@ -6501,13 +6583,15 @@ function boot(){
   }
   stringsToggle.addEventListener("change",()=>{
     state.strings=stringsToggle.checked;
-    try{ localStorage.setItem("gsStrings",state.strings?"1":"0"); }catch(_e){} // persist only explicit choices
+    saveSettings();
+    try{ localStorage.setItem("gsStrings",state.strings?"1":"0"); }catch(_e){}
     syncHarmonicsUI();
     requestDraw();
   });
   harmonicsToggle.addEventListener("change",()=>{
     state.harmonics=harmonicsToggle.checked;
-    try{ localStorage.setItem("gsHarmonics",state.harmonics?"1":"0"); }catch(_e){} // persist only explicit choices
+    saveSettings();
+    try{ localStorage.setItem("gsHarmonics",state.harmonics?"1":"0"); }catch(_e){}
     requestDraw();
   });
   eqDirSeg.addEventListener("click",e=>{
@@ -6515,11 +6599,11 @@ function boot(){
     if(!b) return;
     state.eqDir=+b.dataset.dir;
     eqDirSeg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
-    updateEqSub(); renderEqNote(); renderFooter(); requestDraw();
+    updateEqSub(); renderEqNote(); renderFooter(); requestDraw(); saveSettings();
   });
   eqDevSel.addEventListener("change",()=>{
     state.eqDevice=eqDevSel.value;
-    updateEqSub(); renderEqNote(); renderFooter(); requestDraw();
+    updateEqSub(); renderEqNote(); renderFooter(); requestDraw(); saveSettings();
   });
   eqCopyBtn.addEventListener("click",copyEqSettings);
   eqJsonBtn.addEventListener("click",exportEqJSON);
@@ -6562,6 +6646,7 @@ function boot(){
   shortcutsModal.addEventListener("click",e=>{
     if(e.target===shortcutsModal) shortcutsModal.classList.remove("open");
   });
+  resetSettingsBtn.addEventListener("click", resetSettings);
   guideBtn.addEventListener("click",()=>guideModal.classList.add("open"));
   guideLink.addEventListener("click",e=>{ e.preventDefault(); guideModal.classList.add("open"); });
   guideClose.addEventListener("click",()=>guideModal.classList.remove("open"));
@@ -6630,10 +6715,10 @@ function boot(){
       return;
     }
     switch(e.key){
-      case "1": setSmooth(0); break;
-      case "2": setSmooth(12); break;
-      case "3": setSmooth(6); break;
-      case "4": setSmooth(3); break;
+      case "1": setSmooth(0); saveSettings(); break;
+      case "2": setSmooth(12); saveSettings(); break;
+      case "3": setSmooth(6); saveSettings(); break;
+      case "4": setSmooth(3); saveSettings(); break;
       case "l": case "L":
         if(!lmToggle.disabled){ lmToggle.checked=!lmToggle.checked;
           lmToggle.dispatchEvent(new Event("change")); }
@@ -6643,7 +6728,7 @@ function boot(){
         stringsToggle.dispatchEvent(new Event("change"));
         break;
       case "m": case "M":
-        setMode(state.mode==="electric"?"acoustic":"electric"); break;
+        setMode(state.mode==="electric"?"acoustic":"electric"); saveSettings(); break;
       case "g": case "G":
         setGloss(!glossPanel.classList.contains("open")); break;
       case "e": case "E":
@@ -6727,24 +6812,14 @@ function boot(){
   });
 
   try{
-    // The default vocabulary flipped from "eq" to "mix" (2026-08-20). gsVocab is
-    // only ever written by explicit selector clicks, but before the flip a stored
-    // "eq" most likely just retraced the then-default, so clear it once; the
-    // marker keeps a post-flip explicit choice of EQ speak from being cleared too.
+    // M2.6i: versioned gsSettings replaces the ad-hoc gsVocab/gsStrings/gsHarmonics
+    // keys; the old keys are still read once for migration. The gsVocabMig flip
+    // (eq→mix) is preserved here for pre-migration stores.
     if(!localStorage.getItem("gsVocabMig")){
       if(localStorage.getItem("gsVocab")==="eq") localStorage.removeItem("gsVocab");
       localStorage.setItem("gsVocabMig","1");
     }
-    const v=localStorage.getItem("gsVocab");
-    if(v&&VOCAB_BY_ID[v]) setVocab(v);
-  }catch(_e){}
-  try{
-    const s=localStorage.getItem("gsStrings");
-    if(s!=null){ state.strings=s==="1"; stringsToggle.checked=state.strings; }
-  }catch(_e){}
-  try{
-    const hh=localStorage.getItem("gsHarmonics");
-    if(hh!=null){ state.harmonics=hh==="1"; harmonicsToggle.checked=state.harmonics; }
+    loadSettings();
   }catch(_e){}
   try{ syncHarmonicsUI(); }catch(_e){}
   try{

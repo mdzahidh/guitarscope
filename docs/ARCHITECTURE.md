@@ -355,9 +355,10 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
     `setDivergeEndpoints(pos,neg)` (returns a changed-flag; caller invalidates
     `state._sgDiff` only when true). Raw user picks can be too dark for the dark
     scope-screen ground, so endpoints pass through `liftForDark(rgb)` — a Rec.709
-    luminance lift toward white targeting 0.55. The stock amber/teal (lum ≈0.664 /
-    0.629) pass untouched, so no-override renders stay bit-exact (verified by
-    file-size regression against the pre-k build).
+    luminance lift toward white targeting 0.55. The stock dark amber/teal (since
+    session 8: `#f0a13e` / `#44c2d4`, both above the 0.55 floor) pass untouched, so
+    no-override renders stay bit-exact (originally verified by file-size regression
+    against the pre-k build; re-verified after the session-8 accent change).
   - **Snapshots deliberately do not carry user colors** — they are viewer preference,
     not analysis state (same class as theme, unlike vocab which affects the table).
   - `?ca=RRGGBB`/`?cb=RRGGBB` are session-only test hooks (applied after boot, never
@@ -365,6 +366,56 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
 - Segmented controls were kept for the small closed sets (mode, theme, smoothing,
   EQ direction, sgram alignment); only Regions (b) and EQ device (i) — the two lists
   the user said will grow — became dropdowns.
+
+## UX batch 2 (session 8): verdict, audition, playback, disclosure
+
+- **Verdict strip reuses, never re-derives.** The "At a glance" card computes its
+  region-gap sentence with the Band Energy table's exact integration and its tone
+  sentence from the same ranked list the tone panel's prose uses (`renderProse` body
+  extracted into a shared `proseCandidates()`). The alternative — summarizing with its
+  own thresholds — would eventually contradict the detail panels; a summary that can
+  disagree with its own detail is worse than none.
+- **Playback sources the analyzed mono mix, always.** Both the region audition and the
+  per-card Play button play `slot.samples` (the mono mix the analyzer measured), not
+  the original file. The tool's claim is "you hear what the analyzer sees": a stereo
+  original would differ audibly from every number on screen. Level-match applies
+  `state.lmOffset` to slot B exactly as the plots do, and the card button prints the
+  applied gain while playing ("■ Stop · +3.1 dB") so the number is disclosed like
+  every other correction.
+  - Band-pass for audition = 4th-order Butterworth (two biquad sections, Q 0.5412 /
+    1.3066, 24 dB/oct) at the region's tuning-resolved bounds — steep enough to
+    isolate a region, gentle enough not to ring.
+  - One `playCtx`; a single active playback. Stop paths (inventory — keep complete
+    when adding features): popover close/reopen, first line of `afterDataChange`,
+    click-while-playing, natural end, the lm toggle (the printed gain would go
+    stale), and an Esc-cascade rung after popovers (`if(playCur) return
+    stopPlayback();`).
+- **Progressive disclosure (fold state ≠ analysis state).** Six panels
+  (diff/bands/tone/eq/sgram/env) fold to their header; verdict and spectrum never do.
+  eq/sgram/env start folded so the first screen reads verdict → spectrum → difference
+  → bands → tone.
+  - **Persistence stores only touched keys** (`gsCollapse` = the `collTouched` map,
+    not full `collState`) — same principle as `gsVocab`: one click must not freeze
+    all six defaults forever; a future default change still reaches untouched panels.
+  - **`drawAll()` skips folded panels' model building and canvas work** (their
+    canvases are `display:none`); `toggleCollapse` requestDraws on unfold. Magnify
+    and PNG export build their own models, so `?mag=` works on a folded panel.
+  - **Layout:** the chevron lives in a `.headleft` flex wrapper with the title so the
+    cardhead keeps its two-child space-between layout (chevron as a third child would
+    break spacing on cards with `.controls`). A folded card's whole header is a
+    reopen target; an expanded header keeps live controls, so only the chevron folds
+    (chevron click stopPropagations to avoid double-toggle).
+  - Snapshots don't carry fold state — reader preference, like theme and colors.
+- **Headless capture fires a resize.** `--screenshot` capture triggered a `resize`
+  event that closed any open popover, so `?pop=<glosskey>` (open a popover for
+  screenshots) sets a `popPinned` flag the resize/scroll close-listeners respect.
+  Related: popovers scroll internally past `max-height:min(70vh,560px)` — content
+  below the fold being invisible in a screenshot is the scrollbar, not a bug.
+- **UI state machines get extraction tests.** Audition html, card-play toggle, EQ
+  text export, and the disclosure state machine are tested in node by regex-extracting
+  the real functions from index.html and running them against stubs (`new
+  Function(...deps, src + "return {…}")`), same spirit as `tests/dsp.test.js` — the
+  code that ships is the code under test, no copies to drift.
 
 ## Hard-won correctness notes (dead ends — do not retry)
 

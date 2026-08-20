@@ -19,14 +19,22 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   Band Energy table with keep/cut role colors; Regions + EQ-device dropdowns;
   comparison toggles auto-on when both slots fill; spectrogram zoom; string labels
   outside the sgram plot; labeled file-card buttons; tone rows as true left→right
-  axes; user-selectable per-theme guitar colors): BUILT, awaiting user testing.**
-  All built on explicit user request 2026-08-19/20. Do not start M3 (live input) or
+  axes; user-selectable per-theme guitar colors) + the 2026-08-20 UX batch 2 (more
+  distinct default accents; Band-mix default vocabulary; stronger region shading incl.
+  the Difference plot; "At a glance" verdict strip; EQ-match "Copy settings" export;
+  region audition buttons; per-card loudness-matched Play; progressive disclosure —
+  six panels fold, EQ/sgram/envelope start folded): BUILT, awaiting user testing.**
+  All built on explicit user request 2026-08-19/20. User rejected renaming A/B to file
+  names, and deferred task-based entry points to M3. Do not start M3 (live input) or
   M4 (chain measure) until the user has tested and said so.
 - 100/100 DSP tests pass (`node tests/dsp.test.js`). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
   vocabulary lanes, zoomed panes, custom guitar colors incl. the recolored difference
-  colormap) plus pixel-regression compares against prior commits at each step.
+  colormap, verdict strip, audition popovers, folded/unfolded cards) plus
+  pixel-regression compares against prior commits at each step. UI state machines
+  (audition html, card play, EQ text export, disclosure) have node tests that extract
+  the real functions from index.html — see the scratchpad pattern in ARCHITECTURE.md.
 
 ## File map
 
@@ -51,12 +59,15 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp|sga|sgb|sgd; data units —
   sg keys take x in display-time seconds, y in Hz), `?vocab=eq|anatomy|solo|mix`
   (annotation-lane vocabulary), `?ca=RRGGBB`/`?cb=RRGGBB` (session-only guitar-color
-  overrides).
+  overrides), `?open=all|key,key` (unfold collapsed panels: diff|bands|tone|eq|sgram|
+  env — **full-page screenshots need `?open=all`** now that eq/sgram/env start
+  folded), `?pop=<glosskey>` (pin a glossary/region popover open for capture).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
   --disable-gpu --hide-scrollbars --window-size=1440,2900 --virtual-time-budget=30000
-  --screenshot=out.png "file:///…/index.html?demo"`
+  --screenshot=out.png "file:///…/index.html?demo"` — use `?demo&open=all` and a
+  taller window (≈4600) to capture the panels that start folded.
 
 ## House rules
 
@@ -69,7 +80,7 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   link each label to its formula with current values.
 - **Design brief:** laboratory instrument built by a luthier. Two themes, **Bright
   (cream) is the default**, Dark is the original look; one accent per guitar per theme
-  (Dark: A amber `#d9a35b`, B teal `#5eb3ab`; Bright: A `#a8690f`, B `#17786e`),
+  (Dark: A amber `#f0a13e`, B teal `#44c2d4`; Bright: A `#c05f04`, B `#0c6e80`),
   **user-overridable per theme** by clicking a loaded card's letter chip (localStorage
   `gsColors`, applied as inline `--slot-a/--slot-b`; snapshots deliberately don't carry
   colors — viewer preference, not analysis state). Tabular numerals, no
@@ -90,14 +101,27 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   fill** — an explicit user flip this session is never overridden, snapshots pre-prime
   the latch, dropping to one source re-arms it. EQ match: least-squares fit of RBJ
   analog-magnitude band models against the **1/6-oct-smoothed** difference (never the
-  raw comb) on 140 log points; device trim absorbs the broadband level gap. The
-  annotation lane (`VOCABS` in block 3: EQ speak default / Anatomy / Solo EQ / Band mix,
-  persisted via localStorage `gsVocab` written only on explicit clicks) **drives the
-  spectrum shading and the Band Energy table rows** (roles color-coded cut/keep/other;
-  Anatomy bounds are tuning-reactive via `VOCAB_TUNING`/`syncVocabTuning()`); the
-  tone-character panel keeps its own fixed physical bands regardless of lane. All lane
-  regions are click-to-glossary; new glossary categories must be appended to
-  `GLOSS_CATS` or their entries won't render.
+  raw comb) on 140 log points; device trim absorbs the broadband level gap; "Copy
+  settings" exports the same `eqFitData()` as plain text. The annotation lane
+  (`VOCABS` in block 3: EQ speak / Anatomy / Solo EQ / **Band mix, the default** —
+  persisted via localStorage `gsVocab` written only on explicit clicks, with a one-time
+  `gsVocabMig` migration clearing a stored pre-flip "eq") **drives the spectrum AND
+  Difference-plot shading and the Band Energy table rows** (roles color-coded
+  cut/keep/other; Anatomy bounds are tuning-reactive via
+  `VOCAB_TUNING`/`syncVocabTuning()`); the tone-character panel keeps its own fixed
+  physical bands regardless of lane. All lane regions are click-to-glossary; new
+  glossary categories must be appended to `GLOSS_CATS` or their entries won't render.
+  The "At a glance" verdict strip reuses the Band-Energy math and the tone panel's
+  `proseCandidates()` verbatim so summary and detail can never disagree. Playback
+  (region audition buttons in popovers; per-card Play) always sources the **analyzed
+  mono mix** — never the original file — with level-match gain on B when active
+  (printed on the card button); region audition band-passes with a 4th-order
+  Butterworth. One playback at a time; stops on popover close, data change, lm
+  toggle, Esc, or natural end.
+  Progressive disclosure: diff/bands/tone/eq/sgram/env fold to their header chevron
+  (verdict + spectrum never fold; **eq/sgram/env start folded**); folded panels skip
+  model + canvas work in `drawAll()`; localStorage `gsCollapse` stores only
+  explicitly-clicked panels; snapshots don't carry fold state.
   Plot zoom (line plots **and** spectrogram panes) is **display-only** (`ZOOMS{}` in
   data units, baked in by the model builders, shared with the magnify overlay):
   metrics/band table/tone panel never read it, and the active window is always printed

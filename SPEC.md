@@ -350,3 +350,55 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   magma spectrograms never change, and the diverging difference never follows the
   *theme*; it now follows an explicit *user pick* for the two guitars, which is the
   same identity the rest of the UI uses. See ARCHITECTURE.md for the rationale.
+
+### 2026-08-20 — UX batch 2: defaults, verdict, audition, playback, disclosure (session 8)
+- **User message, three direct items (a–c) plus verdicts on the seven UX suggestions
+  from the session-7 report:** #1 rename A/B → **rejected** ("names of the file can be
+  messy and long" — A/B stays); #2 verdict strip, #3 audition by region, #4 EQ-match
+  exportable settings, #5 progressive disclosure, #7 loudness-matched playback → all
+  **built this session**; #6 task-based entry points → **deferred to M3** by the user.
+- **(a)+(b)+(c) — distinct default accents, Band-mix default, stronger shading**
+  (`566cf02`): default guitar colors pushed apart in hue and chroma — Bright A
+  `#c05f04` / B `#0c6e80`, Dark A `#f0a13e` / B `#44c2d4`; the diverging-difference
+  default endpoints follow the new dark accents (user picks still override). Default
+  region vocabulary is now **Band mix**, with a one-time localStorage migration
+  (`gsVocabMig`) clearing a stored pre-flip "eq" so the new default actually shows —
+  explicit choices still stick. Region shading roughly doubled (keep 0.14, other roles
+  0.11, neutral 0.06/0.03) and is now drawn on the Difference plot too, so annotation
+  and shading agree there as well.
+- **#2 — "At a glance" verdict strip** (`a5af9fa`): a plain-language summary card above
+  the spectrum whenever anything is loaded. Both slots: broadband level gap + whether
+  level-match corrects it, the widest region gap in the active vocabulary (computed
+  with the Band Energy table's exact math so the two can never disagree), and the
+  strongest tone contrast (same ranked candidates as the tone panel's prose, via shared
+  `proseCandidates()`). One slot: centroid, tilt, longest note, and a drop-a-second-file
+  hint. Guitar names render in slot colors; terms link to the glossary.
+- **#4 — EQ match "Copy settings"** (`f0cd695`): header button copies the fitted
+  settings as fixed-width plain text (device, direction, per-band rows, trim, residual,
+  RBJ caveat) from the same `eqFitData()` the device face draws — panel and export can
+  never disagree. Clipboard API with textarea fallback; "Copied" flash.
+- **#3 — audition by region** (`f7b9ab2`): every region popover (lane labels, plot
+  shading, Band Energy rows) gains per-slot play buttons that band-pass the **analyzed
+  mono mix** (4th-order Butterworth, 24 dB/oct) to the region's tuning-resolved bounds,
+  level-match applied to B when active — you hear what the analyzer sees. One playback
+  at a time; stops on popover close, data change, Esc, or natural end. `?pop=<glosskey>`
+  headless hook with a `popPinned` guard (headless capture fires a resize that
+  otherwise closes popovers).
+- **#7 — loudness-matched playback** (`7dcd2bb`): each loaded card gets a Play/Stop
+  button playing the whole take full-range through the same engine, so level-match gain
+  lands on B exactly as in the plots and the applied dB is printed on the button while
+  playing ("■ Stop · +3.1 dB"). Stops on lm toggle (printed gain would go stale), Esc,
+  data change, or natural end. Snapshot slots (no audio) get no button.
+- **#5 — progressive disclosure** (`0a66086`): Difference, Band energy, Tone character,
+  EQ match, Spectrogram, and Envelope fold to their header line via a left-of-title
+  chevron; the verdict strip and the Spectrum never fold. **EQ match, Spectrogram, and
+  Envelope start folded** so a fresh comparison reads verdict → spectrum → difference →
+  bands → tone with the deeper instruments one click away. A folded card's whole header
+  reopens it; an expanded header keeps its live controls, so only the chevron folds.
+  Folded panels skip model building and canvas work; unfolding redraws. localStorage
+  `gsCollapse` stores **only explicitly clicked panels**, so future default changes
+  still reach untouched ones; snapshots don't carry fold state (reader preference, not
+  analysis state). `?open=all|key,key` session-only hook.
+- Decision: playback everywhere sources the analyzed mono mix, never the original
+  multichannel file — the tool's claim is "this is what the analyzer sees," and a
+  stereo original would sound different from every number on screen.

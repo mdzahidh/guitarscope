@@ -630,6 +630,15 @@ kbd{
               <button data-sm="3">1/3</button>
             </div>
           </div>
+          <div class="ctlgroup">
+            <span>Regions</span>
+            <div class="seg" id="vocabSeg" role="group" aria-label="Frequency-region vocabulary">
+              <button data-vocab="eq" class="on">EQ speak</button>
+              <button data-vocab="anatomy">Anatomy</button>
+              <button data-vocab="solo">Solo EQ</button>
+              <button data-vocab="mix">Band mix</button>
+            </div>
+          </div>
           <label class="switch" id="lmSwitch"><input type="checkbox" id="lmToggle"><span class="tk"></span><span class="lbl">Level-match</span></label>
           <label class="switch" id="diffSwitch"><input type="checkbox" id="diffToggle"><span class="tk"></span><span class="lbl">Difference</span></label>
           <div class="exports">
@@ -2169,6 +2178,141 @@ const GLOSSARY=[
     measure:"Annotation only — colloquial region, not an app metric (the app's own Air band is 5–12 kHz). The share below is measured live over 10–20 kHz for reference.",
     values(state){ return _bandVals(state, 10000, 20000); } },
 
+  // ------------ guitar anatomy (vocabulary lane — instrument facts, annotation only) ------------
+  { key:"an-open-strings", name:"Open strings", cat:"Guitar anatomy", hook:"Anatomy: ≈82–330 Hz",
+    musician:"The fundamentals of the six open strings — low E at 82 Hz up to high E at 330 Hz. Every open-position chord puts most of its weight here; drop-tune and the zone slides down with you.",
+    science:"Open-string fundamentals in standard tuning at A4 = 440 Hz: E2 82.4, A2 110.0, D3 146.8, G3 196.0, B3 246.9, E4 329.6 Hz.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 82–330 Hz for reference.",
+    values(state){ return _bandVals(state, 82, 330); } },
+
+  { key:"an-body", name:"Body & warmth", cat:"Guitar anatomy", hook:"Anatomy: ≈200–500 Hz",
+    musician:"Where the instrument's woody thickness lives. Acoustics have real top-plate resonances in this zone; electrics get their “body” here from the low-order harmonics of every note.",
+    science:"Second-to-fourth harmonics of the low strings plus fundamentals of notes fretted up the neck; for acoustics, the main wood resonances (≈140–260 Hz) sit at the bottom edge of this zone.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 200–500 Hz for reference.",
+    values(state){ return _bandVals(state, 200, 500); } },
+
+  { key:"an-fretted", name:"Fretted fundamentals", cat:"Guitar anatomy", hook:"Anatomy: ≈330 Hz–1.3 kHz",
+    musician:"Everything above the open high E is a fretted note — melodies and solos put their fundamentals here, and the zone tops out at the last fret.",
+    science:"From open E4 (329.6 Hz) to the 24th-fret high E (E6 ≈ 1319 Hz), the ceiling of guitar fundamentals in standard tuning. A 22-fret guitar stops at D6 ≈ 1175 Hz.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 330 Hz–1.32 kHz for reference.",
+    values(state){ return _bandVals(state, 330, 1320); } },
+
+  { key:"an-harmonics", name:"Harmonics only", cat:"Guitar anatomy", hook:"Anatomy: ≈1.3–20 kHz",
+    musician:"No guitar note has its fundamental above the last fret — everything up here is harmonics, pick noise and air. That's why EQ moves above ≈1.3 kHz change a guitar's colour, never its notes.",
+    science:"Above the highest fundamental (≈1.32 kHz in standard tuning) the spectrum is exclusively overtones and transients; their balance sets brightness and articulation.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 1.32–20 kHz for reference.",
+    values(state){ return _bandVals(state, 1320, 20000); } },
+
+  { key:"an-attack", name:"Pick attack", cat:"Guitar anatomy", hook:"Anatomy: ≈2–5 kHz",
+    musician:"The click and definition of the pick meeting the string — what you lose with the tone knob rolled off and get back with a fresh plectrum edge.",
+    science:"Pick release is a broadband transient; most of its audible energy lands where the ear is most sensitive, roughly 2–5 kHz. Matches the app's Presence band.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 2–5 kHz for reference.",
+    values(state){ return _bandVals(state, 2000, 5000); } },
+
+  { key:"an-zing", name:"String zing", cat:"Guitar anatomy", hook:"Anatomy: ≈5–10 kHz",
+    musician:"Fresh-string sparkle — the metallic sheen that dies as strings age. Round-wounds have lots of it, flat-wounds barely any.",
+    science:"High-order string partials shaped by string construction and pickup or mic response. Guitar-cab speakers roll off steeply through this zone, so it mostly survives on acoustics and direct signals.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 5–10 kHz for reference.",
+    values(state){ return _bandVals(state, 5000, 10000); } },
+
+  { key:"an-air", name:"Air & noise", cat:"Guitar anatomy", hook:"Anatomy: ≈10–20 kHz",
+    musician:"Almost nothing of the guitar itself lives up here — room ambience, finger-slide noise, hiss. On a miked cab this zone is speaker-filtered to near silence.",
+    science:"Guitar-cab speakers are typically 20+ dB down before 10 kHz; acoustic guitars keep some genuine string and room noise in this zone.",
+    measure:"Annotation only — an instrument fact marked on the frequency axis, not an app metric. The share below is measured live over 10–20 kHz for reference.",
+    values(state){ return _bandVals(state, 10000, 20000); } },
+
+  // ------------ solo EQ words (vocabulary lane — tone-shaping folklore, annotation only) ------------
+  { key:"so-rumble", name:"Rumble", cat:"Solo EQ words", hook:"Solo EQ: ≈60–100 Hz",
+    musician:"Below the guitar's lowest note: stage thump, handling noise, proximity boom. The classic first move is a high-pass filter here — you lose nothing musical.",
+    science:"A standard-tuned guitar has no fundamental below E2 (82.4 Hz); energy below that is noise, bleed or mic proximity effect. Drop tunings reach lower (D2 ≈ 73.4 Hz).",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 60–100 Hz for reference.",
+    values(state){ return _bandVals(state, 60, 100); } },
+
+  { key:"so-mud", name:"Mud", cat:"Solo EQ words", hook:"Solo EQ: ≈100–300 Hz",
+    musician:"Too much and the sound goes thick and undefined — “muddy”. Too little and it turns thin. Small cuts here clean up a strummed acoustic fast.",
+    science:"Low-string fundamentals and first harmonics pile up in this zone; slow-decaying low partials mask upper detail when it dominates.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 100–300 Hz for reference.",
+    values(state){ return _bandVals(state, 100, 300); } },
+
+  { key:"so-boxy", name:"Boxy", cat:"Solo EQ words", hook:"Solo EQ: ≈300–600 Hz",
+    musician:"The “cardboard box” or cheap-practice-amp character. A gentle dip here often opens a recorded guitar right up.",
+    science:"Low-mid harmonics where small-room and cabinet resonances also live; emphasis here reads as a hollow, enclosed formant.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 300–600 Hz for reference.",
+    values(state){ return _bandVals(state, 300, 600); } },
+
+  { key:"so-honk", name:"Honk", cat:"Solo EQ words", hook:"Solo EQ: ≈600 Hz–1.2 kHz",
+    musician:"Nasal, horn-like, cocked-wah character. Some lead tones want it; polite acoustics usually don't.",
+    science:"A formant-like emphasis region — the ear reads narrow peaks here as a vowel-ish “honk”. Wah pedals park their resonance in this zone.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 600 Hz–1.2 kHz for reference.",
+    values(state){ return _bandVals(state, 600, 1200); } },
+
+  { key:"so-harsh", name:"Harsh", cat:"Solo EQ words", hook:"Solo EQ: ≈2–4 kHz",
+    musician:"Where “bright” turns unpleasant: glare, clank, listening fatigue. If a distorted tone hurts, look here first.",
+    science:"The ear's most sensitive region; distortion products and pick transients land right on it, so a small excess reads as pain rather than brightness.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 2–4 kHz for reference.",
+    values(state){ return _bandVals(state, 2000, 4000); } },
+
+  { key:"so-bite", name:"Bite", cat:"Solo EQ words", hook:"Solo EQ: ≈4–6 kHz",
+    musician:"Presence and edge — articulation you can push before it tips into harsh. Amp “presence” controls mostly work here.",
+    science:"Upper pick-transient energy and high harmonics; presence controls lift the power-amp response in roughly this zone.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 4–6 kHz for reference.",
+    values(state){ return _bandVals(state, 4000, 6000); } },
+
+  { key:"so-fizz", name:"Fizz", cat:"Solo EQ words", hook:"Solo EQ: ≈6–10 kHz",
+    musician:"The dusty spray on top of a distorted tone — “bees in a tin”. Rolling it off is often the difference between amp-in-the-room and a cheap direct sound.",
+    science:"High-order distortion products. A real cab speaker filters them steeply, which is why direct or poorly-simulated tones without cab filtering sound fizzy.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 6–10 kHz for reference.",
+    values(state){ return _bandVals(state, 6000, 10000); } },
+
+  { key:"so-air", name:"Air / sheen", cat:"Solo EQ words", hook:"Solo EQ: ≈10–20 kHz",
+    musician:"Openness on acoustics; on a miked electric there's little up here but hiss. A gentle shelf can add studio sheen to an acoustic recording.",
+    science:"Mostly string and room noise for guitars; boosting it raises the noise floor about as much as the instrument.",
+    measure:"Annotation only — colloquial region, not an app metric. The share below is measured live over 10–20 kHz for reference.",
+    values(state){ return _bandVals(state, 10000, 20000); } },
+
+  // ------------ band-mix zones (vocabulary lane — who lives where + guitar keep/cut, annotation only) ------------
+  { key:"mx-kick", name:"Kick + bass floor", cat:"Band-mix zones", hook:"In a mix: ≈60–100 Hz — guitar CUT",
+    musician:"The kick drum and bass guitar own this floor. Guitars are routinely high-passed here (80–120 Hz): the mix gets cleaner and the guitar loses nothing it needs.",
+    science:"Kick fundamentals (≈50–100 Hz) and bass-guitar fundamentals (E1 41 Hz up) dominate; overlapping guitar low end adds masking energy without adding pitch information the bass isn't already carrying.",
+    measure:"Annotation only — colloquial mixing guidance; the keep/cut tag is standard practice, not a measurement. The share below is measured live over 60–100 Hz for reference.",
+    values(state){ return _bandVals(state, 60, 100); } },
+
+  { key:"mx-bass", name:"Bass guitar body", cat:"Band-mix zones", hook:"In a mix: ≈100–250 Hz — guitar THIN",
+    musician:"Bass warmth and body. Guitar energy here fights the bass directly, so mixers thin — not gut — the guitar's low end and let the bass carry the weight.",
+    science:"Bass-guitar fundamentals and first harmonics fill 100–250 Hz; guitar low-string fundamentals sit in the same octave, so a few dB off the guitar reduces mutual masking.",
+    measure:"Annotation only — colloquial mixing guidance; the keep/cut tag is standard practice, not a measurement. The share below is measured live over 100–250 Hz for reference.",
+    values(state){ return _bandVals(state, 100, 250); } },
+
+  { key:"mx-mud", name:"Low-mid pile-up", cat:"Band-mix zones", hook:"In a mix: ≈250–500 Hz — guitar CUT",
+    musician:"Every instrument in the band has energy here — kick ring, bass harmonics, vocal chest, guitar body, keys. It piles up into mud; a small guitar cut here is the most common mix EQ move of all.",
+    science:"Low-order harmonics of nearly all pitched sources plus drum-shell resonances overlap in this zone; the energy sums while the ear can't separate the sources, which reads as congestion.",
+    measure:"Annotation only — colloquial mixing guidance; the keep/cut tag is standard practice, not a measurement. The share below is measured live over 250–500 Hz for reference.",
+    values(state){ return _bandVals(state, 250, 500); } },
+
+  { key:"mx-core", name:"Guitar core", cat:"Band-mix zones", hook:"In a mix: ≈500 Hz–1.2 kHz — guitar KEEP",
+    musician:"In a band this is the guitar's home: the midrange that still reads as “guitar” on a small speaker. Scooped mids sound huge alone and vanish on stage — keep this zone.",
+    science:"The upper half of guitar fundamentals plus their strongest harmonics; masking from bass and cymbals is lowest here, which is why mid-heavy tones stay audible at band volume.",
+    measure:"Annotation only — colloquial mixing guidance; the keep/cut tag is standard practice, not a measurement. The share below is measured live over 500 Hz–1.2 kHz for reference.",
+    values(state){ return _bandVals(state, 500, 1200); } },
+
+  { key:"mx-vocals", name:"Vocal clarity", cat:"Band-mix zones", hook:"In a mix: ≈1.2–2.5 kHz — guitar CARVE",
+    musician:"Vocal consonants and intelligibility live here. While the singer is in, a small guitar dip in this zone buys vocal clarity for free; when they stop, let the guitar back in.",
+    science:"Speech intelligibility depends disproportionately on the 1–3 kHz region; guitar harmonic energy in the same band masks consonants first.",
+    measure:"Annotation only — colloquial mixing guidance; the keep/cut tag is standard practice, not a measurement. The share below is measured live over 1.2–2.5 kHz for reference.",
+    values(state){ return _bandVals(state, 1200, 2500); } },
+
+  { key:"mx-fight", name:"Attack vs vocals", cat:"Band-mix zones", hook:"In a mix: ≈2.5–5 kHz — guitar KEEP, with care",
+    musician:"The classic fight: guitar pick attack and vocal presence share this zone. Keep the guitar's attack — it's what lets it cut without volume — but carve small notches where it steps on the voice.",
+    science:"The ear's maximum-sensitivity region; both vocal presence and guitar articulation transmit here, so complementary (mirrored) EQ between the two parts is standard practice.",
+    measure:"Annotation only — colloquial mixing guidance; the keep/cut tag is standard practice, not a measurement. The share below is measured live over 2.5–5 kHz for reference.",
+    values(state){ return _bandVals(state, 2500, 5000); } },
+
+  { key:"mx-air", name:"Cymbals & air", cat:"Band-mix zones", hook:"In a mix: ≈5–20 kHz — guitar ROLL OFF",
+    musician:"Cymbals, vocal air and room sheen. A miked electric has mostly fizz up here — rolling it off leaves the top of the mix to the drums and the voice.",
+    science:"Cymbal energy stays broadband well past 10 kHz while guitar-cab response is 20+ dB down before then; a guitar low-pass around 8–10 kHz removes fizz that would only blur cymbal detail.",
+    measure:"Annotation only — colloquial mixing guidance; the keep/cut tag is standard practice, not a measurement. The share below is measured live over 5–20 kHz for reference.",
+    values(state){ return _bandVals(state, 5000, 20000); } },
+
   // ------------ tone descriptors ------------
   { key:"brightness", name:"Brightness", cat:"Tone descriptors", hook:"where the spectral balance sits",
     musician:"How trebly versus dark a guitar sounds overall. New strings, bridge pickups, and maple boards read as “brighter”.",
@@ -2513,23 +2657,64 @@ function drawTuning(ctx, w, h, markers, hits){
   ctx.restore();
 }
 
-// ---------- colloquial EQ-region lane (M2.5 — annotation only, boundaries are folklore) ----------
-const EQ_REGIONS=[
-  { key:"eq-low-end",    label:"LOW END",    f0:60,    f1:250 },
-  { key:"eq-low-mids",   label:"LOW MIDS",   f0:250,   f1:800 },
-  { key:"eq-mids",       label:"MIDS",       f0:800,   f1:2500 },
-  { key:"eq-upper-mids", label:"UPPER MIDS", f0:2500,  f1:5000 },
-  { key:"eq-highs",      label:"HIGHS",      f0:5000,  f1:10000 },
-  { key:"eq-air",        label:"AIR",        f0:10000, f1:20000 },
+// ---------- frequency-vocabulary lane (annotation only, boundaries are folklore) ----------
+// Four selectable vocabularies for the lane above the spectrum/difference plots.
+// Annotation only: the M1 shaded bands still drive every number, and the Band
+// Energy table's EQ rows stay tied to the "eq" set regardless of the selection.
+const VOCABS=[
+  { id:"eq", label:"EQ speak", regions:[
+    { key:"eq-low-end",    label:"LOW END",    f0:60,    f1:250,   row:0 },
+    { key:"eq-low-mids",   label:"LOW MIDS",   f0:250,   f1:800,   row:0 },
+    { key:"eq-mids",       label:"MIDS",       f0:800,   f1:2500,  row:0 },
+    { key:"eq-upper-mids", label:"UPPER MIDS", f0:2500,  f1:5000,  row:0 },
+    { key:"eq-highs",      label:"HIGHS",      f0:5000,  f1:10000, row:0 },
+    { key:"eq-air",        label:"AIR",        f0:10000, f1:20000, row:0 },
+  ]},
+  { id:"anatomy", label:"Anatomy", regions:[
+    { key:"an-open-strings", label:"OPEN STRINGS",         f0:82,    f1:330,   row:0 },
+    { key:"an-fretted",      label:"FRETTED FUNDAMENTALS", f0:330,   f1:1320,  row:0 },
+    { key:"an-attack",       label:"PICK ATTACK",          f0:2000,  f1:5000,  row:0 },
+    { key:"an-zing",         label:"STRING ZING",          f0:5000,  f1:10000, row:0 },
+    { key:"an-air",          label:"AIR",                  f0:10000, f1:20000, row:0 },
+    { key:"an-body",         label:"BODY & WARMTH",        f0:200,   f1:500,   row:1 },
+    { key:"an-harmonics",    label:"HARMONICS ONLY",       f0:1320,  f1:20000, row:1 },
+  ]},
+  { id:"solo", label:"Solo EQ", regions:[
+    { key:"so-rumble", label:"RUMBLE", f0:60,    f1:100,   row:0 },
+    { key:"so-mud",    label:"MUD",    f0:100,   f1:300,   row:0 },
+    { key:"so-boxy",   label:"BOXY",   f0:300,   f1:600,   row:0 },
+    { key:"so-honk",   label:"HONK",   f0:600,   f1:1200,  row:0 },
+    { key:"so-harsh",  label:"HARSH",  f0:2000,  f1:4000,  row:0 },
+    { key:"so-bite",   label:"BITE",   f0:4000,  f1:6000,  row:0 },
+    { key:"so-fizz",   label:"FIZZ",   f0:6000,  f1:10000, row:0 },
+    { key:"so-air",    label:"AIR",    f0:10000, f1:20000, row:0 },
+  ]},
+  { id:"mix", label:"Band mix", regions:[
+    { key:"mx-kick",   label:"KICK · CUT",        f0:60,   f1:100,   row:0 },
+    { key:"mx-bass",   label:"BASS GUITAR · THIN",       f0:100,  f1:250,   row:0 },
+    { key:"mx-mud",    label:"MUD PILE-UP · CUT",        f0:250,  f1:500,   row:0 },
+    { key:"mx-core",   label:"GUITAR CORE · KEEP",       f0:500,  f1:1200,  row:0, strong:true },
+    { key:"mx-vocals", label:"VOCALS · CARVE",           f0:1200, f1:2500,  row:0 },
+    { key:"mx-fight",  label:"ATTACK · KEEP",  f0:2500, f1:5000,  row:0, strong:true },
+    { key:"mx-air",    label:"CYMBALS + AIR · ROLL OFF", f0:5000, f1:20000, row:0 },
+  ]},
 ];
+const VOCAB_BY_ID={}; for(const v of VOCABS) VOCAB_BY_ID[v.id]=v;
+const EQ_REGIONS=VOCAB_BY_ID.eq.regions; // Band Energy's EQ rows always use this set
+let VOCAB_ACTIVE="eq";                   // set by block 4 (selector / snapshot / ?vocab=)
+
 function drawEqLane(ctx, w, hits){
-  const yMid=12.5, yTick0=8.5, yTick1=16.5; // lives in the top margin, above the plot area
+  const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
+  const twoRows=vocab.regions.some(r=>r.row===1);
   ctx.save();
   ctx.font=FONT_XS; ctx.textAlign="center"; ctx.textBaseline="middle";
   ctx.lineWidth=1;
   const xL=PLOT.mL, xR=w-PLOT.mR;
-  for(const r of EQ_REGIONS){
+  for(const r of vocab.regions){
     if(r.f1<=XV.f0 || r.f0>=XV.f1) continue;
+    // One row keeps the original geometry (yMid 12.5); two rows pack tighter,
+    // both above the tuning labels (glyphs start ≈ y32 for baseline mT−4).
+    const yMid=twoRows?(r.row?21.5:7.5):12.5, yTick0=yMid-4, yTick1=yMid+4;
     const x0=Math.max(xL, xOfF(r.f0,w)), x1=Math.min(xR, xOfF(r.f1,w));
     ctx.strokeStyle=cssRGBA("ink-rgb",0.18);
     ctx.beginPath();
@@ -2542,7 +2727,7 @@ function drawEqLane(ctx, w, hits){
       ctx.moveTo(x0+3,yMid); ctx.lineTo(cx-tw/2-5,yMid);
       ctx.moveTo(cx+tw/2+5,yMid); ctx.lineTo(x1-3,yMid);
       ctx.stroke();
-      ctx.fillStyle=cssColor("dim");
+      ctx.fillStyle=cssColor(r.strong?"ink":"dim"); // "guitar holds its ground here" zones print stronger
       ctx.fillText(r.label,cx,yMid);
       if(hits) hits.push({x:cx-tw/2-3, y:yMid-7, w:tw+6, h:14, term:r.key});
     }else{
@@ -3423,7 +3608,7 @@ const GRID=makeLogGrid(700,60,20000);
 // ---------- state (contract shared with the glossary) ----------
 const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
               a4:440, smooth:6, lm:false, lmOffset:null, diff:false,
-              sgLm:false, sgDiff:false, sgAlign:"off", eqDir:0, eqDevice:"ge7" };
+              sgLm:false, sgDiff:false, sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"eq" };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
 
@@ -3436,7 +3621,7 @@ const fileInputs=[el("fileInput0"),el("fileInput1")];
 const modeSeg=el("modeSeg"), tuningSel=el("tuningSel"),
       customOffsetWrap=el("customOffsetWrap"), customOffsetEl=el("customOffset"),
       a4Input=el("a4Input"), glossaryBtn=el("glossaryBtn"), themeSeg=el("themeSeg");
-const smoothSeg=el("smoothSeg"),
+const smoothSeg=el("smoothSeg"), vocabSeg=el("vocabSeg"),
       lmSwitch=el("lmSwitch"), lmToggle=el("lmToggle"),
       diffSwitch=el("diffSwitch"), diffToggle=el("diffToggle"),
       pngBtn=el("pngBtn"), csvBtn=el("csvBtn"), jsonBtn=el("jsonBtn");
@@ -4936,7 +5121,7 @@ function openPopover(key,anchor){
 }
 function closePopover(){ popover.classList.remove("open"); }
 
-const GLOSS_CATS=["Frequency regions","EQ regions","Tone descriptors","Physics","Method"];
+const GLOSS_CATS=["Frequency regions","EQ regions","Guitar anatomy","Solo EQ words","Band-mix zones","Tone descriptors","Physics","Method"];
 function buildGlossList(q){
   const needle=(q||"").trim().toLowerCase();
   let html="";
@@ -5092,7 +5277,7 @@ function exportJSON(){
     settings:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
                a4:state.a4, smooth:state.smooth, lm:state.lm,
                sgLm:state.sgLm, sgDiff:state.sgDiff, sgAlign:state.sgAlign,
-               eqDir:state.eqDir, eqDevice:state.eqDevice },
+               eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab },
     files };
   download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
     "guitarscope_"+exportBaseName()+".json");
@@ -5116,6 +5301,11 @@ function setSmoothUI(v){
 function setSgAlign(v){
   state.sgAlign=v;
   sgAlignSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.al===v));
+}
+function setVocab(v){
+  if(!VOCAB_BY_ID[v]) return;
+  state.vocab=v; VOCAB_ACTIVE=v;
+  vocabSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.vocab===v));
 }
 function applySnapshot(snap){
   const st=snap.settings||{};
@@ -5143,6 +5333,7 @@ function applySnapshot(snap){
     state.eqDevice=st.eqDevice;
     eqDevSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.dev===state.eqDevice));
   }
+  if(typeof st.vocab==="string"&&VOCAB_BY_ID[st.vocab]) setVocab(st.vocab);
   loadSeq[0]++; loadSeq[1]++;
   state.slots=[null,null];
   for(const f of snap.files.slice(0,2)){
@@ -5364,6 +5555,13 @@ function boot(){
     setSgAlign(b.dataset.al);
     updateSgramSub(); requestDraw();
   });
+  vocabSeg.addEventListener("click",e=>{
+    const b=e.target.closest("button[data-vocab]");
+    if(!b) return;
+    setVocab(b.dataset.vocab);
+    try{ localStorage.setItem("gsVocab",b.dataset.vocab); }catch(_e){} // persist only explicit clicks
+    requestDraw();
+  });
   eqDirSeg.addEventListener("click",e=>{
     const b=e.target.closest("button[data-dir]");
     if(!b) return;
@@ -5526,6 +5724,10 @@ function boot(){
     if(files.length) handleDrop(files,e.clientX);
   });
 
+  try{
+    const v=localStorage.getItem("gsVocab");
+    if(v&&VOCAB_BY_ID[v]) setVocab(v);
+  }catch(_e){}
   renderCard(0); renderCard(1);
   buildGlossList("");
   updateVisibility();
@@ -5545,6 +5747,8 @@ function boot(){
   if(zm&&(zm[1].toLowerCase() in ZOOMS))
     ZOOMS[zm[1].toLowerCase()]={x0:parseFloat(zm[2]), x1:parseFloat(zm[3]),
       y0:zm[4]!=null?parseFloat(zm[4]):null, y1:zm[5]!=null?parseFloat(zm[5]):null};
+  const vc=location.search.match(/[?&]vocab=([a-z]+)(?:&|$)/i);                     // test hook
+  if(vc&&VOCAB_BY_ID[vc[1].toLowerCase()]){ setVocab(vc[1].toLowerCase()); requestDraw(); }
 }
 boot();
 </script>

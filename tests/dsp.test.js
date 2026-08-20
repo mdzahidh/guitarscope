@@ -630,11 +630,11 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
   // ---- M2.5 divergeColor: endpoints are the slot accents ----
   {
     const p = D.divergeColor(1), z = D.divergeColor(0), m = D.divergeColor(-1);
-    ok(p[0] === 217 && p[1] === 163 && p[2] === 91, "t=+1 → slot A amber", p.join(","));
-    ok(m[0] === 94 && m[1] === 179 && m[2] === 171, "t=−1 → slot B teal", m.join(","));
+    ok(p[0] === 240 && p[1] === 161 && p[2] === 62, "t=+1 → slot A amber", p.join(","));
+    ok(m[0] === 68 && m[1] === 194 && m[2] === 212, "t=−1 → slot B teal", m.join(","));
     ok(z[0] === 14 && z[1] === 16 && z[2] === 20, "t=0 → near-background neutral", z.join(","));
     const hi = D.divergeColor(5), lo = D.divergeColor(-5), nn = D.divergeColor(NaN);
-    ok(hi[0] === 217 && lo[2] === 171 && nn[0] === 14 && nn[1] === 16 && nn[2] === 20,
+    ok(hi[0] === 240 && lo[2] === 212 && nn[0] === 14 && nn[1] === 16 && nn[2] === 20,
       "clamps out-of-range t and maps NaN to neutral");
   }
 

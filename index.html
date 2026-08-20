@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>GuitarScope</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315181d'/%3E%3Cpath d='M4 20 C8 20 8 9 12 9 S16 24 20 24 24 13 28 13' stroke='%23d9a35b' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315181d'/%3E%3Cpath d='M4 20 C8 20 8 9 12 9 S16 24 20 24 24 13 28 13' stroke='%23f0a13e' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* ============================================================
    GuitarScope — stylesheet
@@ -30,8 +30,8 @@
   --mut:     #6d6455;
   --dim:     #958b77;
   --faint:   #b4ab98;
-  --slot-a:  #a8690f;
-  --slot-b:  #17786e;
+  --slot-a:  #c05f04;
+  --slot-b:  #0c6e80;
   --err:     #b04a3e;
   --warn:    #8f6f1f;
   --on-accent:#faf8f1;
@@ -43,7 +43,7 @@
   --mut-rgb:     109,100,85;
   --scrim-rgb:   43,38,30;
   --err-rgb:     176,74,62;
-  --sel-rgb:     168,105,15;
+  --sel-rgb:     192,95,4;
   --role-cut-rgb:  178,62,54;
   --role-keep-rgb: 34,122,62;
   --role-room-rgb: 108,84,158;
@@ -64,8 +64,8 @@ html[data-theme="dark"]{
   --mut:     #9aa0ab;
   --dim:     #6a7280;
   --faint:   #4a515c;
-  --slot-a:  #d9a35b;
-  --slot-b:  #5eb3ab;
+  --slot-a:  #f0a13e;
+  --slot-b:  #44c2d4;
   --err:     #c9756a;
   --warn:    #c9a763;
   --on-accent:#12141a;
@@ -77,7 +77,7 @@ html[data-theme="dark"]{
   --mut-rgb:     154,160,171;
   --scrim-rgb:   10,12,15;
   --err-rgb:     201,117,106;
-  --sel-rgb:     217,163,91;
+  --sel-rgb:     240,161,62;
   --role-cut-rgb:  222,118,106;
   --role-keep-rgb: 118,190,132;
   --role-room-rgb: 158,136,208;
@@ -669,10 +669,10 @@ kbd{
           <div class="ctlgroup">
             <span>Regions</span>
             <select id="vocabSel" aria-label="Frequency-region vocabulary">
-              <option value="eq" selected>EQ speak</option>
+              <option value="eq">EQ speak</option>
               <option value="anatomy">Guitar anatomy</option>
               <option value="solo">Solo EQ words</option>
-              <option value="mix">Band-mix zones</option>
+              <option value="mix" selected>Band-mix zones</option>
             </select>
           </div>
           <label class="switch" id="lmSwitch"><input type="checkbox" id="lmToggle"><span class="tk"></span><span class="lbl">Level-match</span></label>
@@ -2043,8 +2043,8 @@ function sgramDifference(sgA, t0A, sgB, t0B, dbOffsetB){
 // lifts too-dark picks to a legible luminance first — the pane stays a dark
 // scope screen in both themes).
 const DIVERGE_NEUTRAL = [14,16,20];
-let DIVERGE_POS = [217,163,91];
-let DIVERGE_NEG = [94,179,171];
+let DIVERGE_POS = [240,161,62];
+let DIVERGE_NEG = [68,194,212];
 function setDivergeEndpoints(pos, neg){
   const changed = String(pos) !== String(DIVERGE_POS) || String(neg) !== String(DIVERGE_NEG);
   DIVERGE_POS = pos; DIVERGE_NEG = neg;
@@ -2677,8 +2677,8 @@ function drawRegionShading(ctx, w, h){
     const f0=regionF(r.f0), f1=regionF(r.f1);
     if(f1<=XV.f0 || f0>=XV.f1){ n++; continue; } // keep alternation stable under zoom
     const x0=Math.max(xL, xOfF(f0,w)), x1=Math.min(xR, xOfF(f1,w));
-    ctx.fillStyle = r.role ? cssRGBA(ROLE_VAR[r.role], r.role==="keep"?0.075:0.06)
-                           : (n%2 ? cssRGBA("grid-rgb",0.016) : cssRGBA("grid-rgb",0.032));
+    ctx.fillStyle = r.role ? cssRGBA(ROLE_VAR[r.role], r.role==="keep"?0.14:0.11)
+                           : (n%2 ? cssRGBA("grid-rgb",0.03) : cssRGBA("grid-rgb",0.06));
     ctx.fillRect(x0, PLOT.mT, x1-x0, pH);
     n++;
   }
@@ -2754,7 +2754,7 @@ const VOCABS=[
   ]},
 ];
 const VOCAB_BY_ID={}; for(const v of VOCABS) VOCAB_BY_ID[v.id]=v;
-let VOCAB_ACTIVE="eq"; // set by block 4 (selector / snapshot / ?vocab=)
+let VOCAB_ACTIVE="mix"; // set by block 4 (selector / snapshot / ?vocab=)
 // One-liners for the Band Energy group header.
 const VOCAB_DESC={
   eq:"the regions guitarists name when tuning EQ",
@@ -2953,6 +2953,7 @@ function drawSpectrumScene(ctx, w, h, model, hits){
 function drawDiffScene(ctx, w, h, model){
   ctx.clearRect(0,0,w,h);
   setXView(model.fv?model.fv[0]:FMIN, model.fv?model.fv[1]:FMAX);
+  drawRegionShading(ctx, w, h); // same vocabulary shading as the spectrum plot
   const pH=h-PLOT.mT-PLOT.mB, pW=w-PLOT.mL-PLOT.mR;
   const yMin = model.yLo!=null ? model.yLo : -model.yMax;
   const yMax = model.yHi!=null ? model.yHi : model.yMax;
@@ -3703,13 +3704,13 @@ function shortName(n,max){
 function rateK(hz){ return (hz/1000).toFixed(3).replace(/0+$/,"").replace(/\.$/,"")+" kHz"; }
 
 const SLOT_LETTER=["A","B"];
-let COLORS=["#d9a35b","#5eb3ab"];
+let COLORS=["#f0a13e","#44c2d4"];
 const GRID=makeLogGrid(700,60,20000);
 
 // ---------- state (contract shared with the glossary) ----------
 const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
               a4:440, smooth:6, lm:false, lmOffset:null, diff:false,
-              sgLm:false, sgDiff:false, sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"eq" };
+              sgLm:false, sgDiff:false, sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
 
@@ -5721,8 +5722,8 @@ function applyUserColors(){
   for(const k of Object.keys(CSS_COLORS)) delete CSS_COLORS[k];
   COLORS=[cssColor("slot-a"),cssColor("slot-b")];
   // defaults mirror block 0's DIVERGE_POS/NEG initial values — keep in sync
-  const pos=ov[0]?liftForDark(hexToRgb(ov[0])):[217,163,91];
-  const neg=ov[1]?liftForDark(hexToRgb(ov[1])):[94,179,171];
+  const pos=ov[0]?liftForDark(hexToRgb(ov[0])):[240,161,62];
+  const neg=ov[1]?liftForDark(hexToRgb(ov[1])):[68,194,212];
   if(setDivergeEndpoints(pos,neg)) state._sgDiff=null; // image + colorbar bake the endpoints
   requestDraw();
   if(anyLoaded()) renderAnalysis(); // accent dots in the HTML tables embed COLORS
@@ -6010,6 +6011,14 @@ function boot(){
   });
 
   try{
+    // The default vocabulary flipped from "eq" to "mix" (2026-08-20). gsVocab is
+    // only ever written by explicit selector clicks, but before the flip a stored
+    // "eq" most likely just retraced the then-default, so clear it once; the
+    // marker keeps a post-flip explicit choice of EQ speak from being cleared too.
+    if(!localStorage.getItem("gsVocabMig")){
+      if(localStorage.getItem("gsVocab")==="eq") localStorage.removeItem("gsVocab");
+      localStorage.setItem("gsVocabMig","1");
+    }
     const v=localStorage.getItem("gsVocab");
     if(v&&VOCAB_BY_ID[v]) setVocab(v);
   }catch(_e){}

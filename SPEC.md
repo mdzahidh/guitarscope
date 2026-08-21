@@ -798,3 +798,30 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   state, `?how`, `?debug`, and `?demo&open=all` in both themes.
 - **Tagged v1.0.0.** Gate unchanged: M3 (live input, owing the deferred task-based
   entry points) and M4 (chain measure) still wait on the user’s own testing.
+
+### 2026-08-21 — EQ-match header holds its position (session 14, user request)
+
+- **Report.** “In the EQ Match card, when I change the Device type, the whole UI
+  section of Direction, Device, Copy Settings and JSON all jump to a different
+  place all of a sudden.”
+- **Cause.** The card subtitle names the fitted device, so its width swings ~60 px
+  between “Boss GE-7” and “Logic Pro Channel EQ”. `.cardhead` is a wrapping flex
+  row and CSS decides wrapping from each item’s *content* width (shrink never
+  enters into it), so the header sat right on the wrap threshold: one device name
+  put `.controls` on the title row, the next pushed the whole group onto its own
+  row. The `<select>` itself was never the culprit — a native select is sized by
+  its widest option, so it holds width no matter what is selected.
+- **Fix (CSS only, scoped to `#eqCard`).** `.headleft` gets `flex:1 1 100%` so the
+  title column always owns the first row — which is where the controls already sat
+  at every width from 700 to 1900 px — and `#eqSub` gets
+  `white-space:nowrap; overflow:hidden; text-overflow:ellipsis` so a long device
+  name can never wrap to a second line and push the control row down either. The
+  subtitle keeps the device name (it is the only place that names it once the card
+  is folded, since `.card.collapsed` hides `.controls`); it ellipsizes below
+  ~750 px instead of reflowing.
+- **Verification.** Pixel-identical to the pre-fix render for the default device at
+  1440 px (diff bbox `None`), and across 900/1100/1440/1900 px the only difference
+  between GE-7 and Logic Channel EQ on the control row is the ~102 px of text
+  inside the select — Direction, the select box, Copy settings and JSON land on the
+  same pixels. Bright and Dark both checked; `node tests/dsp.test.js` 107/107 and
+  all six scratchpad suites green.

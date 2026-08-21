@@ -106,6 +106,12 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   (what-to-do-next, “Load demo pair”, both help links) unreachable — the card now
   always renders and `#freqBands`/`#freqDiff` gate on the source count instead.
   This mattered acutely once the debug loader was hidden.
+- **Post-v1.0.0 fix (session 14, user report): the EQ-match header no longer jumps
+  when the device changes.** The subtitle names the device, and `.cardhead` wraps on
+  content width (shrink is irrelevant to the wrap decision), so a longer device name
+  flipped Direction/Device/Copy settings/JSON between the title row and their own
+  row. CSS only: `#eqCard .headleft{flex:1 1 100%}` + a one-line ellipsized `#eqSub`.
+  Pixel-identical to before for the default device; see ARCHITECTURE "Browser quirks".
 - 107/107 tests pass (`node tests/dsp.test.js`, including the M2.6e switch CSS contract). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four

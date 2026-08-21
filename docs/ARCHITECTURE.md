@@ -832,6 +832,19 @@ metrics) are carried as stored values and labeled as such.
 - Chrome headless: `--virtual-time-budget` fast-forwards `setTimeout` chains (the Welch
   yields), making `?demo` screenshots deterministic and instant.
 - zsh: `echo =====` triggers globbing errors; quote such literals in shell commands.
+- **Flex wrapping is decided by content width, not by shrink.** A `flex-wrap:wrap`
+  row lays items out at their hypothetical (content) size and wraps when the sum
+  overflows — `flex-shrink`/`min-width:0` only kick in *after* that decision. So any
+  card header whose subtitle length depends on a control will flip its `.controls`
+  between row 1 and row 2 as the user changes that control, if the header happens to
+  sit near the threshold. That is what the EQ-match header did (session 14): the
+  subtitle names the fitted device, ~60 px wider for "Logic Pro Channel EQ" than for
+  "Boss GE-7". Fix is `#eqCard .headleft{flex:1 1 100%}` (title column always owns
+  the first row, so wrapping is no longer a function of text) plus a one-line
+  ellipsized `#eqSub` (so a long name cannot wrap downward either). Note a native
+  `<select>` is *not* a source of this — it is sized by its widest option and holds
+  width across selections. Watch for the same pattern if another card's `.cardsub`
+  ever becomes control-dependent.
 
 ## Testing strategy
 

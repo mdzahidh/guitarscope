@@ -218,6 +218,15 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .card.foldable .cardhead{ cursor:pointer; }
 .card.foldable .cardhead:hover .cardtitle{ color:var(--ink); }
 .card.foldable .cardhead:hover .collbtn{ color:var(--ink); border-color:var(--hair); }
+/* EQ match: the header holds its geometry when the device changes. The subtitle names
+   the device, so its width used to swing ~60 px between "Boss GE-7" and "Logic Pro
+   Channel EQ" — right across the wrap threshold, which flipped Direction/Device/Copy
+   settings/JSON between sharing row 1 and owning row 2. Pin the title column to the
+   full first row (that is where the controls already sat at every tested width) and
+   keep the subtitle to one line so it can never push the control row down either. */
+#eqCard .headleft{ flex:1 1 100%; }
+#eqCard .headleft > div{ min-width:0; }
+#eqSub{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* frequency-card sub-sections (M2.6f): three individually foldable rows inside #freqCard */
 #freqCard .freq-sub{ border-top:1px solid var(--hair); }
 #freqCard .freq-sub:first-of-type{ border-top:none; }

@@ -725,3 +725,76 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
 
 - **EQ Copy/JSON in consistent exports area.** `EQ match` cardhead now wraps `Copy settings` + `JSON` in `<div class="exports">` like every other card's `PNG`/`CSV`/`JSON` row (previously two bare buttons in `controls`).
 - **Per-card state scoping.** `_exportCardJson` now via `_cardStateFor(name)`: Frequency Analysis (Spectrum/Difference/Bands) exports `mode`/`tuning`/`customOffset`/`A4`/`smooth`/`lm`/`lmOffset`/`vocab`; Tone exports only `mode`/`smooth`/`lm`/`lmOffset`; Spectrogram/Envelope export only `mode`; EQ exports `mode`/`tuning`/`customOffset`/`A4`/`smooth`/`lm`/`lmOffset`/`vocab`/`eqDir`/`eqDevice`. `regions` array only for Frequency Analysis cards; Tone/Sgram/Env/EQ omit it. Snapshot (global) still carries full data-relevant settings.
+  *(Superseded 2026-08-21 by the v1.0.0 instrument-mode removal: `mode` is no longer
+  part of any of these payloads.)*
+
+### 2026-08-21 — M2.6g reworked: harmonics are per string (session 13, user request)
+
+- **The global “Show harmonics” switch is gone.** Each open-string popover now
+  carries four switches, one per harmonic 2–5, backed by `state.stringHarmonics`
+  — a 6×4 boolean grid, everything off by default. A `Clear harmonics` button in
+  the Frequency-card header wipes the grid; `syncClearHarmonicsBtn()` disables it
+  when Strings is off or nothing is on. Rationale: the global toggle drew 18 extra
+  verticals at once, which buried the plot; harmonics are useful one string at a
+  time, while you are looking at that string.
+- **Per-string color.** Each string owns one of six `STRING_COLORS` (a **data**
+  palette — never themed, like the magma and diverging maps). Harmonics draw in
+  the same hue at 0.48 alpha / dash `[2,3]`; fundamentals at 0.85 / `[3,3]`. The
+  earlier ×2–×4 labels were dropped — hue plus left-to-right order already say it,
+  and no on-plot frequency text is the standing rule since M2.6b.
+- **Compat.** `?harmonics=0|1` survives, meaning “2–4 on for every string”;
+  `gsSettings` bumped to v2 with a v1 migration from the old boolean.
+
+### 2026-08-21 — Release hardening: exports that survive contact (session 13)
+
+- **`toBlob` can return `null`** (memory pressure, tainted canvas). `_exportPngCanvas`
+  now falls back `toBlob` → `toDataURL` → raw blob → error toast rather than
+  silently doing nothing.
+- **`_pngWithDpi` parses the real IHDR length** and bounds-checks every offset,
+  returning the original blob untouched on any surprise, so a future encoder
+  change can degrade the DPI stamp but never corrupt the file.
+- **One footer on every PNG** (“made with GuitarScope”), and `exportSgramPNG`
+  builds its own pane stack so the envelope can no longer bleed into it.
+- **Debug loader hidden.** The “Load test files” button is hidden in the shipped
+  app and revealed by `?debug`; `loadDemo()` itself is untouched.
+
+### 2026-08-21 — v1.0.0 release batch (session 13, user request)
+
+- **(a) “How to use this app”.** A second, deliberately thin modal (`#howModal`),
+  opened from a topbar button beside “How to record” (`#howBtn`), from the
+  spectrum empty state (`#howLink`), or headless via `?how`. Three numbered steps
+  and nothing more: drop one or two recordings, set the tuning (with the custom
+  offset / A4 note), leave Level-match on when comparing. It hands off to the
+  recording guide instead of repeating it — the guide is thorough, which is
+  exactly why it is the wrong first-run document.
+- **(b) Instrument selection removed.** Asked whether electric vs acoustic changed
+  anything significant, the audit found it drove **exactly one** code path:
+  `annotationsFor()` renamed two peak dots (“Helmholtz / air resonance”, “Top
+  resonance”) and suppressed generic peaks within 1/6 octave of them. No DSP
+  parameter, band edge, metric, table, verdict, or export ever read `state.mode`.
+  It was also not defensible: the 70–130 Hz air window overlaps the open low-E
+  fundamental (E2 ≈ 82 Hz), so the “Helmholtz” dot was often sitting on a string.
+  Removed: `state.mode`, `setMode()`, the `modeSeg` control and its wiring, the
+  “M” shortcut and its row in the shortcuts modal, the `?mode=` hook, and the mode
+  line in the PNG export headers.
+- **What was kept, per the user’s instruction.** `m.air`/`m.top` are still measured
+  for every file and still feed the `helmholtz` and `top-resonance` glossary
+  entries with live values, their `measure:` text rewritten to describe the band
+  rather than assert a body mode; `boxiness` now says outright that it is the same
+  200–500 Hz share as Warmth/Mud with a different word over it. The recording
+  guide keeps its acoustic mic-placement bullet (now ending on the soundhole
+  caveat instead of the instrument toggle) — acoustic technique is documentation,
+  not a mode.
+- **Persistence.** `SETTINGS_VER` 2 → 3 drops `mode`; v1/v2 payloads still load and
+  their stale `mode` key is ignored, as is `settings.mode` in old snapshots.
+- **Empty-state fix (found while testing (a)).** `updateVisibility()` hid the whole
+  Frequency card at zero files, while the spectrum row inside it carries the empty
+  state — so “One guitar to study, two to compare”, the **Load demo pair** button
+  and both help links were unreachable on a first run. The card is now always
+  visible and `#freqBands`/`#freqDiff` gate on the source count. Latent through
+  M2.6, masked by the debug loader, fatal the moment that button was hidden.
+- **Verification.** `node tests/dsp.test.js` 107/107; all six scratchpad extraction
+  suites green; all five script blocks parse; headless screenshots of the empty
+  state, `?how`, `?debug`, and `?demo&open=all` in both themes.
+- **Tagged v1.0.0.** Gate unchanged: M3 (live input, owing the deferred task-based
+  entry points) and M4 (chain measure) still wait on the user’s own testing.

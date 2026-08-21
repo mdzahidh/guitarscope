@@ -586,6 +586,21 @@ kbd{
   background:var(--raise); border-radius:0 8px 8px 0;
   font-size:13px; line-height:1.5; color:var(--ink);
 }
+/* numbered walkthrough (How to use) — the number is chrome, the text carries it */
+.guide ol.steps{ list-style:none; margin:14px 0 4px; padding:0; counter-reset:step; }
+.guide ol.steps > li{
+  counter-increment:step; position:relative; padding:0 0 14px 40px;
+  font-size:13.5px; line-height:1.6; color:var(--mut); margin:0;
+}
+.guide ol.steps > li::before{
+  content:counter(step); position:absolute; left:0; top:-1px;
+  width:26px; height:26px; border-radius:50%;
+  border:1px solid var(--hair); background:var(--raise);
+  display:flex; align-items:center; justify-content:center;
+  font-variant-numeric:tabular-nums; font-size:12.5px; font-weight:600; color:var(--ink);
+}
+.guide ol.steps b{ color:var(--ink); font-weight:600; }
+.guide ol.steps .sub{ display:block; margin-top:2px; font-size:12.5px; color:var(--dim); }
 
 /* plot magnify */
 .magbtn{
@@ -649,13 +664,6 @@ kbd{
     </div>
     <div class="globals">
       <div class="field">
-        <label>Instrument</label>
-        <div class="seg" id="modeSeg" role="group" aria-label="Instrument mode">
-          <button data-mode="electric" class="on">Electric</button>
-          <button data-mode="acoustic">Acoustic</button>
-        </div>
-      </div>
-      <div class="field">
         <label for="tuningSel">Tuning</label>
         <select id="tuningSel">
           <option value="estd">E standard</option>
@@ -684,7 +692,9 @@ kbd{
           <button data-theme="dark">Dark</button>
         </div>
       </div>
-      <button class="btn" id="debugLoadBtn" title="Load demo bright + warm pair (Karplus–Strong, 44.1k vs 48k)">Load test files</button>
+      <!-- development affordance: hidden in the shipped app, revealed by ?debug -->
+      <button class="btn" id="debugLoadBtn" style="display:none" title="Load demo bright + warm pair (Karplus–Strong, 44.1k vs 48k)">Load test files</button>
+      <button class="btn" id="howBtn">How to use this app</button>
       <button class="btn" id="guideBtn">How to record</button>
       <button class="btn" id="glossaryBtn">Glossary</button>
     </div>
@@ -767,7 +777,8 @@ kbd{
               <div class="t1">One guitar to study, two to compare</div>
               <div class="t2">Drop recordings above — a single guitar gets the full analysis;
                 add a second playing the same riff and the comparison views unlock.<br>
-                First time? Read <a href="#" id="guideLink">how to record a fair comparison</a>.</div>
+                First time? Read <a href="#" id="howLink">how to use this app</a>, or
+                <a href="#" id="guideLink">how to record a fair comparison</a>.</div>
               <button class="btn" id="demoBtn">Load demo pair</button>
             </div>
           </div>
@@ -978,7 +989,7 @@ kbd{
         <span>GuitarScope · offline · files never leave this page</span>
       </div>
       <div class="settingsFoot" id="settingsFoot">
-        <span class="sfInfo">Remembered: mode · tuning · A4 · EQ device · smoothing · Strings · Harmonics — not level-match · <button class="linkish" id="resetSettingsBtn">Reset saved settings</button></span>
+        <span class="sfInfo">Remembered: tuning · A4 · EQ device · smoothing · Strings · Harmonics — not level-match · <button class="linkish" id="resetSettingsBtn">Reset saved settings</button></span>
       </div>
     </footer>
 
@@ -1019,7 +1030,6 @@ kbd{
     <div class="shortcutrow"><span><kbd>1</kbd>–<kbd>4</kbd></span><span>smoothing off · 1/12 · 1/6 · 1/3</span></div>
     <div class="shortcutrow"><span><kbd>L</kbd></span><span>level-match</span></div>
     <div class="shortcutrow"><span><kbd>S</kbd></span><span>open-string axis</span></div>
-    <div class="shortcutrow"><span><kbd>M</kbd></span><span>electric / acoustic mode</span></div>
     <div class="shortcutrow"><span><kbd>G</kbd></span><span>glossary</span></div>
     <div class="shortcutrow"><span><kbd>E</kbd></span><span>export PNG</span></div>
     <div class="shortcutrow"><span><kbd>Esc</kbd></span><span>close panels</span></div>
@@ -1027,6 +1037,53 @@ kbd{
     <div class="shortcutrow"><span><kbd>Shift</kbd> + drag</span><span>pan a zoomed plot</span></div>
     <div class="shortcutrow"><span><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + scroll</span><span>zoom frequency / time axis</span></div>
     <div class="shortcutrow"><span>double-click</span><span>reset zoom</span></div>
+  </div>
+</div>
+
+<!-- how to use (the short path: files in, tuning right, level-match on) -->
+<div class="modal" id="howModal">
+  <div class="inner guide">
+    <div class="ghead">
+      <h3>How to use this app</h3>
+      <button class="iconbtn" id="howClose" aria-label="Close">✕</button>
+    </div>
+    <div class="rule">Three steps to a reading. Everything runs inside this page —
+      your recordings never leave the machine.</div>
+
+    <ol class="steps">
+      <li><b>Drop in your recordings.</b> Drag an audio file onto slot A and another onto
+        slot B — the same riff played on two guitars. WAV, FLAC, AIFF, MP3 or M4A; the
+        sample rate is read from the file, so there is nothing to set.
+        <span class="sub">One file on its own is fine too — you get the full single-guitar
+        analysis, just without the comparison views.</span></li>
+
+      <li><b>Set the tuning you actually played.</b> Top bar, next to A4. The open-string
+        axis and the anatomy regions are derived from it, so Drop D read as E standard
+        puts the landmarks in the wrong place.
+        <span class="sub">Leave A4 at 440 Hz unless you deliberately tuned elsewhere.</span></li>
+
+      <li><b>Keep Level-match on while comparing.</b> It cancels the broadband loudness
+        difference between the two takes, so what you see is tone and not output. It
+        switches itself on when the second file loads.
+        <span class="sub">Turn it off only when the level gap itself is the question.</span></li>
+    </ol>
+
+    <h4>Then just read down the page</h4>
+    <ul>
+      <li><b>At a glance</b> — the difference in a sentence or two.</li>
+      <li><b>Frequency analysis</b> — the spectrum of each guitar, their difference, and
+        the band-energy table. This is the heart of it.</li>
+      <li>Everything below folds open when you want it: tone character, EQ match,
+        spectrograms, envelopes.</li>
+    </ul>
+
+    <h4>Two habits worth having</h4>
+    <ul>
+      <li>Anything you don't recognise is clickable — labels, region names, the dots on
+        the plots. Each one opens what it measures, with your numbers in the formula.</li>
+      <li>Haven't recorded yet? <a href="#" id="howToRecordLink">How to record a fair
+        comparison</a> matters more than anything in this app: change only the guitar.</li>
+    </ul>
   </div>
 </div>
 
@@ -1052,7 +1109,8 @@ kbd{
         against a mic'd take.</li>
       <li><b>Acoustic:</b> one microphone on a stand (not handheld), 30–60 cm away, aimed
         where the neck meets the body. Mark your seat and the mic position; re-seat yourself
-        exactly for the second guitar. Switch the instrument toggle above to Acoustic.</li>
+        exactly for the second guitar. Aiming at the soundhole exaggerates the body's air
+        resonance and flatters whichever guitar is closer to the mic.</li>
     </ul>
 
     <h4>Levels</h4>
@@ -2298,7 +2356,7 @@ const GLOSSARY=[
   { key:"boxiness", name:"Boxiness", cat:"Frequency regions", hook:"200–500 Hz in excess (acoustic)",
     musician:"An acoustic that sounds like it's playing inside a cardboard box — hollow, honky low-mids. Usually the body's own resonances over-represented by mic placement.",
     science:"Excess energy ≈200–500 Hz, often reinforced by body modes and comb effects from close-mic'ing near the soundhole.",
-    measure:"Same measurement as Warmth/Mud: 200–500 Hz energy share of the 60 Hz–20 kHz total. The acoustic-mode label changes; the physics doesn't.",
+    measure:"Same measurement as Warmth/Mud: 200–500 Hz energy share of the 60 Hz–20 kHz total. Only the word changes — on an acoustic this band reads as boxiness, on an electric as warmth or mud; the physics is identical.",
     values(state){ return _bandVals(state, 200, 500); } },
 
   { key:"body-band", name:"Body", cat:"Frequency regions", hook:"500 Hz–1.2 kHz — the note's core",
@@ -2577,13 +2635,13 @@ const GLOSSARY=[
   { key:"helmholtz", name:"Helmholtz / air resonance", cat:"Physics", hook:"the body's breathing mode, ~90–120 Hz",
     musician:"The acoustic guitar's “whoomp” — the low resonance you hear humming into the soundhole. It gives an acoustic its low-end bloom, and it's what a feedback-buster plug removes.",
     science:"The air in the body cavity plus the soundhole acts as a Helmholtz resonator: f = (c/2π)·√(A/(V·L′)), typically 90–120 Hz on steel-string guitars (≈ F♯2–B2), shifted by the flexible top.",
-    measure:"In Acoustic mode: the most prominent peak between 70 and 130 Hz on a fixed 1/12-octave-smoothed curve (prominence ≥ 3 dB), marked on the plot with a dot — click it to see the frequency and nearest note here.",
+    measure:"Measured on every file: the most prominent peak between 70 and 130 Hz on a fixed 1/12-octave-smoothed curve (prominence ≥ 3 dB). Reported here rather than labelled on the plot — the window also contains the open low-E fundamental, so on an electric (or a capoed/low-tuned acoustic) the number is a candidate, not a verdict.",
     values(state){ return _vals(state, s=>s.metrics.air ? fmtHz(s.metrics.air.f)+"  ·  "+noteStr(s.metrics.air.f, state.a4) : null); } },
 
   { key:"top-resonance", name:"Top resonance", cat:"Physics", hook:"the soundboard's main mode, ~140–260 Hz",
     musician:"The soundboard's own preferred note. Notes near it jump out (or boom); luthiers voice the top by shaving braces to move it.",
     science:"The first major coupled top-plate mode (T(1,1)₂ in plate-mode terms), typically 140–260 Hz, strongly coupled to the air resonance below it.",
-    measure:"In Acoustic mode: the most prominent peak between 140 and 260 Hz (fixed 1/12-oct smoothing, prominence ≥ 3 dB), excluding anything within 1/6 octave of the detected air resonance.",
+    measure:"Measured on every file: the most prominent peak between 140 and 260 Hz (fixed 1/12-oct smoothing, prominence ≥ 3 dB), excluding anything within 1/6 octave of the detected air resonance. Reported here rather than labelled on the plot — string fundamentals share this window, so read it as a candidate on acoustics and ignore it on electrics.",
     values(state){ return _vals(state, s=>s.metrics.top ? fmtHz(s.metrics.top.f)+"  ·  "+noteStr(s.metrics.top.f, state.a4) : null); } },
 
   { key:"resonance-peak", name:"Resonance peak", cat:"Physics", hook:"a bump the instrument adds",
@@ -3864,7 +3922,7 @@ const GRID=makeLogGrid(700,60,20000);
 
 // ---------- state (contract shared with the glossary) ----------
 const _defaultHarmonics=()=>Array.from({length:6},()=> [false,false,false,false]); // per string: hh 2,3,4,5
-const state={ slots:[null,null], mode:"electric", tuning:"estd", customOffset:0,
+const state={ slots:[null,null], tuning:"estd", customOffset:0,
               a4:440, smooth:6, lm:false, lmOffset:null, strings:false,
               stringHarmonics:_defaultHarmonics(),
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
@@ -3877,7 +3935,7 @@ function bothLoaded(){ return !!(state.slots[0]&&state.slots[1]); }
 // ---------- DOM ----------
 const cards=[el("card0"),el("card1")];
 const fileInputs=[el("fileInput0"),el("fileInput1")];
-const modeSeg=el("modeSeg"), tuningSel=el("tuningSel"),
+const tuningSel=el("tuningSel"),
       customOffsetWrap=el("customOffsetWrap"), customOffsetEl=el("customOffset"),
       a4Input=el("a4Input"), glossaryBtn=el("glossaryBtn"), themeSeg=el("themeSeg");
 const smoothSeg=el("smoothSeg"), vocabSel=el("vocabSel"),
@@ -3921,6 +3979,8 @@ const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSel=
 const paramsLine=el("paramsLine"), shortcutsBtn=el("shortcutsBtn"), shortcutsModal=el("shortcutsModal");
 const guideModal=el("guideModal"), guideBtn=el("guideBtn"),
       guideLink=el("guideLink"), guideClose=el("guideClose");
+const howModal=el("howModal"), howBtn=el("howBtn"), howLink=el("howLink"),
+      howClose=el("howClose"), howToRecordLink=el("howToRecordLink");
 const resetSettingsBtn=el("resetSettingsBtn");
 const debugLoadBtn=el("debugLoadBtn");
 const magModal=el("magModal"), magTitle=el("magTitle"),
@@ -4034,7 +4094,8 @@ function computeSpectralExtras(slot){
   slot.fixed6db=db6;
   m.peaks=detectPeaks(db6,df,{fmin:70,fmax:12000,minProm:6,maxCount:6});
   m.rumble=rumbleCheck(power,df);
-  // body resonances (shown in acoustic mode): search a lightly-smoothed curve
+  // body resonances (reported in the glossary, never labelled on the plot): search
+  // a lightly-smoothed curve
   const p12=smoothOct(power,df,12);
   const db12=new Float64Array(p12.length);
   for(let k=0;k<p12.length;k++) db12[k]=powerToDb(p12[k]);
@@ -4265,20 +4326,13 @@ function syncVocabTuning(){
   VOCAB_TUNING.fretTopF=VOCAB_TUNING.highF*Math.pow(2,24/12);
 }
 syncVocabTuning(); // state defaults are valid here
+// Every peak dot is a plain resonance peak. The air/top body resonances are still
+// measured (see m.air/m.top and their glossary entries) but no longer labelled on the
+// plot: naming them needed the instrument toggle, and the detection windows overlap
+// open-string fundamentals, so the label was a guess dressed as a fact.
 function annotationsFor(slot){
   const m=slot.metrics||{}, anns=[];
-  let peaks=(m.peaks||[]).slice();
-  if(state.mode==="acoustic"){
-    if(m.air){
-      anns.push({f:m.air.f,term:"helmholtz"});
-      peaks=peaks.filter(p=>Math.abs(Math.log2(p.f/m.air.f))>1/6);
-    }
-    if(m.top){
-      anns.push({f:m.top.f,term:"top-resonance"});
-      peaks=peaks.filter(p=>Math.abs(Math.log2(p.f/m.top.f))>1/6);
-    }
-  }
-  for(const p of peaks) anns.push({f:p.f,term:"resonance-peak"});
+  for(const p of (m.peaks||[])) anns.push({f:p.f,term:"resonance-peak"});
   return anns;
 }
 function buildSpecModel(forExport){
@@ -5480,8 +5534,11 @@ function toggleCollapse(key){
 function updateVisibility(){
   const n=(state.slots[0]?1:0)+(state.slots[1]?1:0), both=n===2;
   verdictCard.style.display=n?"":"none";
-  freqCard.style.display=n?"":"none";
+  // the frequency card stays up with nothing loaded — its spectrum pane carries the
+  // empty state (what to do next, demo pair, links to the two guides)
+  freqCard.style.display="";
   freqDiff.style.display=both?"":"none";
+  freqBands.style.display=n?"":"none";
   specEmpty.style.display=n?"none":"";
   magBtns.forEach(b=>{
     if(b.dataset.mag==="spec") b.style.display=n?"":"none";
@@ -5966,7 +6023,7 @@ function exportPNG(){
   ctx.fillStyle=cssColor("mut");
   ctx.fillText("· long-term average spectrum",40+bw+10,46);
   ctx.textAlign="right";
-  ctx.fillText(new Date().toISOString().slice(0,10)+" · "+state.mode+" mode · "+tuningLabel()+
+  ctx.fillText(new Date().toISOString().slice(0,10)+" · "+tuningLabel()+
     " · A4 = "+state.a4+" Hz",W-40,46);
   ctx.textAlign="left";
   let y=74;
@@ -6008,7 +6065,7 @@ function _cardPng(name, draw){
   ctx.fillText("GuitarScope · "+name, 28, 36);
   ctx.font="11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
   ctx.fillStyle=cssColor("mut");
-  ctx.fillText(new Date().toISOString().slice(0,10)+" · "+state.mode+" · "+tuningLabel()+" · A4 "+state.a4+" Hz", 28, 52);
+  ctx.fillText(new Date().toISOString().slice(0,10)+" · "+tuningLabel()+" · A4 "+state.a4+" Hz", 28, 52);
   ctx.save(); ctx.translate(0,64);
   draw(ctx,W,H-80);
   ctx.restore();
@@ -6127,12 +6184,12 @@ function exportEnvCSV(){
 function _cardStateFor(name){
   // Only include settings that actually affect that card's data (no UI-only, no cross-card bleed)
   const n=name.toLowerCase();
-  const full={ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset, a4:state.a4, smooth:state.smooth, lm:state.lm, lmOffset:state.lmOffset, vocab:state.vocab, eqDir:state.eqDir, eqDevice:state.eqDevice };
-  if(n.includes("tone")) return { mode:full.mode, smooth:full.smooth, lm:full.lm, lmOffset:full.lmOffset };
-  if(n.includes("spectrogram")||n.includes("envelope")) return { mode:full.mode };
-  if(n.includes("eq")) return { mode:full.mode, tuning:full.tuning, customOffset:full.customOffset, a4:full.a4, smooth:full.smooth, lm:full.lm, lmOffset:full.lmOffset, vocab:full.vocab, eqDir:full.eqDir, eqDevice:full.eqDevice };
+  const full={ tuning:state.tuning, customOffset:state.customOffset, a4:state.a4, smooth:state.smooth, lm:state.lm, lmOffset:state.lmOffset, vocab:state.vocab, eqDir:state.eqDir, eqDevice:state.eqDevice };
+  if(n.includes("tone")) return { smooth:full.smooth, lm:full.lm, lmOffset:full.lmOffset };
+  if(n.includes("spectrogram")||n.includes("envelope")) return { lm:full.lm, lmOffset:full.lmOffset };
+  if(n.includes("eq")) return { tuning:full.tuning, customOffset:full.customOffset, a4:full.a4, smooth:full.smooth, lm:full.lm, lmOffset:full.lmOffset, vocab:full.vocab, eqDir:full.eqDir, eqDevice:full.eqDevice };
   // Spectrum / Difference / Band energy — frequency analysis
-  return { mode:full.mode, tuning:full.tuning, customOffset:full.customOffset, a4:full.a4, smooth:full.smooth, lm:full.lm, lmOffset:full.lmOffset, vocab:full.vocab };
+  return { tuning:full.tuning, customOffset:full.customOffset, a4:full.a4, smooth:full.smooth, lm:full.lm, lmOffset:full.lmOffset, vocab:full.vocab };
 }
 function _exportCardJson(name, payload){
   const st=_cardStateFor(name);
@@ -6193,7 +6250,7 @@ function exportJSON(){
   }
   const snap={ app:"GuitarScope", type:"snapshot", version:1,
     created:new Date().toISOString(),
-    settings:{ mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
+    settings:{ tuning:state.tuning, customOffset:state.customOffset,
                a4:state.a4, smooth:state.smooth, lm:state.lm,
                eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab },
     files };
@@ -6227,12 +6284,14 @@ function setVocab(v){
   syncLaneHeight(); // two-row vocabularies need a taller lane (PLOT.mT 48 vs 34)
 }
 // ---------- settings persistence (M2.6i) ----------
-// Versioned gsSettings: mode, tuning+offset, A4, EQ device/dir, smoothing,
+// Versioned gsSettings: tuning+offset, A4, EQ device/dir, smoothing,
 // vocab, Strings, harmonics — NOT level-match. Written only on explicit
 // user actions, read on boot with migration from legacy keys.
-const SETTINGS_VER=2;
+// v3 dropped `mode` when the instrument selector was removed; v1/v2 payloads
+// still load, their stale `mode` key simply ignored.
+const SETTINGS_VER=3;
 function _settingsPayload(){
-  return {v:SETTINGS_VER, mode:state.mode, tuning:state.tuning, customOffset:state.customOffset,
+  return {v:SETTINGS_VER, tuning:state.tuning, customOffset:state.customOffset,
     a4:state.a4, smooth:state.smooth, eqDevice:state.eqDevice, eqDir:state.eqDir,
     vocab:state.vocab, strings:state.strings, stringHarmonics:state.stringHarmonics.map(a=>a.slice())};
 }
@@ -6256,8 +6315,7 @@ function loadSettings(){
     const raw=localStorage.getItem("gsSettings");
     if(raw){
       const j=JSON.parse(raw);
-      if(j&& (j.v===SETTINGS_VER || j.v===1)){
-        if(j.mode==="electric"||j.mode==="acoustic") state.mode=j.mode;
+      if(j&& (j.v===SETTINGS_VER || j.v===1 || j.v===2)){
         if(typeof j.tuning==="string"&&(TUNINGS[j.tuning]||j.tuning==="custom")) state.tuning=j.tuning;
         if(typeof j.customOffset==="number") state.customOffset=j.customOffset|0;
         if(isFinite(j.a4)&&j.a4>=415&&j.a4<=466) state.a4=+j.a4;
@@ -6277,7 +6335,6 @@ function loadSettings(){
           for(let i=0;i<Math.min(6,j.stringHarmonics.length);i++) for(let k=0;k<4;k++) state.stringHarmonics[i][k]=!!(j.stringHarmonics[i]&&j.stringHarmonics[i][k]);
         }
         // apply to UI
-        modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===state.mode));
         tuningSel.value=state.tuning; customOffsetWrap.style.display=state.tuning==="custom"?"":"none"; customOffsetEl.value=state.customOffset;
         a4Input.value=state.a4;
         setSmoothUI(state.smooth);
@@ -6311,10 +6368,9 @@ function resetSettings(){
     localStorage.removeItem("gsHarmonics");
     localStorage.removeItem("gsStringHarmonics");
   }catch(_e){}
-  state.mode="electric"; state.tuning="estd"; state.customOffset=0; state.a4=440;
+  state.tuning="estd"; state.customOffset=0; state.a4=440;
   state.smooth=6; state.eqDevice="ge7"; state.eqDir=0; state.vocab="mix";
   state.strings=false; _clearAllHarmonics();
-  modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===state.mode));
   tuningSel.value=state.tuning; customOffsetWrap.style.display="none"; customOffsetEl.value=state.customOffset;
   a4Input.value=state.a4;
   setSmoothUI(state.smooth);
@@ -6327,10 +6383,8 @@ function resetSettings(){
 }
 function applySnapshot(snap){
   const st=snap.settings||{};
-  if(st.mode==="electric"||st.mode==="acoustic"){
-    state.mode=st.mode;
-    modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===st.mode));
-  }
+  // older snapshots carry st.mode (electric/acoustic) — deliberately ignored, the
+  // instrument selector is gone and never changed any analysis.
   if(typeof st.tuning==="string"&&(TUNINGS[st.tuning]||st.tuning==="custom")){
     state.tuning=st.tuning; tuningSel.value=st.tuning;
   }
@@ -6477,13 +6531,6 @@ function handleDrop(files,x){
 }
 
 // ---------- controls ----------
-function setMode(mode){
-  if(state.mode===mode) return;
-  state.mode=mode;
-  modeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.mode===mode));
-  requestDraw();
-  renderBandsTable();
-}
 function setSmooth(v){
   if(state.smooth===v) return;
   setSmoothUI(v);
@@ -6581,6 +6628,7 @@ function escCascade(){
   if(glossPanel.classList.contains("open")) return setGloss(false);
   if(shortcutsModal.classList.contains("open")) return shortcutsModal.classList.remove("open");
   if(guideModal.classList.contains("open")) return guideModal.classList.remove("open");
+  if(howModal.classList.contains("open")) return howModal.classList.remove("open");
   if(dropOverlay.classList.contains("show")) hideDropOverlay();
 }
 
@@ -6612,10 +6660,6 @@ function boot(){
   // the markup defaults to Bright; sync if a stored/URL choice said otherwise
   themeSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.theme===theme));
 
-  modeSeg.addEventListener("click",e=>{
-    const b=e.target.closest("button[data-mode]");
-    if(b){ setMode(b.dataset.mode); saveSettings(); }
-  });
   smoothSeg.addEventListener("click",e=>{
     const b=e.target.closest("button[data-sm]");
     if(b){ setSmooth(+b.dataset.sm); saveSettings(); }
@@ -6739,6 +6783,15 @@ function boot(){
   guideModal.addEventListener("click",e=>{
     if(e.target===guideModal) guideModal.classList.remove("open");
   });
+  howBtn.addEventListener("click",()=>howModal.classList.add("open"));
+  howLink.addEventListener("click",e=>{ e.preventDefault(); howModal.classList.add("open"); });
+  howClose.addEventListener("click",()=>howModal.classList.remove("open"));
+  howModal.addEventListener("click",e=>{
+    if(e.target===howModal) howModal.classList.remove("open");
+  });
+  howToRecordLink.addEventListener("click",e=>{                 // hand off to the recording guide
+    e.preventDefault(); howModal.classList.remove("open"); guideModal.classList.add("open");
+  });
   magBtns.forEach(b=>b.addEventListener("click",()=>openMag(b.dataset.mag)));
 
   document.querySelectorAll(".collbtn").forEach(b=>{
@@ -6828,8 +6881,6 @@ function boot(){
         stringsToggle.checked=!stringsToggle.checked;
         stringsToggle.dispatchEvent(new Event("change"));
         break;
-      case "m": case "M":
-        setMode(state.mode==="electric"?"acoustic":"electric"); saveSettings(); break;
       case "g": case "G":
         setGloss(!glossPanel.classList.contains("open")); break;
       case "e": case "E":
@@ -6939,6 +6990,7 @@ function boot(){
   const al=location.search.match(/[?&]sgalign=(file|onset)(?:&|$)/i);   // test hook
   if(al) setSgAlign(al[1].toLowerCase());
   if(/[?&]guide(?:&|$)/i.test(location.search)) guideModal.classList.add("open");   // test hook
+  if(/[?&]how(?:&|$)/i.test(location.search)) howModal.classList.add("open");       // test hook
   const op=location.search.match(/[?&]open=([a-z,]+)(?:&|$)/i);                     // test hook
   if(op){        // session-only unfold: "all" or a comma list of panel keys
     const ks=op[1].toLowerCase()==="all"?Object.keys(COLL_CARDS):op[1].toLowerCase().split(",");
@@ -6974,8 +7026,8 @@ function boot(){
     try{ syncClearHarmonicsBtn(); }catch(_e){}
     saveSettings(); requestDraw();
   }
-  const md=location.search.match(/[?&]mode=(electric|acoustic)(?:&|$)/i);           // test hook
-  if(md) setMode(md[1].toLowerCase());
+  const dbg=location.search.match(/[?&]debug(?:=1)?(?:&|$)/i);                     // reveals the hidden "Load test files" button
+  if(dbg&&debugLoadBtn) debugLoadBtn.style.display="";
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook
   const cb=location.search.match(/[?&]cb=([0-9a-f]{6})(?:&|$)/i);                   // test hook
   if(ca||cb){ // session-only accent overrides (not persisted unless later edited)

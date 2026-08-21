@@ -186,7 +186,41 @@ power with the same full-scale-sine convention as Welch → resample each frame 
   (electric DI recommended; mic'd amp with the mic-movement caveat; acoustic mic
   placement), level discipline (set gain once with the louder guitar; clipped takes are
   unusable), what to play, and what to avoid (no processing anywhere; never DI vs mic;
-  lossy only if both files share it). `?guide` opens it headless.
+  lossy only if both files share it). `?guide` opens it headless. The acoustic bullet
+  survived the removal of the instrument selector on purpose — mic technique is where
+  an acoustic recording actually goes wrong, and it is documentation, not a mode.
+
+### How-to-use walkthrough (v1.0.0)
+
+- A second, deliberately thin modal (`howModal`, topbar "How to use this app" +
+  empty-state link, `?how` headless) sits *before* the recording guide in the topbar.
+  It is three numbered steps — drop one or two files, set the tuning, leave Level-match
+  on when comparing — and nothing else. Everything it might have said about mics,
+  signal chains and level discipline is one link away in the recording guide; the whole
+  point of a second modal is that the first one is too long to be a first-run
+  onboarding. Esc closes it through the same cascade as every other overlay.
+
+### Why instrument mode was removed (v1.0.0)
+
+- Through M2.6 the app carried an electric/acoustic segmented control (`state.mode`,
+  `setMode()`, "M" key, `?mode=`). An audit before the public release found it drove
+  **exactly one** code path: `annotationsFor()` renamed two peak dots ("Helmholtz /
+  air resonance", "Top resonance") and suppressed generic peaks within 1/6 octave of
+  them. No DSP parameter, band edge, metric, table row, verdict, or export ever read
+  it — `setMode()` called `renderBandsTable()`, but that function never looked at the
+  mode either.
+- Worse, the label was a guess dressed as a fact: the 70–130 Hz air-resonance window
+  overlaps the open low-E fundamental (E2 ≈ 82 Hz in standard tuning), so on plenty of
+  acoustic takes the dot labelled "Helmholtz" was sitting on a string, not a body mode.
+  A defensible instrument would rather say less. Per the house rule that every visible
+  number is defensible, the label went and the measurement stayed.
+- `m.air` and `m.top` are still computed for **every** file and still feed the
+  `helmholtz` / `top-resonance` glossary entries with live values; their `measure:`
+  text now explains the band rather than asserting a body mode, and `boxiness` says
+  outright that it is the same 200–500 Hz share as Warmth/Mud with a different word
+  over it. `SETTINGS_VER` went 2 → 3 to drop `mode` from `gsSettings`; v1/v2 payloads
+  still load and their stale `mode` key is ignored, as is `settings.mode` in old
+  snapshots.
 
 ### Theming (Bright default + Dark)
 
@@ -493,9 +527,9 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   has its own tick loop with no unit suffix and never collided.
 - **Persistence per the session-9 user decision:** `gsStrings` stores only explicit
   toggle flips (like `gsVocab`/`gsCollapse`); snapshots deliberately don't carry the
-  toggle — it's viewer preference, not analysis state. `?strings=1|0` and
-  `?mode=electric|acoustic` exist for headless capture; the latter because instrument
-  mode is a user toggle (never detected), so tests need a way to set it.
+  toggle — it's viewer preference, not analysis state. `?strings=1|0` exists for
+  headless capture. (`?mode=electric|acoustic` was documented here too until v1.0.0
+  removed the instrument selector — see "Why instrument mode was removed".)
 
 ## M2.6c (session 9): region-boundary Hz labels, dynamic lane height
 
@@ -582,7 +616,11 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   default). Reusing `diff`/`bands` keys means a user who already collapsed
   Difference or Bands keeps that preference without a storage migration.
 - **Visibility vs collapse.** `updateVisibility()` gates the *existence* of rows:
-  `#freqCard` when `anyLoaded()`, `#freqDiff` only when `bothLoaded()`. Collapse
+  `#freqDiff` only when `bothLoaded()`, `#freqBands` when `anyLoaded()`. **`#freqCard`
+  itself is always visible** — its spectrum row carries the empty state (what to do
+  next, "Load demo pair", links to both guides), so hiding the card at zero files made
+  the empty state unreachable. That was a live bug through M2.6 (masked by the debug
+  loader, fatal once it was hidden for release); fixed at v1.0.0. Collapse
   gates *rendering*: `drawAll()` skips `buildSpecModel` when `spec` collapsed and
   `buildDiffModel` when `diff` collapsed or single-guitar. The spectrum canvas
   reuses the same `specHits` hit-rects; clearing them when collapsed prevents
@@ -597,68 +635,144 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   sub-sections so any external or test hook referencing the old IDs doesn't
   break — they point at `freqDiff`/`freqBands`/`freqSpec`.
 
-## M2.6g (session 12): show harmonics — lighter overtones
+## M2.6g (session 12, reworked session 13): per-string harmonics
 
-- **Overtones are annotation, like the fundamentals.** `stringAxisMarkers()` is
-  the single source of truth for the bottom-axis guides: fundamentals
-  (`harm:1`) plus, when `state.harmonics` is on, 2×–4× per string (filtered to
-  `FMIN–FMAX`). The array is sorted fundamentals-first so `drawStringAxis`'s
-  16 px label-skip guard gives priority to the named fundamentals; harmonics
-  never get a label (dots-only) to keep the axis readable with 18 extra
-  verticals. Both `buildSpecModel` and `buildDiffModel` read the same array, so
-  the two plots stay in lockstep.
-- **Lighter, still interactive.** Fundamentals: `0.32` ` [2,4]`; harmonics: `0.16`
-  `[1,5]`. The lighter stroke reads as secondary without vanishing on Bright.
-  Hit rects for harmonics are 8 px-wide strips covering the full plot height
-  (no label to click), dispatching to the same `openStringPopover(si)` — the
-  popover already documents harmonics 2–5, so the interaction is free.
-- **Persistence.** `state.harmonics` (default off) lives in `gsHarmonics` today
-  and in `gsSettings` v1 after M2.6i; the Frequency header's second switch is
-  `disabled` when Strings is off (`syncHarmonicsUI()`), and `?harmonics=0|1`
-  is the headless hook.
+The first cut was a single global "Show harmonics" switch beside Strings
+(`state.harmonics`, `gsHarmonics`, `syncHarmonicsUI()`), drawing 2×–4× for
+every string at once. It was replaced (`3fbfa72`) because turning on 18 extra
+verticals to see *one* string's overtones is the wrong granularity — the
+question a player actually asks is "where does *this* string land up there".
+What ships:
+
+- **The toggle lives where the string is documented.** Each open-string popover
+  (`stringContentHtml(si)`) lists harmonics 1–5; rows 2–5 carry their own
+  `.harm-toggle` switch (row 1, the fundamental, prints "always on" — it *is*
+  the Strings axis). State is `state.stringHarmonics[si][hh-2]`, a 6×4 boolean
+  grid seeded by `_defaultHarmonics()` (all off). A `Clear harmonics` button in
+  the Frequency card header wipes the grid; `syncClearHarmonicsBtn()` disables
+  it whenever Strings is off or nothing is on, so the button doubles as the
+  indicator that *something* is showing.
+- **Overtones are annotation, like the fundamentals.** `stringAxisMarkers()`
+  stays the single source of truth for the bottom-axis guides: fundamentals
+  (`harm:1`) first, then each enabled harmonic 2–5 per string, filtered to
+  `FMIN–FMAX`. Fundamentals-first ordering gives `drawStringAxis`'s 16 px
+  label-skip guard priority over the named fundamentals. Both `buildSpecModel`
+  and `buildDiffModel` read the same array, so the two plots stay in lockstep.
+- **Color carries the association, not text.** `STRING_COLORS` (six distinct
+  hues, index 0 = low E) is a *data* palette — like the magma spectrogram it
+  never themes, because it encodes identity, not chrome. A harmonic is drawn in
+  its parent string's hue at `0.48` alpha, dash `[2,3]`, `lw 1`; the fundamental
+  at `0.85`, `[3,3]`, `lw 1.4`. Harmonics get **no** label at all (an earlier
+  `×2`–`×4` labelling, `b501832`, was dropped in the recolor): hue ties them to
+  their string and left-to-right order implies the overtone number, which keeps
+  the axis readable when several strings are expanded. The same hue drives the
+  popover's row dots, at `0.9` enabled / `0.35` off, so the popover legend and
+  the plot agree.
+- **Still interactive.** Harmonic hit rects are 8 px strips over the full plot
+  height (no label to click) dispatching to `openStringPopover(si)` — i.e. the
+  place you turn them off again.
+- **Persistence.** The 6×4 grid rides in `gsSettings` (bumped to **v2**;
+  `stringHarmonics`) and mirrors to legacy `gsStringHarmonics`. `loadSettings()`
+  accepts v1 payloads and migrates the old `harmonics:true` boolean to
+  "2–4 on for all six strings". `?harmonics=0|1` survives as a compatibility
+  test hook with exactly that meaning.
 
 ## M2.6h (session 12): per-card 300-dpi PNG / JSON / CSV
 
 - **Buttons per sub-section, not per card.** The merged Frequency card's three
   rows each own their export row (`spec` keeps its `PNG/CSV/Snapshot`, `diff`
-  and `bands` gain `PNG/CSV/JSON`); Tone, Sgram, Env, and EQ gain `PNG/JSON/CSV`
-  in their own headers. All buttons gate on `anyLoaded()` or `bothLoaded()` so
-  a single-guitar view doesn't offer a difference export for nothing.
+  gains `PNG/CSV/JSON`, `bands` gains `CSV/JSON`); Tone, Sgram, Env, and EQ get
+  their own `.exports` row. All buttons gate on `anyLoaded()` or `bothLoaded()`
+  so a single-guitar view doesn't offer a difference export for nothing.
+- **PNG only where there is a plot.** Band energy and Tone export CSV/JSON only
+  (`d45e682`): both are HTML tables, and rasterizing a table produces a picture
+  of numbers that the CSV already carries better. Only canvas cards — Spectrum,
+  Difference, Spectrogram, Envelope, EQ response — get a PNG button.
 - **One true 300-dpi path.** Every PNG export renders clean from its scene
   builder (`drawSpectrumScene`, `drawDiffScene`, `drawEnvelopeScene`, etc.) into
   an offscreen canvas (`@2×` for retina, `W=1240` etc.), then injects a `pHYs`
   chunk (`11811` dpm) via `_pngWithDpi` (`_crc32` is the PNG CRC). `Spectrum`
-  keeps its titled header+legend composition; `Bands`/`Tone` rasterize their
-  HTML tables (text only) — a table has no canvas scene to reuse.
+  keeps its titled header+legend composition.
 - **Data exports are defensible.** `diffCsv`/`diffJson` dump the displayed
   `a−b` curve; `bandsCsv` recomputes `bandPower` shares per vocabulary region
   (the same math as `renderBandsTable`); `toneCsv` scrapes the live tone rows
   and prose; `envCsv` dumps `buildEnvModel` points; `sgramJson`/`envJson` wrap
   frame counts (alignment is UI, not exported); `eqJson` dumps `eqFitData()`;
   per-card JSONs are scoped via `_cardStateFor(name)` — Frequency cards carry
-  `mode`/`tuning`/`a4`/`smooth`/`lm`/`vocab`, Tone carries `mode`/`smooth`/`lm`,
-  Sgram/Env carry `mode`, EQ carries full `mode`/`tuning`/`a4`/`smooth`/`lm`/`vocab`/`eqDevice`/`eqDir`; `regions` only for frequency cards; `strings`/`stringHarmonics`/`sgAlign` are UI-only and excluded from all exports (PNGs suppress string guides). Snapshot (global) still carries full data-relevant settings.
+  `tuning`/`a4`/`smooth`/`lm`/`vocab`, Tone carries `smooth`/`lm`,
+  Sgram/Env carry only `lm`, EQ carries the full
+  `tuning`/`a4`/`smooth`/`lm`/`vocab`/`eqDevice`/`eqDir`; `regions` only for frequency cards; `strings`/`stringHarmonics`/`sgAlign` are UI-only and excluded from all exports (PNGs suppress string guides). Snapshot (global) still carries full data-relevant settings.
 
 ## M2.6i (session 12): versioned `gsSettings` — one store, one reset
 
-- **Scope.** `gsSettings` v1 stores the analysis-fact settings the user
-  *chose* (intent, not data): `mode`, `tuning`+`customOffset`, `a4`, `smooth`,
-  `eqDevice`/`eqDir`, `vocab`, `strings`, `harmonics`. `lm` (level-match) is
+- **Scope.** `gsSettings` (v1 → **v2** when harmonics became per-string → **v3** when
+  the instrument selector was removed) stores the analysis-fact settings the user
+  *chose* (intent, not data):
+  `tuning`+`customOffset`, `a4`, `smooth`, `eqDevice`/`eqDir`, `vocab`,
+  `strings`, `stringHarmonics` (6×4). `lm` (level-match) is
   deliberately excluded — its auto-latch already handles the common case and
   a saved `lm` would fight the latch. `gsTheme`/`gsColors`/`gsCollapse` stay
   separate (viewer prefs with their own scopes).
-- **One write path.** `_settingsPayload()` builds `{v:1,…}`; `saveSettings()`
-  writes `gsSettings`; `loadSettings()` validates `v` and applies to `state`+UI
-  (selectors, switches, `syncHarmonicsUI`, `syncVocabTuning`). Legacy keys
-  `gsVocab`/`gsStrings`/`gsHarmonics` are read once for migration; new writes
-  also mirror to the legacy keys so a downgraded build doesn't lose them.
-  Writes happen only on explicit UI actions (click/change/keyboard `1-4`/`M`);
+- **One write path.** `_settingsPayload()` builds `{v:SETTINGS_VER,…}`;
+  `saveSettings()` writes `gsSettings`; `loadSettings()` accepts the current
+  version *or* v1/v2 (migrating the old global `harmonics` boolean, ignoring the
+  dead `mode` key) and applies to
+  `state`+UI (selectors, switches, `syncClearHarmonicsBtn`, `syncVocabTuning`).
+  Legacy keys `gsVocab`/`gsStrings`/`gsHarmonics`/`gsStringHarmonics` are read
+  once for migration; new writes also mirror to the legacy keys so a downgraded
+  build doesn't lose them.
+  Writes happen only on explicit UI actions (click/change/keyboard `1-4`);
   `applySnapshot` and programmatic `setSmoothUI`/`setVocab` never write.
 - **Footer affordance.** New `.settingsFoot` line prints what *is* remembered
   and what *isn't* (“… — not level-match”) with a `Reset saved settings`
   button that clears `gsSettings`+legacy keys, resets `state` to defaults,
   syncs every control, and toasts. No snapshot carries fold/collapse state,
   so resets never affect a snapshot reload.
+
+## Release hardening (session 13): exports that survive contact
+
+The exports shipped in M2.6h broke in four different ways under real use. All
+four fixes are small, and all four are the kind of thing that only shows up
+when a person clicks the button rather than when a test calls the function.
+
+- **`toBlob` can hand you `null`.** Not "throws" — *calls back with null*, on a
+  tainted or oversized canvas, and the old code passed that straight to
+  `download()` for a 0-byte file with no complaint (`9fc4847`).
+  `_exportPngCanvas(cv,name)` now owns the whole path: no `toBlob` at all →
+  `toDataURL` fallback; `toBlob` yields null or the dpi injection throws → ship
+  the raw blob rather than nothing; everything fails → `toast(…, isErr)`. A
+  failed export must say so — silence plus a broken file is the worst outcome.
+- **The `pHYs` splice was writing into the wrong bytes.** The original assumed
+  a fixed 25-byte IHDR and spliced at byte 33 (`b59c060`). It now reads the
+  IHDR length from the `DataView`, sanity-checks the type and every offset
+  against `u.length`, and returns the **original blob** on any surprise — a
+  PNG at the wrong DPI beats a corrupt PNG. `_pngWithDpi` is deliberately
+  total: every failure path returns a usable blob.
+- **The footer overlapped itself.** The left-hand parameter dump and the
+  right-aligned credit collided at 1240 px on long filenames. Truncating the
+  left string (`e4e2ef3`) worked but read badly; the settled answer
+  (`39c5c64`, `7fb174f`) is that every PNG carries exactly one footer,
+  `made with GuitarScope`, right-aligned. The analysis parameters were already
+  in the sub-header line and in the JSON — the footer was duplicating them.
+- **The spectrogram PNG bled the envelope in** (`c8e48c5`). `exportSgramPNG`
+  builds its own canvas and stacks only `sgramModelFor(0/1)` + the diff pane;
+  it never reuses the live composite. If you add a pane to the sgram card,
+  add it here explicitly — the export is not a screenshot.
+
+- **Exports are data, not UI.** `strings`, `stringHarmonics`, and `sgAlign`
+  never appear in CSV/JSON (`a29b5f2`), and the PNG builders (`exportPNG`,
+  `_cardPng`) force `state.strings=false` with the harmonics grid cleared for
+  the duration of the render, restoring both in a `finally`. Reasoning: a
+  string guide is an annotation the *reader* asked for, not a property of the
+  measurement, and an exported curve should be reproducible from its stated
+  parameters alone. `_cardStateFor(name)` narrows this further per card, so a
+  Tone JSON doesn't claim a vocabulary it never used.
+
+- **Debug affordance is opt-in.** The "Load test files" button that loads the
+  demo pair is hidden by default and revealed by `?debug` (the `loadDemo()`
+  path itself is untouched — `?demo` still works headlessly). It exists for
+  development, and a first-time visitor reading "Load test files" in the header
+  of an analysis tool reasonably wonders whose files those are.
 
 ## Hard-won correctness notes (dead ends — do not retry)
 

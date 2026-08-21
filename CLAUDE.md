@@ -57,17 +57,55 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   Difference sub-section exists only with two sources; Strings + Regions move from
   the global header into the card header (scope = this card), Level-match stays
   global; `gsCollapse`/`?open=` gain sub-section keys (`spec`/`diff`/`bands`);
-  magnify keys unchanged. **M2.6g BUILT (session 12):** "Show harmonics" sub-toggle
-  under Strings (harmonics 2–4 per string on both line plots, 0.16 vs 0.32 opacity,
-  dash [1,5] vs [2,4], clickable to per-string popover, `?harmonics=` hook,
-  persisted via `gsHarmonics`/`gsSettings`). **M2.6h BUILT (session 12):** per-card
-  300-dpi PNG (`pHYs` 11811 dpm) / JSON / CSV — Spectrum/Difference/Bands buttons
-  per sub-section inside merged card, plus Tone/Sgram/Env/EQ JSON+CSV/PNG;
+  magnify keys unchanged. **M2.6g BUILT (session 12), REWORKED (session 13):** harmonics
+  are **per string, not global** — the old "Show harmonics" switch is gone; each
+  open-string popover carries a switch per harmonic 2–5 (`state.stringHarmonics`,
+  a 6×4 grid, all off by default), and a `Clear harmonics` button in the Frequency
+  card header wipes them (`syncClearHarmonicsBtn()` disables it when Strings is off
+  or nothing is on). Each string owns one of six `STRING_COLORS` (a **data** palette
+  — never themed); its harmonics draw in the same hue at 0.48 alpha / dash [2,3]
+  vs the fundamental's 0.85 / [3,3], and carry **no labels** (an earlier ×2–×4
+  labelling was dropped — hue + left-to-right order say it). `?harmonics=0|1`
+  survives as a compat hook meaning "2–4 on for every string". **M2.6h BUILT
+  (session 12):** per-card 300-dpi PNG (`pHYs` 11811 dpm) / JSON / CSV —
+  Spectrum/Difference buttons per sub-section inside the merged card, Bands
+  CSV/JSON only, plus Tone (CSV/JSON), Sgram/Env/EQ; **PNG only for canvas cards**
+  — Band energy and Tone are HTML tables and export data, not a picture of numbers.
   PNGs render clean from scene builders via `_cardPng`/`_exportPngCanvas`.
-  **M2.6i BUILT (session 12):** versioned `gsSettings` (v1: mode/tuning+offset/A4/
-  smooth/EQ device+dir/vocab/Strings+Harmonics; NOT level-match) with migration
-  from legacy `gsVocab`/`gsStrings`/`gsHarmonics`, `saveSettings()` on explicit
-  actions, footer “Remembered … — Reset saved settings” (`resetSettingsBtn`).
+  **M2.6i BUILT (session 12), bumped to v3 (session 13):** versioned `gsSettings`
+  (**v3**: tuning+offset/A4/smooth/EQ device+dir/vocab/Strings + the 6×4
+  `stringHarmonics` grid; NOT level-match, and no longer `mode` — v1/v2 payloads
+  still load, their stale `mode` key ignored) with migration from v1 (global
+  `harmonics` boolean → 2–4 on all strings) and from legacy
+  `gsVocab`/`gsStrings`/`gsHarmonics`/`gsStringHarmonics`,
+  `saveSettings()` on explicit actions, footer “Remembered … — Reset saved
+  settings” (`resetSettingsBtn`).
+- **Release hardening (session 13), then v1.0.0 tagged:** PNG export made total —
+  `_exportPngCanvas` handles `toBlob` returning null (→ `toDataURL` fallback →
+  raw blob → error toast), `_pngWithDpi` parses the real IHDR length and
+  bounds-checks every offset, returning the original blob on any surprise; one
+  footer on every PNG (`made with GuitarScope`); `exportSgramPNG` builds its own
+  stack so the envelope can't bleed in. **Exports are data-only:** `strings`,
+  `stringHarmonics`, `sgAlign` never appear in CSV/JSON, and PNG builders force
+  `state.strings=false` for the render (restored in `finally`); `_cardStateFor(name)`
+  narrows the recorded settings per card. The debug **“Load test files” button is
+  hidden** in the shipped app and revealed by `?debug` (`loadDemo()` untouched).
+- **v1.0.0 release batch (session 13, user request):** (a) **“How to use this app”**
+  modal (`#howBtn` beside “How to record”, `#howLink` in the spectrum empty state,
+  `?how` hook, Esc cascade) — three steps only: drop one or two files, set the
+  tuning, leave Level-match on for comparisons; it hands off to the recording guide
+  rather than repeating it. (b) **Instrument selector removed** — electric/acoustic
+  drove exactly two peak-dot *labels* in `annotationsFor()` and nothing else, so
+  `state.mode`, `setMode()`, `modeSeg`, the “M” key, `?mode=`, the shortcut row and
+  the PNG-header mode line are all gone; the air/top resonance numbers are still
+  measured for every file and reported through the glossary (their `measure:` text
+  rewritten to say the band is the same physics under either word), and the
+  acoustic mic-placement bullet stays in the recording guide. Old snapshots'
+  `settings.mode` is deliberately ignored. (c) **Empty-state fix:** `updateVisibility()`
+  used to hide the whole Frequency card at zero files, which made the empty state
+  (what-to-do-next, “Load demo pair”, both help links) unreachable — the card now
+  always renders and `#freqBands`/`#freqDiff` gate on the source count instead.
+  This mattered acutely once the debug loader was hidden.
 - 107/107 tests pass (`node tests/dsp.test.js`, including the M2.6e switch CSS contract). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
@@ -105,8 +143,9 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   overrides), `?open=all|key,key` (unfold collapsed panels: diff|bands|tone|eq|sgram|
   env — **full-page screenshots need `?open=all`** now that eq/sgram/env start
   folded), `?pop=<glosskey>` (pin a glossary/region popover open for capture),
-  `?strings=1|0` (bottom-axis open-string labels), `?mode=electric|acoustic`
-  (instrument mode, for headless acoustic checks).
+  `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
+  `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
+  app" walkthrough), `?debug` (reveal the hidden "Load test files" button).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
@@ -119,7 +158,11 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 - **Sample rate is read from file bytes, never asked of the user.** Decode via
   OfflineAudioContext at the file's native rate; each file's own rate in its frequency
   math; refuse files whose rate can't be determined. "Facts come from the data, intent
-  comes from the user" — instrument mode is a toggle, not detection.
+  comes from the user" — tuning and A4 are user-set, never guessed from the audio.
+  **There is no instrument (electric/acoustic) selector** — it was removed at v1.0.0
+  because it changed nothing in the analysis (see ARCHITECTURE.md "Why instrument mode
+  was removed"); acoustic body resonances are still measured and reported in the
+  glossary, and acoustic mic technique lives in the recording guide.
 - **Every visible number defensible.** Analysis params live in the footer; smoothing
   state is always printed on the plot; dB re full-scale sine everywhere; glossary terms
   link each label to its formula with current values.

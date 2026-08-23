@@ -137,9 +137,9 @@ Replace in place (each is a literal string in the file):
 ### R1.4 — Comments, docs, README
 
 - Block comments at ~11, 1192, 2265, 2314, 2744, 3906.
-- `README.md` **does not exist** in the repo despite being named in the rename scope —
-  either create a short one (what the app is, how to open it, how to run tests) or tell
-  the user it was missing. Do not silently skip it.
+- `README.md` **is already written** (repo root, 2026-08-23) and already says *Claude
+  Rameau* throughout — nothing to rename there. Do not rewrite it; if a fact in it goes
+  stale as a task lands (test count, hook list, tone-row names), fix that line only.
 - `docs/ARCHITECTURE.md`: add a short note under naming/plumbing that the `gs*`
   localStorage keys and `?` hooks deliberately keep the old prefix.
 

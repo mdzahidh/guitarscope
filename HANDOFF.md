@@ -2,8 +2,8 @@
 
 Branch: `rameau-r1r2` (not master)
 Base: `master` at 675afd6
-Commit range for Gate 1: 675afd6..752c1b2 (9 commits, includes R2.5) + follow-up doc rename (this update)
-Final commit for HANDOFF is this update (R2.5 follow-up).
+Commit range for Gate 1: 675afd6..b023918 (11 commits: 9 gate + doc-rename + header Load demo pair)
+Final commit for HANDOFF is this update (production Load demo pair).
 
 ## Tasks completed
 
@@ -182,6 +182,10 @@ Screenshots were opened with the image-reading tool and verified: title/slogan/t
 - `tests/dsp.test.js`: header `GuitarScope DSP unit tests` → `Claude Rameau DSP unit tests`.
 - `docs/THEORY.md:235`: `GuitarScope could measure the beating!` → `Claude Rameau could measure the beating!`.
 - `HANDOFF.md`: updated commit range and moved former “still titled GuitarScope” entry to fixed. No changes to `index.html` legacy snapshot string or `gs*` plumbing; no edits to `SPEC.md`/`CLAUDE.md` status per original gate rule.
+
+## Follow-up 2026-08-23 — production Load demo pair
+
+- `index.html:720`: removed `style="display:none"` from `#debugLoadBtn` and changed text `Load test files` → `Load demo pair` per user request — header button is now always visible in production (plus the empty-state `#demoBtn` remains). `?debug` hook still works (sets display=""). Title comment updated; verified header shows “Load demo pair” next to About in bright/dark screenshots (`/tmp/header-check.png`).
 
 ## Notes
 

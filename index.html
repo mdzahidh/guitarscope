@@ -115,6 +115,8 @@ main{ display:flex; flex-direction:column; gap:18px; }
 }
 .brand h1 .thin{ font-weight:300; color:var(--mut); }
 .brand-row{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.brandbtn{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; cursor:help; text-align:left; }
+.brandbtn:focus-visible{ outline:2px solid var(--hair2); outline-offset:2px; border-radius:4px; }
 .slogan{ font-size:12px; color:var(--dim); font-style:italic; }
 .tagline{ font-size:12px; color:var(--dim); letter-spacing:.04em; margin-top:1px; }
 .globals{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
@@ -678,10 +680,10 @@ kbd{
 
   <header class="topbar">
     <div class="brand">
-      <div class="brand-row">
+      <button class="brandbtn" id="brandBtn" aria-label="About Claude Rameau">
         <h1>Claude <span class="thin">Rameau</span></h1>
         <span class="slogan">“Yes — but why does it sound that way?”</span>
-      </div>
+      </button>
       <div class="tagline">long-term average spectrum · A/B comparison</div>
     </div>
     <div class="globals">
@@ -4019,7 +4021,7 @@ const guideModal=el("guideModal"), guideBtn=el("guideBtn"),
       guideLink=el("guideLink"), guideClose=el("guideClose");
 const howModal=el("howModal"), howBtn=el("howBtn"), howLink=el("howLink"),
       howClose=el("howClose"), howToRecordLink=el("howToRecordLink");
-const aboutModal=el("aboutModal"), aboutBtn=el("aboutBtn"), aboutClose=el("aboutClose");
+const aboutModal=el("aboutModal"), aboutBtn=el("aboutBtn"), aboutClose=el("aboutClose"), brandBtn=el("brandBtn");
 const resetSettingsBtn=el("resetSettingsBtn");
 const debugLoadBtn=el("debugLoadBtn");
 const magModal=el("magModal"), magTitle=el("magTitle"),
@@ -6836,6 +6838,7 @@ function boot(){
   aboutModal.addEventListener("click",e=>{
     if(e.target===aboutModal) aboutModal.classList.remove("open");
   });
+  brandBtn.addEventListener("click",()=>aboutModal.classList.add("open"));
   magBtns.forEach(b=>b.addEventListener("click",()=>openMag(b.dataset.mag)));
 
   document.querySelectorAll(".collbtn").forEach(b=>{

@@ -1428,6 +1428,80 @@ function tuningMidi(key, customOffset){
   return (TUNINGS[key]||TUNINGS.estd).midi.slice();
 }
 
+// ---------- discovery moments: harmonic ↔ open-string coincidences ----------
+// The app's origin story (docs/STORY.md): a harmonic of one string landing on
+// another string's open fundamental. findCoincidences() locates those landings so
+// the UI can mark them with a ✦; it reports arithmetic only, never prose.
+//
+// Threshold — fixed at ±6 cents, deliberately not a user control:
+//   · 12-TET's fifth is 2¢ off just (docs/THEORY.md §5), so the real 3rd-harmonic
+//     landings must sit inside the window;
+//   · the tempered major third is 14¢ off (§5) — a near-miss, not a landing, and
+//     the ear reads it that way (§2.6, "tolerance bands");
+//   · ordinary tuning slop lives under a few cents.
+// A test-only ?tol= hook may override it; nothing persists it.
+const COINCIDENCE_CENTS = 6;
+
+// Signed interval from f1 to f2 in cents. Positive ⇒ f2 is the higher pitch.
+function centsBetween(f1, f2){ return 1200 * Math.log2(f2 / f1); }
+
+function gcdInt(a, b){ a = Math.abs(a); b = Math.abs(b); while(b){ const t = a % b; a = b; b = t; } return a; }
+
+// Fold the ratio h:1 into a single octave, lowest terms, plus how many octaves
+// were removed: 2 → 1/1 (+1 oct), 3 → 3/2 (+1), 4 → 1/1 (+2), 5 → 5/4 (+2), 6 → 3/2 (+2).
+function octaveFold(h){
+  let d = 1;
+  while(h / d >= 2) d *= 2;
+  const g = gcdInt(h, d) || 1;
+  return { n: h / g, d: d / g, octaves: Math.round(Math.log2(d)) };
+}
+
+// Names for octave-folded harmonic ratios, from the docs/THEORY.md §1 table.
+// Ratios that table declines to name (11/8, 13/8) stay null rather than invent one.
+const HARMONIC_INTERVALS = {
+  "1/1": "unison",           "3/2": "perfect fifth",  "5/4": "major third",
+  "7/4": "harmonic seventh", "9/8": "major second",   "15/8": "major seventh",
+};
+
+// marks: [{f, si, midi, harm}] in stringAxisMarkers() shape — every open-string
+// fundamental (harm 1) plus whichever harmonics the user has switched on.
+// Pairs each harmonic (harm > 1) against every OTHER string's fundamental.
+// Returns [{f, cents, harm, from, onto, ratio, reduced, octaves, interval}] sorted
+// by frequency; `cents` is signed, open string relative to the harmonic, so the
+// 12-TET fifth's −2¢ prints as the harmonic sitting fractionally above the string.
+function findCoincidences(marks, tolCents){
+  if(!Array.isArray(marks)) return [];
+  const tol = (tolCents == null) ? COINCIDENCE_CENTS : Math.abs(tolCents);
+  const opens = marks.filter(m => m && m.f > 0 && ((m.harm | 0) || 1) === 1);
+  const out = [];
+  for(const h of marks){
+    if(!h || !(h.f > 0) || (h.harm | 0) < 2) continue;
+    const hn = h.harm | 0;
+    for(const o of opens){
+      if(o.si === h.si) continue;
+      let cents = centsBetween(h.f, o.f);
+      // An exact landing (h×f computed one way, the open string another) leaves a
+      // sub-picocent float residue; snap it so a true unison reads 0, not −0.0.
+      if(Math.abs(cents) < 1e-9) cents = 0;
+      if(!(Math.abs(cents) <= tol)) continue;
+      const fold = octaveFold(hn);
+      out.push({
+        f: h.f,
+        cents,
+        harm: hn,
+        from: { si: h.si, midi: h.midi, f: h.f / hn },
+        onto: { si: o.si, midi: o.midi, f: o.f },
+        ratio: { n: hn, d: 1 },
+        reduced: { n: fold.n, d: fold.d },
+        octaves: fold.octaves,
+        interval: HARMONIC_INTERVALS[fold.n + "/" + fold.d] || null,
+      });
+    }
+  }
+  out.sort((a, b) => a.f - b.f || a.from.si - b.from.si || a.harm - b.harm);
+  return out;
+}
+
 // ---------- STFT band envelopes (for onsets & decay) ----------
 // win 2048, hop 512. Returns per-frame power in given bands plus
 // full-band magnitude spectra flux for onset detection.

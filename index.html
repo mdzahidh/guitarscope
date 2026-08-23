@@ -6670,6 +6670,7 @@ function escCascade(){
   if(shortcutsModal.classList.contains("open")) return shortcutsModal.classList.remove("open");
   if(guideModal.classList.contains("open")) return guideModal.classList.remove("open");
   if(howModal.classList.contains("open")) return howModal.classList.remove("open");
+  if(aboutModal.classList.contains("open")) return aboutModal.classList.remove("open");
   if(dropOverlay.classList.contains("show")) hideDropOverlay();
 }
 
@@ -7038,6 +7039,7 @@ function boot(){
   if(al) setSgAlign(al[1].toLowerCase());
   if(/[?&]guide(?:&|$)/i.test(location.search)) guideModal.classList.add("open");   // test hook
   if(/[?&]how(?:&|$)/i.test(location.search)) howModal.classList.add("open");       // test hook
+  if(/[?&]about(?:&|$)/i.test(location.search)) aboutModal.classList.add("open");
   const op=location.search.match(/[?&]open=([a-z,]+)(?:&|$)/i);                     // test hook
   if(op){        // session-only unfold: "all" or a comma list of panel keys
     const ks=op[1].toLowerCase()==="all"?Object.keys(COLL_CARDS):op[1].toLowerCase().split(",");

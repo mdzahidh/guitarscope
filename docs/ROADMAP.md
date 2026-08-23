@@ -44,6 +44,42 @@ Verification command (see CLAUDE.md for the full list of `?` hooks):
 
 ---
 
+## Review gates (build/review handoff)
+
+Tasks are built in stacks and reviewed at three points. The gates sit where a mistake
+stops being local — not at even task counts.
+
+| gate | after | why here |
+|---|---|---|
+| **1** | R1.1–R1.5 + R2.1–R2.5 | Cosmetic and additive; every failure shows in a screenshot or a grep. One review for both milestones. **Read R1.3's snapshot-compat test first** — it is the only silent, retroactive failure in the stack. |
+| **2** | R3.1 + R3.2, **before R3.3 starts** | `findCoincidences()` is shared, node-tested block-0 code that R3.3, R3.4, R4.2 and R5 all build on. A subtly wrong detector produces a plausible ✦ in the wrong place and then propagates into three milestones. Smallest diff, highest leverage. |
+| **3** | R3.3–R3.5 | R3.4 writes the app's first user-facing physics sentences. Every claim is checked against `docs/THEORY.md` §3.4 by hand. |
+
+R4 is then one stack (low risk — it reuses the reviewed detector); R5.1 reviews on its own.
+
+**The rule, for work past R5.** Review at interface and claim boundaries:
+- anything landing in **script block 0** (shared, node-tested, dependents inherit its bugs);
+- anything emitting a **user-facing physics sentence** (the trace-to-THEORY.md rule is the
+  one most easily violated in silence — improvising reads fluently, flagging feels like failure);
+- anything touching a **persisted format** (`gsSettings`, `gsCollapse`, snapshot/export JSON)
+  — those failures are silent and retroactive.
+- Everything else — CSS, markup, string swaps, canvas drawing — batches freely.
+
+**Handoff at each gate:** the commit range, which R-tasks are claimed done, the output of
+`node tests/dsp.test.js`, and both-theme screenshots.
+
+**Two standing constraints on the builder:**
+1. **Do not edit `SPEC.md` or the `CLAUDE.md` status section.** Commit per task as specified,
+   but leave the changelog and status entries to the reviewer at each gate — per-task doc
+   edits churn the files used to orient.
+2. **Two `docs/THEORY.md` §2.5 figures are under review and must not appear in any copy:**
+   the "peaks near ¼ of the critical bandwidth" framing and "~30–40 Hz in the guitar's
+   mid-register". The formula in §2.5 gives 19–26 Hz across guitar open strings; 30–40 Hz
+   needs f₁ ≈ 660–1200 Hz. The ¼ rule is a classic-Bark statement sitting next to an ERB
+   definition. The formula itself, and the peak constant ≈ 0.221, are verified and usable.
+
+---
+
 # R1 — Rename: GuitarScope → Claude Rameau
 
 Self-contained, no behaviour change, entirely string work. 32 occurrences of the old

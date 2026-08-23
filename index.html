@@ -716,6 +716,7 @@ kbd{
       </div>
       <!-- development affordance: hidden in the shipped app, revealed by ?debug -->
       <button class="btn" id="debugLoadBtn" style="display:none" title="Load demo bright + warm pair (Karplus–Strong, 44.1k vs 48k)">Load test files</button>
+      <button class="btn" id="aboutBtn">About</button>
       <button class="btn" id="howBtn">How to use this app</button>
       <button class="btn" id="guideBtn">How to record</button>
       <button class="btn" id="glossaryBtn">Glossary</button>
@@ -4018,6 +4019,7 @@ const guideModal=el("guideModal"), guideBtn=el("guideBtn"),
       guideLink=el("guideLink"), guideClose=el("guideClose");
 const howModal=el("howModal"), howBtn=el("howBtn"), howLink=el("howLink"),
       howClose=el("howClose"), howToRecordLink=el("howToRecordLink");
+const aboutModal=el("aboutModal"), aboutBtn=el("aboutBtn"), aboutClose=el("aboutClose");
 const resetSettingsBtn=el("resetSettingsBtn");
 const debugLoadBtn=el("debugLoadBtn");
 const magModal=el("magModal"), magTitle=el("magTitle"),
@@ -6828,6 +6830,11 @@ function boot(){
   });
   howToRecordLink.addEventListener("click",e=>{                 // hand off to the recording guide
     e.preventDefault(); howModal.classList.remove("open"); guideModal.classList.add("open");
+  });
+  aboutBtn.addEventListener("click",()=>aboutModal.classList.add("open"));
+  aboutClose.addEventListener("click",()=>aboutModal.classList.remove("open"));
+  aboutModal.addEventListener("click",e=>{
+    if(e.target===aboutModal) aboutModal.classList.remove("open");
   });
   magBtns.forEach(b=>b.addEventListener("click",()=>openMag(b.dataset.mag)));
 

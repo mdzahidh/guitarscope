@@ -5983,6 +5983,92 @@ function stringContentHtml(si){
       state.a4.toFixed(1)+' × 2^(('+midi+' − 69)⁄12) = '+esc(fmtHz(f))+'</div></div>'+
     '<div class="pop-sec"><div class="pop-label">Current values — harmonics toggle their guides</div><div class="pop-vals">'+rows+'</div></div>';
 }
+// ---------- discovery moments: the ✦ popover (R3.4) ----------
+// Copy discipline: every claim traces to docs/THEORY.md — §1 (the series and its
+// ratio table), §2.6 (tolerance bands; comb alignment), §3.4 (the denominator rule),
+// §5 (12-TET errors: octave exact, 5th −2¢, major 3rd +14¢), §6 (fretboard nodes).
+// No section symbols or file names appear in the copy itself: the app states the
+// physics, it does not cite its homework. Tone: measure first, never lecture.
+const OCT_WORD=["","an octave","two octaves","three octaves","four octaves"];
+// Where the player can touch the string to sound this harmonic (THEORY §6 node map).
+const HARM_NODES={2:"12th fret",3:"7th & 19th fret",4:"5th & 24th fret",5:"≈4th, 9th & 16th fret"};
+// Why the gap isn't zero, keyed by the octave-folded ratio (THEORY §5 error table).
+const TEMPER_NOTE={
+  "1/1":"Octaves are the one interval equal temperament renders exactly, so there is nothing to compromise here — the gap is zero by construction.",
+  "3/2":"The fret system tunes its fifths about 2 ¢ narrow of a true 3:2 so that all twelve keys behave alike. That compromise is the whole of the gap above.",
+  "5/4":"The fret system’s major third sits about 14 ¢ sharp of a true 5:4 — the largest compromise equal temperament makes, and an audible one. A gap that wide is a near-miss rather than a landing; it shows here only because the tolerance was widened.",
+};
+// The house fmtHz() rounds to whole Hz above 100, which would print a real
+// 2 ¢ gap as the same number twice. Coincidence copy needs the decimal.
+function fmtHzFine(f){
+  if(f==null||!isFinite(f)) return "—";
+  return f>=1000 ? (f/1000).toFixed(3)+" kHz" : f.toFixed(1)+" Hz";
+}
+function fmtCents(c){
+  if(!isFinite(c)) return "—";
+  if(c===0) return "0 ¢";
+  return (c>0?"+":"−")+Math.abs(c).toFixed(1)+" ¢";
+}
+function coincidenceContentHtml(hit){
+  if(!hit) return "";
+  const h=hit.harm, fromOrd=STRING_ORD[hit.from.si], ontoOrd=STRING_ORD[hit.onto.si];
+  const n=hit.reduced.n, d=hit.reduced.d, ratio=n+"/"+d;
+  const exact=hit.cents===0;
+  const gap=fmtCents(hit.cents);
+  const hName=noteInfo(hit.f,state.a4).name, oName=noteInfo(hit.onto.f,state.a4).name;
+  const octPhrase=(OCT_WORD[hit.octaves]||hit.octaves+" octaves")+
+    (ratio==="1/1" ? "" : " and "+(hit.interval? "a "+hit.interval : ratio))+" above";
+  // THEORY §2.6, tolerance bands: consonance minima are basins with width, so a
+  // couple of cents passes as one pitch — but a 14 ¢ third sits up the wall of the
+  // basin and is audibly not the same note. Only widened tolerances reach that case.
+  const nearness=exact
+    ? "the same frequency, exactly"
+    : Math.abs(hit.cents).toFixed(1)+" ¢ apart"+(Math.abs(hit.cents)<=COINCIDENCE_CENTS
+        ? " — well inside the width the ear grants one pitch"
+        : " — near enough to see, wide enough to hear");
+  const temper=TEMPER_NOTE[ratio];
+  // The denominator rule (THEORY §3.4) is the point for 3/2 and 5/4; at 1/1 there is
+  // nothing left to fold and stating the rule would be vacuous, so say what's true.
+  const ancestry=(d===1)
+    ? "fold the octaves away and nothing is left to fold: the ratio is 1/1, the same note. The octave is the series’ first step, which is why it lands this exactly."
+    : "fold the octaves away and the ratio is "+ratio+". That denominator is a power of two — the signature of one note living inside another’s series rather than merely near it.";
+  const node=HARM_NODES[h];
+
+  let vals=
+    '<div class="pop-val"><span class="dot" style="background:'+_stringColor(hit.from.si,0.9)+'"></span>'+
+      '<span class="l">Harmonic '+h+' of the '+fromOrd+' string</span>'+
+      '<span class="v">'+esc(fmtHzFine(hit.f)+"  ·  "+hName)+'</span></div>'+
+    '<div class="pop-val"><span class="dot" style="background:'+_stringColor(hit.onto.si,0.9)+'"></span>'+
+      '<span class="l">Open '+ontoOrd+' string</span>'+
+      '<span class="v">'+esc(fmtHzFine(hit.onto.f)+"  ·  "+oName)+'</span></div>'+
+    '<div class="pop-val"><span class="dot" style="background:var(--dim)"></span>'+
+      '<span class="l">Gap</span><span class="v">'+esc(gap+"  ·  ratio "+ratio)+'</span></div>';
+  if(node) vals+=
+    '<div class="pop-val"><span class="dot" style="background:var(--dim)"></span>'+
+      '<span class="l">Touch the '+fromOrd+' string at</span><span class="v">'+esc(node)+'</span></div>';
+
+  return '<div class="pop-term">'+esc(hName)+' — harmonic '+h+' of the '+fromOrd+' string</div>'+
+    '<div class="pop-cat">lands on the open '+ontoOrd+' string · '+esc(gap)+'</div>'+
+    '<div class="pop-sec"><div class="pop-label">Musician’s ear</div><p>Two strings, one pitch. '+
+      'Harmonic '+h+' of the open '+fromOrd+' string falls on the open '+ontoOrd+' string’s own '+
+      '<button class="term" data-term="fundamental">fundamental</button> — '+esc(nearness)+'. '+
+      'You don’t have to play the '+ontoOrd+' string to hear this note: the '+fromOrd+
+      ' string is already sounding it, quietly, every time it rings.</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">The physics</div><p>A plucked string vibrates at f and at '+
+      '2f, 3f, 4f, 5f… all at once — its '+
+      '<button class="term" data-term="harmonic-series">harmonic series</button>, and the recipe for its timbre. '+
+      'Harmonic '+h+' sits '+esc(octPhrase)+' the '+fromOrd+' string’s fundamental; '+ancestry+
+      ' So the '+ontoOrd+' string’s partials are the '+fromOrd+' string’s partials too — one comb sitting '+
+      'inside the other, to within the gap above.</p></div>'+
+    (temper? '<div class="pop-sec"><div class="pop-label">Equal temperament</div><p>'+esc(temper)+'</p></div>' : "")+
+    '<div class="pop-sec"><div class="pop-label">How Claude Rameau places it</div><div class="pop-formula">'+
+      esc(fmtHzFine(hit.from.f))+' × '+h+' = '+esc(fmtHzFine(hit.f))+'   ·   open '+ontoOrd+' = '+
+      esc(fmtHzFine(hit.onto.f))+'   ·   Δ = '+esc(gap)+'</div>'+
+      '<p>Marked when the gap is '+COINCIDENCE_CENTS+' ¢ or less — wide enough to admit equal temperament’s own '+
+      '2 ¢ error on the fifth, narrow enough to exclude its 14 ¢ major third.</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">Current values</div><div class="pop-vals">'+vals+'</div></div>';
+}
+// ---------- end ✦ popover copy ----------
 function openStringPopover(si,anchor){
   const html=stringContentHtml(si);
   if(!html) return;

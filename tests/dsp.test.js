@@ -776,6 +776,78 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
     ok(sorted.every((f, i) => i === 0 || f >= sorted[i - 1]), "results are sorted by frequency");
   }
 
+  // ---- R3.4 ✦ popover copy: extracted from index.html and rendered ----
+  // The copy is the app's first user-facing physics prose; docs/ROADMAP.md R3.4 owns
+  // its sourcing. These tests pin the claims that must not drift and prove the
+  // template survives every branch (exact octave / tempered fifth / widened third).
+  {
+    const A = "// ---------- discovery moments: the ✦ popover (R3.4) ----------";
+    const Z = "// ---------- end ✦ popover copy ----------";
+    const i = html.indexOf(A), j = html.indexOf(Z);
+    ok(i > 0 && j > i, "index.html still carries the ✦ popover copy block between its sentinels");
+    const copySrc = html.slice(i, j);
+
+    // Stubs for the block-4 helpers the copy calls; each mirrors the real one.
+    const STRING_ORD = ["6th", "5th", "4th", "3rd", "2nd", "1st"];
+    const STRING_COLORS = ["#e74c3c", "#e67e22", "#27ae60", "#3498db", "#8e44ad", "#d64582"];
+    const _stringColor = (si, a) => {
+      const [r, g, b] = [1, 3, 5].map(k => parseInt(STRING_COLORS[si % 6].slice(k, k + 2), 16));
+      return `rgba(${r},${g},${b},${a})`;
+    };
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const render = new Function("STRING_ORD", "_stringColor", "esc", "noteInfo",
+      "COINCIDENCE_CENTS", "state", copySrc + "\nreturn coincidenceContentHtml;")(
+      STRING_ORD, _stringColor, esc, D.noteInfo, D.COINCIDENCE_CENTS, { a4: 440 });
+
+    const marks = [];
+    D.tuningMidi("standard", 0).forEach((m, si) => {
+      for (let hh = 1; hh <= 5; hh++) marks.push({ f: D.midiToFreq(m, 440) * hh, si, midi: m, harm: hh });
+    });
+    const hits = D.findCoincidences(marks);
+    const htmls = hits.map(render);
+    ok(htmls.length === 3 && htmls.every(x => x && x.length > 400), "every E-standard hit renders copy");
+    ok(render(null) === "", "no hit → no popover content, no throw");
+
+    // Section scaffold must match stringContentHtml()'s idiom, or the popover CSS
+    // renders unstyled prose.
+    for (const need of ["pop-term", "pop-cat", "pop-sec", "pop-label", "pop-formula", "pop-vals", "pop-val"])
+      ok(htmls.every(x => x.includes('class="' + need + '"')), "copy uses the popover class " + need);
+    ok(htmls.every(x => x.includes('data-term="fundamental"') && x.includes('data-term="harmonic-series"')),
+      "copy links both glossary terms that exist");
+    ok(!/§|THEORY|docs\//.test(htmls.join("")),
+      "copy states the physics without citing its sources at the user");
+
+    // The tempered fifth: E2 harmonic 3 → open B3, 2 ¢ narrow (THEORY §5).
+    const fifth = htmls[hits.findIndex(c => c.harm === 3 && c.from.si === 0)];
+    ok(fifth.includes("−2.0 ¢") && fifth.includes("ratio 3/2") && fifth.includes("perfect fifth"),
+      "the 6th-string fifth prints its gap, ratio and interval name");
+    ok(fifth.includes("2 ¢ narrow of a true 3:2"), "the fifth's gap is attributed to equal temperament");
+    ok(fifth.includes("247.2 Hz") && fifth.includes("246.9 Hz"),
+      "the formula resolves the 2 ¢ gap into visibly different numbers");
+    ok(fifth.includes("7th &amp; 19th fret"), "the fifth names its fretboard nodes");
+    ok(fifth.includes("denominator is a power of two"), "the fifth invokes the denominator rule");
+
+    // The exact octave: no tempering to explain, and no vacuous denominator claim.
+    const oct = htmls[hits.findIndex(c => c.harm === 4)];
+    ok(oct.includes("the same frequency, exactly") && oct.includes("0 ¢"), "the exact octave says so");
+    ok(oct.includes("nothing is left to fold") && !oct.includes("denominator is a power of two"),
+      "1/1 does not assert the denominator rule at itself");
+    ok(oct.includes("Octaves are the one interval equal temperament renders exactly"),
+      "the octave explains why its gap is zero");
+
+    // Widened tolerance reaches the tempered major third — a near-miss, and the copy
+    // must not call 14 ¢ inaudible (THEORY §2.6: it sits up the wall of the basin).
+    const m3 = D.findCoincidences([
+      { f: D.midiToFreq(40, 440), si: 0, midi: 40, harm: 1 },
+      { f: D.midiToFreq(40, 440) * 5, si: 0, midi: 40, harm: 5 },
+      { f: D.midiToFreq(68, 440), si: 1, midi: 68, harm: 1 },
+    ], 15);
+    const third = render(m3[0]);
+    ok(third.includes("wide enough to hear") && !third.includes("well inside the width"),
+      "a 14 ¢ near-miss is never described as one pitch");
+    ok(third.includes("14 ¢ sharp of a true 5:4"), "the tempered third names its error");
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

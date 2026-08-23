@@ -203,15 +203,23 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 /* progressive disclosure: analysis panels fold to their header line */
 .headleft{ display:flex; align-items:center; gap:10px; min-width:0; }
 .collbtn{
-  font:inherit; width:24px; height:24px; flex:none; padding:0;
+  font:inherit; width:30px; height:30px; flex:none; padding:0;
   display:inline-flex; align-items:center; justify-content:center;
   color:var(--mut); background:var(--raise); border:1px solid var(--hair2);
-  border-radius:6px; cursor:pointer;
+  border-radius:7px; cursor:pointer;
   transition:color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.collbtn::before{ content:"▾"; display:block; font-size:12px; transition:transform 200ms var(--ease); }
+/* the chevron is drawn, not typed: the ▾ glyph renders tiny inside its em box in
+   most UI fonts, so at any button size it read as a speck. Two borders on a rotated
+   box give a real chevron that scales and stays crisp. */
+.collbtn::before{
+  content:""; display:block; width:9px; height:9px;
+  border-right:2px solid currentColor; border-bottom:2px solid currentColor;
+  transform:translateY(-2px) rotate(45deg);
+  transition:transform 200ms var(--ease);
+}
 .collbtn:hover{ color:var(--ink); border-color:var(--hair); }
-.card.collapsed .collbtn::before{ transform:rotate(-90deg); }
+.card.collapsed .collbtn::before{ transform:translateX(-2px) rotate(-45deg); }
 .card.collapsed .cardbody{ display:none; }
 .card.collapsed .cardhead .controls{ display:none; }
 /* the whole header folds/unfolds (controls excepted in JS), so it advertises it */
@@ -237,7 +245,7 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .freq-sub .subbody{ padding:0 20px 16px; }
 .freq-sub.collapsed .subbody{ display:none; }
 .freq-sub.collapsed .subhead .controls{ display:none; }
-.freq-sub.collapsed .collbtn::before{ transform:rotate(-90deg); }
+.freq-sub.collapsed .collbtn::before{ transform:translateX(-2px) rotate(-45deg); }
 .freq-sub.foldable .subhead{ cursor:pointer; }
 .freq-sub.foldable .subhead:hover .cardtitle{ color:var(--ink); }
 .freq-sub.foldable .subhead:hover .collbtn{ color:var(--ink); border-color:var(--hair); }

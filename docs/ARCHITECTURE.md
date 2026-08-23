@@ -569,9 +569,14 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   inside `button,.seg,.switch,select,label,a,input` and bails when a text selection
   is active (users drag-select header prose). The chevron button keeps its own
   handler with `stopPropagation` — without it a chevron click would toggle twice.
-  The chevron itself is a 24×24 bordered button in the `.iconbtn` visual family;
+  The chevron itself is a 30×30 bordered button in the `.iconbtn` visual family;
   the previous borderless 16px glyph failed the "would a user even notice it"
-  test that motivated user item f.
+  test that motivated user item f. The arrow inside is **drawn, not typed**: the
+  `▾` glyph (U+25BE) sits tiny inside its em box in every UI font we render in,
+  so raising `font-size` grew the button's line box without growing the mark. It
+  is now a 9×9 box with `border-right`/`border-bottom` in `currentColor`, rotated
+  45° (down = expanded) or −45° (right = folded); it scales, stays crisp at any
+  DPR, and inherits the hover color for free.
 - **Magnify buttons must not be hover-revealed.** They were `opacity:0` until
   `.plotwrap:hover` — invisible chrome scores zero on discoverability, and on
   touch devices it never appears at all. Always-visible now; the cost is one small

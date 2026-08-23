@@ -825,3 +825,48 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   inside the select — Direction, the select box, Copy settings and JSON land on the
   same pixels. Bright and Dark both checked; `node tests/dsp.test.js` 107/107 and
   all six scratchpad suites green.
+  
+### 2026-08-22 — Identity: GuitarScope → Claude Rameau (user request)
+
+- **The app is renamed Claude Rameau**, slogan *"Yes — but why does it sound that
+  way?"* rendered beside the title. Named for Jean-Philippe Rameau — who derived
+  harmony from the overtone series in 1722 — and Claude: the AI collaborator, and
+  coincidentally Rameau's organist brother. Full story + About text: docs/STORY.md
+  (new). The name arose from the project itself: the user's string-harmonics
+  overlay revealed one string's harmonic landing exactly on another string's
+  fundamental, which sparked the harmonic-series exploration recorded in
+  docs/THEORY.md (new).
+- **Rename scope:** all user-visible strings — <title>, header, how-to modal, PNG
+  footer ("made with Claude Rameau"), recording guide, README. Internal `gs*`
+  localStorage keys and `?` hooks deliberately unchanged (plumbing, not identity;
+  back-compat with existing snapshots/settings).
+- The original prompt above retains "GuitarScope" verbatim, per this file's rules.
+
+### 2026-08-22 — Scope addition: the educational layer (user request)
+
+- **New direction beyond measurement** (specs in docs/STORY.md, physics ground
+  truth in docs/THEORY.md): (1) an About modal telling the origin story (`?about`
+  hook, Esc cascade like existing modals); (2) ✦ **discovery moments** — when a
+  displayed harmonic of one string coincides with another string's fundamental
+  (settable cents tolerance), a quiet ✦ marks it and click-opens the ratio
+  explanation, recreating the observation that started this project; (3)
+  harmonic-ancestry detail in the per-string popovers (ratio to root,
+  overtone-family vs shares-an-ancestor, the denominator rule); (4) interval
+  consonance explainers (joint period, comb alignment, Plomp–Levelt roughness).
+- **Educational tone rule (house rule):** measure first, never lecture — curiosity
+  clicks the ✦; every educational sentence traces to docs/THEORY.md, and gaps in
+  THEORY.md are flagged to the user, never improvised.
+- Sequenced before M3/M4, which remain gated on explicit user approval.
+
+### 2026-08-22 — Legibility pass (user request, session 15)
+
+- **Tone-character dots enlarged** 9 → 13 px with a 2 px background ring; the value
+  labels move 7 → 9 px off the axis so they clear the larger dot. The dots are the
+  panel's only quantitative mark, and at 9 px the A/B pair read as specks on a
+  cream ground.
+- **Fold chevron made obvious.** The 24×24 button becomes 30×30, and the arrow is
+  now **drawn** — a 9×9 box with `border-right`/`border-bottom` in `currentColor`,
+  rotated 45° when expanded and −45° when folded — instead of the `▾` character.
+  The glyph (U+25BE) occupies a small fraction of its em box in the UI fonts we
+  render in, so raising `font-size` only grew the button's line box; the drawn
+  chevron scales, stays crisp at any DPR, and inherits the hover color.

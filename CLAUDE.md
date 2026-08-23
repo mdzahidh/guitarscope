@@ -1,10 +1,17 @@
-# GuitarScope — working brief
+# Claude Rameau — working brief
 
-Single-page, offline guitar spectrum comparison tool. Drop two recordings (same riff,
-different guitars), get long-term average spectra, band energies, and a tone-character
-panel where every number is scientifically defensible. Read SPEC.md for the full
-commissioning prompt (verbatim — never edit that section) and the append-only decision
-changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
+*(formerly GuitarScope; renamed 2026-08-22 — see docs/STORY.md for the name's story)*
+
+**Claude Rameau** — *"Yes — but why does it sound that way?"* (the slogan; it renders
+next to the app title). Single-page, offline guitar spectrum comparison tool. Drop two
+recordings (same riff, different guitars), get long-term average spectra, band energies,
+and a tone-character panel where every number is scientifically defensible. Read SPEC.md
+for the full commissioning prompt (verbatim — never edit that section) and the
+append-only decision changelog. Read docs/ARCHITECTURE.md before touching DSP or
+rendering. **Read docs/STORY.md before touching user-facing copy, naming, or the About
+section** — it holds the app's identity, the About text, and the educational product
+direction. **docs/THEORY.md is ground truth for every educational/physics claim** —
+build educational copy from it, never re-derive from scratch.
 
 ## Status
 
@@ -46,7 +53,7 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   PLOT.mT 34, or 48 for two-row vocabularies (Anatomy), via `syncLaneHeight()`
   called from `setVocab()`. M2.6d: affordance audit — canvas doc-targets hover the
   `help` cursor (attachCrosshair hit-test; guarded so it never fights a pan's
-  `grabbing`), collapse chevron restyled as a real 24×24 bordered button, the whole
+  `grabbing`), collapse chevron restyled as a real bordered button, the whole
   header of the six foldable cards toggles both ways (`.foldable`; clicks on
   controls/text selections exempt), magnify buttons always visible (were
   hover-revealed). **M2.6e BUILT (session 10):** checked switches use `--switch-on`
@@ -106,12 +113,36 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
   (what-to-do-next, “Load demo pair”, both help links) unreachable — the card now
   always renders and `#freqBands`/`#freqDiff` gate on the source count instead.
   This mattered acutely once the debug loader was hidden.
+- **Post-v1.0.0 legibility fixes (session 15, user request):** Tone-character value
+  dots 9 → 13 px with a 2 px background ring (labels nudged 7 → 9 px off the axis);
+  the fold chevron is a 30×30 button whose arrow is **drawn from two borders on a
+  rotated box**, not the `▾` glyph — that glyph renders tiny inside its em box, so
+  enlarging the font never enlarged the mark. Down = expanded, right = folded.
+  CSS only, both themes verified.
 - **Post-v1.0.0 fix (session 14, user report): the EQ-match header no longer jumps
   when the device changes.** The subtitle names the device, and `.cardhead` wraps on
   content width (shrink is irrelevant to the wrap decision), so a longer device name
   flipped Direction/Device/Copy settings/JSON between the title row and their own
   row. CSS only: `#eqCard .headleft{flex:1 1 100%}` + a one-line ellipsized `#eqSub`.
   Pixel-identical to before for the default device; see ARCHITECTURE "Browser quirks".
+- **NEXT — Rameau phase (2026-08-22, user request; do before M3/M4, which remain
+  gated on explicit user go-ahead):** (a) **Rename** GuitarScope → **Claude Rameau**
+  in all user-visible strings: `<title>`, header title (slogan *"Yes — but why does
+  it sound that way?"* beside it), how-to modal, PNG footer ("made with Claude
+  Rameau"), recording guide, README. Keep internal `gs*` localStorage keys and
+  `?`-hooks as-is for back-compat (plumbing, not identity — note in
+  ARCHITECTURE.md). (b) **About modal:** "About" affordance near the title → the
+  story text from docs/STORY.md (the two-guitars question, the harmonic-overlay
+  discovery, the two Rameaus), Esc cascade like the other modals, `?about` hook.
+  (c) **Educational layer, incremental** (specs in docs/STORY.md, math in
+  docs/THEORY.md): first the **discovery moment** — when a shown harmonic of one
+  string coincides with another string's fundamental (within a settable cents
+  tolerance), mark it with a quiet ✦ that click-opens a popover explaining the
+  coincidence via the ratio; then harmonic-ancestry info in the per-string popovers
+  (ratio to root, overtone-family vs shares-an-ancestor, the denominator rule);
+  then interval consonance explainers (joint period, comb alignment, Plomp–Levelt
+  roughness). Educational tone: measure first, never lecture — curiosity clicks
+  the ✦.
 - 107/107 tests pass (`node tests/dsp.test.js`, including the M2.6e switch CSS contract). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
@@ -137,6 +168,12 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 - `samples/demo-bright-44k.wav`, `samples/demo-warm-48k.wav` — drag-drop test material.
 - `SPEC.md` — verbatim prompt + decision changelog. `docs/ARCHITECTURE.md` — DSP
   pipeline, parameter rationale, browser quirks, dead ends.
+- `docs/STORY.md` — the app's identity: name/slogan origin, the About-section text,
+  and the educational product direction (discovery moments, ancestry views,
+  consonance explainers). Read before user-facing copy.
+- `docs/THEORY.md` — the verified physics/math source (harmonic series, roughness
+  §2.5, consonance §2.6, denominator rule §3.4, narrative §3.6, dynasty of
+  fifths/Tonnetz §3.7, Rameau appendix) — ground truth for all educational features.
 
 ## Run / test
 
@@ -172,6 +209,12 @@ changelog. Read docs/ARCHITECTURE.md before touching DSP or rendering.
 - **Every visible number defensible.** Analysis params live in the footer; smoothing
   state is always printed on the plot; dB re full-scale sine everywhere; glossary terms
   link each label to its formula with current values.
+- **Identity & education.** The app is **Claude Rameau**; the slogan *"Yes — but why
+  does it sound that way?"* sits beside the title. Educational features teach the way
+  the app's own origin did (docs/STORY.md): the instrument surfaces a curiosity
+  marker (✦), the user clicks, the physics answers — measure first, never lecture.
+  Every educational sentence must trace to docs/THEORY.md; if THEORY.md doesn't
+  cover a claim, flag the gap to the user instead of improvising physics.
 - **Design brief:** laboratory instrument built by a luthier. Two themes, **Bright
   (cream) is the default**, Dark is the original look; one accent per guitar per theme
   (Dark: A amber `#f0a13e`, B teal `#44c2d4`; Bright: A `#c05f04`, B `#0c6e80`),

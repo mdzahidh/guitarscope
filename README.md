@@ -79,7 +79,8 @@ in the page footer.
 | `docs/ARCHITECTURE.md` | DSP pipeline, parameter rationale, browser quirks, dead ends |
 | `docs/STORY.md` | where the name and the app came from |
 | `docs/THEORY.md` | the verified physics behind the educational features |
-| `docs/ROADMAP.md` | what's being built next, in buildable pieces |
+| `docs/ROADMAP.md` | what's being built next, in buildable pieces, and the rules for building them |
+| `LICENSE` | MIT |
 
 ## Tests
 
@@ -105,6 +106,10 @@ Appending a query string drives the app for screenshots and manual checks:
 | `?debug` | reveal the hidden demo-loading button |
 
 `CLAUDE.md` lists the rest, including the zoom, magnify and popover hooks.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ## The name
 

@@ -29,6 +29,67 @@ Verification command (see CLAUDE.md for the full list of `?` hooks):
 
 ---
 
+## Working discipline — how to build these tasks
+
+This codebase is finished software being extended, not a project being explored. The
+default answer to "should I also…" is **no**. Read this section before the first task
+and again whenever a task tempts you outside its own anchors.
+
+**Scope**
+- Build **one task at a time, in order**, and stop at its "done when" line. A task that
+  looks trivial still ends at its boundary.
+- The **smallest diff that satisfies the task** is the correct diff. If your change
+  touches code the task did not name, that is a signal to re-read the task, not to
+  widen it.
+- **Do not refactor, rename, reorder, reformat, or "tidy" anything you are not asked to
+  change** — not variables, not functions, not CSS, not whitespace, not the script-block
+  layout. `index.html` is a single 7000-line file; incidental reformatting makes every
+  future diff unreviewable and will be reverted wholesale.
+- **Do not add dependencies, build steps, package files, bundlers, frameworks, module
+  syntax, or network calls.** There is no `package.json` and there will not be one. The
+  tests run under bare `node`; the app runs from `file://`.
+- **Do not add UI that no task asked for** — no new controls, switches, settings,
+  tooltips, keyboard shortcuts, or persisted keys. Every control in this app exists
+  because it captures *user intent*; anything else is a constant in the source.
+- **Do not change DSP parameters, thresholds, colours, or layout values** that a task
+  did not name. The values in `CLAUDE.md` under "DSP params" and "Design brief" are
+  settled decisions with reasons recorded in `docs/ARCHITECTURE.md`.
+- **Do not delete or weaken an existing test** to make a change pass. If a test now
+  contradicts a task, stop and report it — that is a spec conflict, not a test bug.
+
+**Matching the existing code**
+- Follow the file's conventions exactly: two-space indent, `el("id")` lookups, `esc()`
+  on interpolated text, `cssColor()`/`cssRGBA()` for anything drawn on canvas, existing
+  helpers (`fmtHz`, `noteStr`, `auditionBlock`, `openPopover`) rather than new ones.
+- New pure math goes in **script block 0** and gets node tests. Nothing else goes there.
+- Copy the nearest existing thing rather than inventing a pattern: a new modal is a
+  clone of `#howModal`, a new popover section is a clone of an existing one.
+- Prose in the UI matches the app's voice — plain, factual, no exclamation marks, no
+  marketing, no second-person cheerleading. When a task quotes text, **use that text
+  verbatim** rather than improving it.
+
+**When something is wrong or unclear**
+- If a task's anchor doesn't match the current file, **re-grep for the search string**;
+  line numbers drift. If it still doesn't match, stop and report.
+- If you find a bug outside the current task, **do not fix it** — finish the task and
+  list it under a "Found, not fixed" heading in your handoff. Unrequested fixes arrive
+  unreviewed and untested.
+- If a task seems wrong, underspecified, or contradicted by the code, **stop and ask**.
+  Do not pick the interpretation that lets you keep going.
+- If an educational sentence needs a fact `docs/THEORY.md` does not state, **flag the
+  gap**. Never derive, estimate, or fill it in from general knowledge. This is the rule
+  most easily broken in silence: improvised physics reads perfectly fluently.
+
+**Per task, before you call it done**
+1. `node tests/dsp.test.js` — must print `N passed, 0 failed` with N never decreasing.
+2. Headless screenshot in **both** themes (command above), eyeballed.
+3. `git diff --stat` — read it. Every changed file and roughly every changed line should
+   be explainable by the task text. Unexplained lines get reverted, not justified.
+4. One commit per task, subject line starting with the task id (`R1.2 — …`), body saying
+   what changed and what was verified.
+
+---
+
 ## Decisions already made (do not re-litigate)
 
 - **✦ tolerance: ±6 cents, fixed, no visible control.** It is a perceptual claim, not

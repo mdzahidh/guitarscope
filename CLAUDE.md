@@ -177,7 +177,9 @@ build educational copy from it, never re-derive from scratch.
 - `docs/ROADMAP.md` — the Rameau phase (R1 rename, R2 About modal, R3 ✦ discovery
   moments, R4 ancestry, R5 consonance) split into individually buildable, testable,
   commit-sized tasks with file anchors and done-when criteria. Read before starting
-  any Rameau-phase work; update the task's status there when it lands.
+  any Rameau-phase work; update the task's status there when it lands. Its "Working
+  discipline" section is the scope contract for anyone (human or model) building these
+  tasks — smallest diff, no unrequested refactors/UI/deps, flag rather than improvise.
 
 ## Run / test
 

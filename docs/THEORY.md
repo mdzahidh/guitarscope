@@ -49,6 +49,17 @@ So "harmonizing" is literal: consonance = shared/aligned harmonics, dissonance =
 - Δf > critical band → the cochlea's mechanical filter bank (basilar membrane; bandwidth ≈ ERB, roughly 11–15% of center frequency) resolves the tones into separate channels → smooth again.
 Roughness = amplitude modulation *inside one cochlear filter*. Physiological and computable (Plomp–Levelt 1965; Sethares' model sums over all partial pairs, weighted by amplitude product).
 
+**Parameterized roughness curve (Sethares' model, added 2026-08-22 for Claude Rameau's consonance explainer).** For one pair of partials at frequencies f₁ ≤ f₂ with amplitudes a₁, a₂:
+
+```
+d(f₁, f₂, a₁, a₂) = min(a₁, a₂) · [ e^(−b₁·s·Δf) − e^(−b₂·s·Δf) ]
+where  Δf = f₂ − f₁
+       s  = d* / (s₁·f₁ + s₂)
+       b₁ = 3.5,  b₂ = 5.75,  d* = 0.24,  s₁ = 0.021,  s₂ = 19
+```
+
+Total roughness of two complex tones = Σ d over **all** cross-pairs of their partials (self-pairs of one tone contribute a timbre's intrinsic roughness and are usually included too). Properties worth asserting in tests: d = 0 at Δf = 0 (unison); d peaks near Δf ≈ ¼ of the critical bandwidth at f₁ (~30–40 Hz in the guitar's mid-register) — the peak of the bracketed term sits at s·Δf = ln(b₂/b₁)/(b₂−b₁) ≈ 0.221; d → 0 as Δf exceeds the critical band. The `s` scaling encodes the frequency-dependent critical bandwidth (wider in Hz at higher f₁), which is what makes the same musical interval rougher in low register than high — the physics behind "power chords low, triads high." Amplitude convention: `min(a₁,a₂)` per Sethares (*Tuning, Timbre, Spectrum, Scale*, 1998 — the softer partner limits audible beating); the a₁·a₂ product is a common variant, fine if stated. Output is a relative (dimensionless) roughness — normalize the plotted curve to its own maximum and say so on the axis; do not present absolute units.
+
 **The 15th-harmonic paradox (Zahid's question).** B is harmonic 15 of C — so why is B-against-C rough? Because for *complex* tones you compare the full harmonic combs, and alignment must be weighted by energy:
 - C's comb: f, 2f, 3f… · B's comb: (15/8)f·{1,2,3…}. First coincidence: C's 15th = B's 8th. But string-harmonic amplitudes fall ~1/n — by harmonic 15 there's almost no power. The alignment exists *mathematically* and is *energetically irrelevant*.
 - Meanwhile the strong low partials near-miss: at C4 (261.6 Hz), B4 = 490.5 Hz vs C's 2nd harmonic 523.2 Hz → Δ = 32.7 Hz — **exactly peak roughness**. B's 2nd partial (981) vs C's 4th (1046): Δ = 65 Hz, still inside the critical band at that register. The comb's high-energy region is full of near-misses parked in the maximum-grit zone.

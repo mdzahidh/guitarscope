@@ -59,6 +59,12 @@ and again whenever a task tempts you outside its own anchors.
   it doesn't — stop and ask.
 - **Do not delete or weaken an existing test** to make a change pass. If a test now
   contradicts a task, stop and report it — that is a spec conflict, not a test bug.
+- **`tests/` is read-only for the builder.** Not one byte, in any file, including a new
+  one. `./tests/verify.sh` fails the gate on any diff under `tests/` against the base,
+  because a builder who can edit the gate can always pass it. The tests are the
+  specification of the tasks below; they were written before the work and reviewed
+  against `docs/THEORY.md`. Several are red today **on purpose** — that is what the
+  milestone turns green.
 
 **Matching the existing code**
 - Follow the file's conventions exactly: two-space indent, `el("id")` lookups, `esc()`
@@ -89,7 +95,12 @@ and again whenever a task tempts you outside its own anchors.
   most easily broken in silence: improvised physics reads perfectly fluently.
 
 **Per task, before you call it done**
-1. `node tests/dsp.test.js` — must print `N passed, 0 failed` with N never decreasing.
+1. `./tests/verify.sh` — the gate: the DSP suite, the R3 contracts, the headless
+   render checks, and the two tamper guards. It ends in `gate passed` / `gate failed`
+   and exits nonzero on any failure. It is red until the milestone is complete, so
+   between tasks read *which* lines are red and confirm they are the ones still
+   unbuilt; a line that was green and went red is a regression you caused.
+   **Do not open the PR until it exits 0.**
 2. Headless screenshot in **both** themes (command above), eyeballed.
 3. `git diff --stat` — read it. Every changed file and roughly every changed line should
    be explainable by the task text. Unexplained lines get reverted, not justified.
@@ -330,16 +341,31 @@ string's fundamental. Build it in this order — the pure function first, drawn 
   **different** string (`si !== si`), where `|centsBetween| <= tolCents`.
 - **Node tests:** E standard, harmonics 2–5 on all strings → the three real hits
   (E2·h3 → open B3 at −2.0 ¢ = 3/2; E2·h4 → open E4 at 0 ¢ = 1/1; A2·h3 → open E4
-  at −2.0 ¢); the tempered major third (~13.7 ¢) excluded at tol = 6 and included
-  at tol = 15; a synthetic same-string marker pair proves the `si !== si` guard is
+  at −2.0 ¢); a synthetic same-string marker pair proves the `si !== si` guard is
   load-bearing rather than tautological.
 - **Done when:** tests pass with no DOM involved. ✅
+- **Measured afterwards, 2026-08-23** (`tests/r3.test.js`), because the planned
+  "widen the tolerance and the tempered major third appears" bracket turned out to
+  be false: **no 5/4 landing exists in E standard at any tolerance.** Only *open
+  strings* are candidate targets, and none of the six sits near another string's
+  5th harmonic. Widening 6 ¢ → 50 ¢ admits **nothing new in any stocked tuning** —
+  every landing is a fifth (−1.955 ¢) or an octave (exactly 0), and every one folds
+  to a power-of-two denominator. Counts: E standard / Eb / D standard 3 each,
+  drop D 2, **DADGAD 5 (four of them exact)**. That insensitivity is the empirical
+  argument for a fixed ±6 ¢ over a user slider, and it is now asserted both in node
+  and in pixels.
 
 ### R3.2 — Wire the constant + `?tol=` hook
 
 - Block 4 reads `COINCIDENCE_CENTS` into `state.tolCents`; a `?tol=<n>` query param
   overrides it (clamped to 0–50) purely for headless testing.
 - **No control, no persistence, no `gsSettings` key.** It is not user intent.
+- **Also extend the existing `?pop=<glosskey>` hook to accept `?pop=coin<N>`**, which
+  pins the Nth coincidence popover open (N indexing `findCoincidences()`'s sorted
+  result, out of range = no popover). The canvas is unreachable from node, so this is
+  the only way the gate can check that the pre-landed R3.4 copy renders inside the
+  real popover chrome; `tests/headless.js` asserts on it and `tests/verify.sh` will
+  stay red without it.
 
 ### R3.3 — Draw the ✦
 
@@ -382,12 +408,22 @@ string's fundamental. Build it in this order — the pure function first, drawn 
 
 ### R3.5 — Verify + commit
 
-- `node tests/dsp.test.js` — **168 passed, 0 failed** is the baseline entering R3.2;
-  the suite must still be green and no assertion may be edited to make it so.
-- Headless: `?demo&strings=1&harmonics=1&open=all` in both themes; `?tol=0` (no ✦) and
-  `?tol=25` (many) as bracket checks; `?tol=6` default screenshot.
-- One capture with a ✦ popover open, to confirm the pre-landed copy renders inside the
-  real popover chrome (widths, glossary buttons, the audition block below it).
+- **`./tests/verify.sh` exits 0.** That one command is the whole gate (added
+  2026-08-23, `0c713b7`) and it is deliberately red until this milestone lands:
+  - `node tests/dsp.test.js` — the shipped-math baseline, must stay green;
+  - `node tests/r3.test.js` — block-0 math (green already) plus the R3.2/R3.3/R3.4
+    wiring contracts, read out of `index.html`'s own source;
+  - `node tests/headless.js` — drives real Chrome and compares two builds of the
+    same page differing in one query parameter, so there is no golden image to
+    maintain. It checks that the ✦ appears between `?tol=0` and the default, is
+    glyph-sized, sits at one frequency across both frequency plots, is drawn in
+    neither guitar's accent, stays away when the strings axis or harmonics are off,
+    and that `?pop=coin0` opens a popover carrying the reviewed sentences.
+    (`?tol=25` was the planned bracket; measurement killed it — see R3.1.)
+  - two mechanical guards: `tests/` byte-identical to the base, and the frozen copy
+    block matching its recorded SHA-256.
+- **No assertion may be edited to make the gate pass.** If a contract is genuinely
+  wrong, leave it red and say so in the PR — the reviewer changes the test.
 - Commit: `Discovery moments: ✦ marks harmonic/fundamental coincidences (±6¢)`.
 
 ---

@@ -1008,7 +1008,7 @@ kbd{
       <div id="paramsLine"></div>
       <div class="footright">
         <button class="linkish" id="shortcutsBtn"><kbd>?</kbd> shortcuts</button>
-        <span>GuitarScope · offline · files never leave this page</span>
+        <span>Claude Rameau · offline · files never leave this page</span>
       </div>
       <div class="settingsFoot" id="settingsFoot">
         <span class="sfInfo">Remembered: tuning · A4 · EQ device · smoothing · Strings · Harmonics — not level-match · <button class="linkish" id="resetSettingsBtn">Reset saved settings</button></span>
@@ -1186,7 +1186,7 @@ kbd{
 <div id="dropOverlay">
   <div class="inner">
     <div class="t1" id="dropTitle">Drop audio file</div>
-    <div class="t2">WAV · AIFF · MP3 · M4A · FLAC — or a GuitarScope snapshot (.json)</div>
+    <div class="t2">WAV · AIFF · MP3 · M4A · FLAC — or a Claude Rameau snapshot (.json)</div>
   </div>
 </div>
 
@@ -2403,7 +2403,7 @@ const GLOSSARY=[
   { key:"eq-low-end", name:"Low end", cat:"EQ regions", hook:"EQ-speak: ≈60–250 Hz",
     musician:"What moves when you turn an amp's bass knob: thump, weight, the part of the sound you feel more than hear. Cut it to tighten, boost it for heft.",
     science:"Fundamentals of the guitar's lower strings and their first harmonics, up to roughly 250 Hz.",
-    measure:"Annotation only — the lane marks where the word points on the frequency axis; region boundaries are colloquial (± half an octave by speaker) and no GuitarScope metric integrates over exactly this range. The share below is measured live over 60–250 Hz for reference.",
+    measure:"Annotation only — the lane marks where the word points on the frequency axis; region boundaries are colloquial (± half an octave by speaker) and no Claude Rameau metric integrates over exactly this range. The share below is measured live over 60–250 Hz for reference.",
     values(state){ return _bandVals(state, 60, 250); } },
 
   { key:"eq-low-mids", name:"Low mids", cat:"EQ regions", hook:"EQ-speak: ≈250–800 Hz",
@@ -4039,7 +4039,7 @@ async function loadFileIntoSlot(i,file){
     const sniffed=sniffAudioInfo(buf);
     if(!sniffed){
       const e=new Error("Couldn't determine this file's sample rate from its bytes.");
-      e.hint="GuitarScope refuses to guess a rate. Try a WAV, AIFF, FLAC, MP3 or M4A export.";
+      e.hint="Claude Rameau refuses to guess a rate. Try a WAV, AIFF, FLAC, MP3 or M4A export.";
       throw e;
     }
     setCardProgress(i,"Decoding at "+sniffed.sampleRate+" Hz…",0.08);
@@ -5320,7 +5320,7 @@ function renderProse(){
   const cands=proseCandidates();
   const text=cands.length
     ? cands.slice(0,4).map(c=>c.html).join(" ")
-    : "These two spectra are closely matched — no difference clears GuitarScope's reporting thresholds. Try turning smoothing off, or the Difference plot with "+termHtml("level-match","level-match")+" on, to hunt for finer detail.";
+    : "These two spectra are closely matched — no difference clears Claude Rameau's reporting thresholds. Try turning smoothing off, or the Difference plot with "+termHtml("level-match","level-match")+" on, to hunt for finer detail.";
   prosePara.style.display="";
   prosePara.innerHTML='<span class="lead">Reading the measurements</span>'+text;
 }
@@ -5381,7 +5381,7 @@ function renderVerdict(){
     const cands=proseCandidates();
     if(cands.length) parts.push(cands[0].html);
     else if(!bd||Math.abs(bd.d)<1)
-      parts.push("No tone difference clears GuitarScope's reporting thresholds — these two are closely matched.");
+      parts.push("No tone difference clears Claude Rameau's reporting thresholds — these two are closely matched.");
   }
   verdictPara.innerHTML='<span class="lead">At a glance</span>'+parts.join(" ");
 }
@@ -5824,7 +5824,7 @@ function termSections(t){
     : '<div class="pop-none">'+(anyLoaded()?"No measured value for the loaded audio.":"Load audio to see live values here.")+'</div>';
   return '<div class="pop-sec"><div class="pop-label">Musician’s ear</div><p>'+t.musician+'</p></div>'+
     '<div class="pop-sec"><div class="pop-label">The physics</div><p>'+t.science+'</p></div>'+
-    '<div class="pop-sec"><div class="pop-label">How GuitarScope measures it</div><div class="pop-formula">'+t.measure+'</div></div>'+
+    '<div class="pop-sec"><div class="pop-label">How Claude Rameau measures it</div><div class="pop-formula">'+t.measure+'</div></div>'+
     '<div class="pop-sec"><div class="pop-label">Current values</div>'+valHtml+'</div>';
 }
 function termContentHtml(key){
@@ -5888,7 +5888,7 @@ function stringContentHtml(si){
     '<div class="pop-sec"><div class="pop-label">The physics</div><p>Equal temperament places every pitch at '+
       'A4 × 2^((MIDI − 69)⁄12). This string is MIDI note '+midi+' with your A4 reference at '+
       state.a4.toFixed(1)+' Hz.</p></div>'+
-    '<div class="pop-sec"><div class="pop-label">How GuitarScope places it</div><div class="pop-formula">f = '+
+    '<div class="pop-sec"><div class="pop-label">How Claude Rameau places it</div><div class="pop-formula">f = '+
       state.a4.toFixed(1)+' × 2^(('+midi+' − 69)⁄12) = '+esc(fmtHz(f))+'</div></div>'+
     '<div class="pop-sec"><div class="pop-label">Current values — harmonics toggle their guides</div><div class="pop-vals">'+rows+'</div></div>';
 }

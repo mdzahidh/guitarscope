@@ -124,7 +124,7 @@ stops being local — not at even task counts.
 | gate | after | why here |
 |---|---|---|
 | **1** | R1.1–R1.5 + R2.1–R2.5 | Cosmetic and additive; every failure shows in a screenshot or a grep. One review for both milestones. **Read R1.3's snapshot-compat test first** — it is the only silent, retroactive failure in the stack. |
-| **2** | R3.1 + R3.2, **before R3.3 starts** | `findCoincidences()` is shared, node-tested block-0 code that R3.3, R3.4, R4.2 and R5 all build on. A subtly wrong detector produces a plausible ✦ in the wrong place and then propagates into three milestones. Smallest diff, highest leverage. |
+| **2** | R3.1 + R3.2, **before R3.3 starts** | `findCoincidences()` is shared, node-tested block-0 code that R3.3, R3.4, R4.2 and R5 all build on. A subtly wrong detector produces a plausible ✦ in the wrong place and then propagates into three milestones. Smallest diff, highest leverage. — **Discharged 2026-08-23:** the reviewer authored R3.1 (`9b9858f`) and the R3.4 copy (`48925b8`) directly, mutation-checking both, so the gate's subject is already reviewed. R3.2 still lands as its own commit, but the builder continues into R3.3 without pausing. |
 | **3** | R3.3–R3.5 | R3.4 writes the app's first user-facing physics sentences. Every claim is checked against `docs/THEORY.md` §3.4 by hand. |
 
 R4 is then one stack (low risk — it reuses the reviewed detector); R5.1 reviews on its own.

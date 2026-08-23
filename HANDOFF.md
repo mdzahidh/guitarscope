@@ -2,8 +2,8 @@
 
 Branch: `rameau-r1r2` (not master)
 Base: `master` at 675afd6
-Commit range for Gate 1: 675afd6..b023918 (11 commits: 9 gate + doc-rename + header Load demo pair)
-Final commit for HANDOFF is this update (production Load demo pair).
+Commit range for Gate 1: 675afd6..166b81a (12 commits: 9 gate + doc-rename + header Load demo pair + HANDOFF note) + revert to handover Frequency-card demo (this update)
+Final commit for HANDOFF is this update (restore handover: header Load test files debug-only, Frequency card Load demo pair, defaults unfolded).
 
 ## Tasks completed
 
@@ -186,6 +186,12 @@ Screenshots were opened with the image-reading tool and verified: title/slogan/t
 ## Follow-up 2026-08-23 — production Load demo pair
 
 - `index.html:720`: removed `style="display:none"` from `#debugLoadBtn` and changed text `Load test files` → `Load demo pair` per user request — header button is now always visible in production (plus the empty-state `#demoBtn` remains). `?debug` hook still works (sets display=""). Title comment updated; verified header shows “Load demo pair” next to About in bright/dark screenshots (`/tmp/header-check.png`).
+
+## Follow-up 2026-08-23 — restore handover: header debug-only, Frequency card defaults
+
+- Per your correction, `Load demo pair` at handover was **inside the Frequency analysis card** (`#specEmpty` → `#demoBtn` at :806, inside Spectrum's empty state), not in the header. Header `Load test files` was `style="display:none"` debug-only at handover (`master:720`).
+- Reverted `index.html:720` to handover state: `<!-- development affordance … --> <button id="debugLoadBtn" style="display:none" title="…">Load test files</button>` — header button again hidden unless `?debug`.
+- Verified Frequency analysis card defaults already match your request: `COLL_DEFAULT={spec:false,diff:false,bands:false,tone:false,eq:true,sgram:true,env:true}` → Spectrum/Bands unfolded at start (`freqCard` always visible, `freqDiff` hidden until `both` then unfolded because `collState.diff=false`), `updateVisibility` keeps `freqCard` always up and shows `specEmpty` when `n==0`. No code change needed for the “unfolded by default at beginning / Difference unfolded when two files provided” part — confirmed via `master` and current `COLL_DEFAULT`.
 
 ## Notes
 

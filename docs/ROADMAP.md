@@ -307,26 +307,33 @@ Follows the `#howModal` pattern exactly (~line 1061). Copy its structure, don't 
 The origin story as a feature: a shown harmonic of one string landing on another
 string's fundamental. Build it in this order — the pure function first, drawn last.
 
-### R3.1 — Pure detector in script block 0 (node-testable)
+### R3.1 — Pure detector in script block 0 (node-testable) — **BUILT** (`9b9858f`)
 
-- Add to block 0 (DSP, node-safe — tests extract this block):
+- In block 0, after `tuningMidi()`: `COINCIDENCE_CENTS = 6`, `centsBetween(f1,f2)`,
+  `gcdInt`, `octaveFold`, `HARMONIC_INTERVALS`, `findCoincidences(marks, tolCents)`.
+- Input: the marker shape `stringAxisMarkers()` already produces —
+  `{f, name, si, midi, harm}`. **Output (as shipped — this supersedes the
+  `{f, cents, hi, lo, ratio}` sketch this task originally carried):**
 
   ```js
-  const COINCIDENCE_CENTS = 6; // fixed perceptual threshold; see docs/ROADMAP.md
-  function centsBetween(f1, f2){ return 1200 * Math.log2(f2 / f1); }
-  function findCoincidences(marks, tolCents){ … }
+  { f, cents, harm,
+    from: {si, midi, f},      // the string whose harmonic it is
+    onto: {si, midi, f},      // the open string it lands on
+    ratio:   {n, d},          // harm : 1, unreduced
+    reduced: {n, d},          // octave-folded, e.g. 3/2
+    octaves,                  // how many octaves were folded away
+    interval }                // "perfect fifth" | "octave" | … | null
   ```
-- Input: the marker list shape already produced by `stringAxisMarkers()` —
-  `{f, name, si, midi, harm}`. Output: `[{f, cents, hi:{si,harm}, lo:{si,harm}, ratio}]`.
+  Sorted by frequency; exact unisons snap to `cents === 0` (a `1e-9` guard kills
+  float residue like `−3.84e-13`).
 - Rules: pair a marker with `harm > 1` against a marker with `harm === 1` on a
-  **different** string (`si !== si`), where `|centsBetween| <= tolCents`. Report the
-  ratio as the harmonic number over the interval's small-integer denominator (e.g. E2's
-  3rd harmonic on B3 → 3:1 over the octave-reduced 3:2).
-- **Node tests (add to `tests/dsp.test.js`):** E standard, harmonics 2–5 on all strings
-  → assert the known hits (6th-string 3rd harmonic vs 2nd-string fundamental, etc.);
-  assert the tempered major third (~13.7¢) is **excluded** at tol = 6; assert it is
-  included at tol = 15; assert exact-unison pairs report 0 cents.
-- **Done when:** tests pass with no DOM involved.
+  **different** string (`si !== si`), where `|centsBetween| <= tolCents`.
+- **Node tests:** E standard, harmonics 2–5 on all strings → the three real hits
+  (E2·h3 → open B3 at −2.0 ¢ = 3/2; E2·h4 → open E4 at 0 ¢ = 1/1; A2·h3 → open E4
+  at −2.0 ¢); the tempered major third (~13.7 ¢) excluded at tol = 6 and included
+  at tol = 15; a synthetic same-string marker pair proves the `si !== si` guard is
+  load-bearing rather than tautological.
+- **Done when:** tests pass with no DOM involved. ✅
 
 ### R3.2 — Wire the constant + `?tol=` hook
 
@@ -349,21 +356,38 @@ string's fundamental. Build it in this order — the pure function first, drawn 
 - **PNG exports force `state.strings=false`, so ✦ never appears in exports.** That is
   correct and needs no extra work; just don't undo it.
 
-### R3.4 — The popover
+### R3.4 — The popover — **COPY PRE-LANDED** (`48925b8`); wiring remains
 
-- Dispatch in the canvas click handler beside `if(hh.string!=null)` (~6844).
-- Content, built like `stringContentHtml()`: name both notes and both strings, print the
-  measured cents offset, give the ratio, and explain **why** in one sentence sourced to
-  `docs/THEORY.md` §3.4 (denominator rule) — small denominators mean the two combs share
-  many partials.
-- Include the existing `auditionBlock()` so the user can hear the coincidence.
-- Tone: the popover answers a question the user asked by clicking. It does not open with
-  a lesson.
+- The prose is **already written, tested and committed** in `index.html`, between
+  `// ---------- discovery moments: the ✦ popover (R3.4) ----------` and
+  `// ---------- end ✦ popover copy ----------` (script block 4, just above
+  `openStringPopover`). It is currently inert — nothing calls it.
+- **Do not rewrite the copy or its helpers** (`OCT_WORD`, `HARM_NODES`,
+  `TEMPER_NOTE`, `fmtHzFine`, `fmtCents`). Every sentence is sourced to
+  `docs/THEORY.md` and pinned by tests in `tests/dsp.test.js`, which extract the
+  block from `index.html` between those sentinels and render every branch.
+- What is left is plumbing: an `openCoincidencePopover(hit, anchor)` built like
+  `openStringPopover()` —
+
+  ```js
+  popover.innerHTML = coincidenceContentHtml(hit)
+                    + auditionBlock(hit.f*Math.pow(2,-1/6), hit.f*Math.pow(2,1/6));
+  popover.classList.add("open"); placePopover(anchor);
+  ```
+  dispatched from the canvas click handler beside `if(hh.string!=null)
+  openStringPopover(hh.string,anchor);`, and cleaned up by `closePopover()` the same
+  way the string popover is.
+- Tone (already carried by the copy): the popover answers a question the user asked
+  by clicking. It does not open with a lesson.
 
 ### R3.5 — Verify + commit
 
+- `node tests/dsp.test.js` — **168 passed, 0 failed** is the baseline entering R3.2;
+  the suite must still be green and no assertion may be edited to make it so.
 - Headless: `?demo&strings=1&harmonics=1&open=all` in both themes; `?tol=0` (no ✦) and
   `?tol=25` (many) as bracket checks; `?tol=6` default screenshot.
+- One capture with a ✦ popover open, to confirm the pre-landed copy renders inside the
+  real popover chrome (widths, glossary buttons, the audition block below it).
 - Commit: `Discovery moments: ✦ marks harmonic/fundamental coincidences (±6¢)`.
 
 ---

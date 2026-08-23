@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315181d'/%3E%3Cpath d='M4 20 C8 20 8 9 12 9 S16 24 20 24 24 13 28 13' stroke='%23f0a13e' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* ============================================================
-   GuitarScope — stylesheet
+   Claude Rameau — stylesheet
    Palette discipline: color encodes data (slot A amber, slot B
    teal). Chrome stays monochrome. One type family, tabular
    numerals for every readout.
@@ -1194,7 +1194,7 @@ kbd{
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — DSP core
+   Claude Rameau — DSP core
    Everything above the NODE-TEST BOUNDARY is pure computation on
    typed arrays (no DOM, no Web Audio) and is exercised by the
    node test harness in tests/.
@@ -2267,7 +2267,7 @@ function divergeColor(t){
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — audio decode (browser side)
+   Claude Rameau — audio decode (browser side)
    Sample-rate policy: rate is read from the container bytes, then
    decoding happens in an OfflineAudioContext AT that rate, so
    decodeAudioData never silently resamples. If the container can't
@@ -2316,7 +2316,7 @@ function mixChannel(audioBuf, mode){
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — glossary
+   Claude Rameau — glossary
    Every term the app prints is defined here with three registers:
    what musicians mean, the scientific definition, and the exact
    measurement THIS app performs — with current values for the
@@ -2746,7 +2746,7 @@ function termHtml(key, text){
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — canvas rendering
+   Claude Rameau — canvas rendering
    Draw functions are parameterized by (ctx, cssW, cssH, model) so
    the same code renders the live plots and the 2× PNG export.
    Term "links" inside canvases are recorded as hit rectangles.
@@ -3908,7 +3908,7 @@ function drawEqRespScene(ctx, w, h, model){
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — application
+   Claude Rameau — application
    State, file loading, analysis pipeline, rendering, exports,
    glossary UI, snapshots, demo pair, keyboard, drag & drop.
    ============================================================ */

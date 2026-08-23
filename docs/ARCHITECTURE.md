@@ -21,6 +21,14 @@ must stay free of DOM/window references. Blocks were authored as separate files 
 session scratchpad and concatenated, but the repo's source of truth is `index.html`
 itself; edit it directly.
 
+## Naming and plumbing
+
+The app is **Claude Rameau** everywhere the user reads. Internal identifiers stay `gs*`:
+`localStorage` keys (`gsCollapse`, `gsVocab`, `gsColors`, `gsSettings`, …) and `?` hooks
+(`?demo`, `?theme`, `?vocab`, etc.) deliberately keep the old `gs` prefix for
+back-compat — they are plumbing, not identity. Renaming them would break every saved
+setting and bookmark.
+
 ## DSP pipeline and why the parameters are what they are
 
 decode (native rate) → Welch LTAS → common log grid → smooth → render/metrics.

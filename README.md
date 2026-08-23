@@ -85,7 +85,7 @@ in the page footer.
 ## Tests
 
 ```
-node tests/dsp.test.js      # 107 assertions, no framework; exit 1 on failure
+node tests/dsp.test.js      # 116 assertions, no framework; exit 1 on failure
 node tests/make_samples.js  # regenerate the demo WAVs
 ```
 

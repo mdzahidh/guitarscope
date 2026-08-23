@@ -646,6 +646,20 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
     ok(!/--slot-[ab]/.test(sw[0]), "switch CSS does not use guitar slot colors");
   }
 
+  // ---- scroll containers don't chain to the page (popover/glossary/modal) ----
+  {
+    const css = (html.match(/<style>[\s\S]*?<\/style>/g) || []).join("\n");
+    const blocks = css.split("}").filter(b => /overflow-y:\s*auto/.test(b));
+    ok(blocks.length >= 3, "found the scrollable containers", blocks.length + " rules");
+    const leaky = blocks.filter(b => !/overscroll-behavior:\s*contain/.test(b))
+      .map(b => (b.match(/([.#][\w-]+)[^{]*\{[^{]*$/) || ["", "?"])[1]);
+    ok(leaky.length === 0,
+      "every scrollable overlay contains its own overscroll", leaky.join(" ") || "none leak");
+    const pop = css.match(/\.popover\{[^}]+/);
+    ok(!!pop && /overscroll-behavior:\s*contain/.test(pop[0]),
+      "popover scroll never reaches the page (which would close it mid-read)");
+  }
+
   // ---- M2.5 divergeColor: endpoints are the slot accents ----
   {
     const p = D.divergeColor(1), z = D.divergeColor(0), m = D.divergeColor(-1);

@@ -125,6 +125,13 @@ build educational copy from it, never re-derive from scratch.
   flipped Direction/Device/Copy settings/JSON between the title row and their own
   row. CSS only: `#eqCard .headleft{flex:1 1 100%}` + a one-line ellipsized `#eqSub`.
   Pixel-identical to before for the default device; see ARCHITECTURE "Browser quirks".
+- **Post-v1.0.0 fix (session 16, user report): scrollable overlays no longer chain to
+  the page.** Reading to the bottom of a tall popover used to hand the remaining scroll
+  to the document, and `window.scroll` closes an unpinned popover — so finishing the
+  text dismissed it. `overscroll-behavior:contain` on all three scroll containers
+  (`.popover`, `.glosslist`, the modal body). CSS only; a test asserts every rule
+  carrying `overflow-y:auto` also contains its overscroll, so a fourth scrollable
+  overlay can't be added without one.
 - **Rameau phase R1 + R2 BUILT (branch `rameau-r1r2`, gate 1 passed 2026-08-23).**
   (a) **Rename** GuitarScope → **Claude Rameau** in every user-visible string —
   `<title>`, header title + slogan, how-to modal, PNG footer, recording guide,

@@ -125,25 +125,32 @@ build educational copy from it, never re-derive from scratch.
   flipped Direction/Device/Copy settings/JSON between the title row and their own
   row. CSS only: `#eqCard .headleft{flex:1 1 100%}` + a one-line ellipsized `#eqSub`.
   Pixel-identical to before for the default device; see ARCHITECTURE "Browser quirks".
-- **NEXT — Rameau phase (2026-08-22, user request; do before M3/M4, which remain
-  gated on explicit user go-ahead):** (a) **Rename** GuitarScope → **Claude Rameau**
-  in all user-visible strings: `<title>`, header title (slogan *"Yes — but why does
-  it sound that way?"* beside it), how-to modal, PNG footer ("made with Claude
-  Rameau"), recording guide, README. Keep internal `gs*` localStorage keys and
-  `?`-hooks as-is for back-compat (plumbing, not identity — note in
-  ARCHITECTURE.md). (b) **About modal:** "About" affordance near the title → the
-  story text from docs/STORY.md (the two-guitars question, the harmonic-overlay
-  discovery, the two Rameaus), Esc cascade like the other modals, `?about` hook.
-  (c) **Educational layer, incremental** (specs in docs/STORY.md, math in
-  docs/THEORY.md): first the **discovery moment** — when a shown harmonic of one
-  string coincides with another string's fundamental (within a settable cents
-  tolerance), mark it with a quiet ✦ that click-opens a popover explaining the
-  coincidence via the ratio; then harmonic-ancestry info in the per-string popovers
-  (ratio to root, overtone-family vs shares-an-ancestor, the denominator rule);
-  then interval consonance explainers (joint period, comb alignment, Plomp–Levelt
-  roughness). Educational tone: measure first, never lecture — curiosity clicks
-  the ✦.
-- 107/107 tests pass (`node tests/dsp.test.js`, including the M2.6e switch CSS contract). Demo pair verified end-to-end
+- **Rameau phase R1 + R2 BUILT (branch `rameau-r1r2`, gate 1 passed 2026-08-23).**
+  (a) **Rename** GuitarScope → **Claude Rameau** in every user-visible string —
+  `<title>`, header title + slogan, how-to modal, PNG footer, recording guide,
+  glossary/string popover labels, verdict/tone prose, drop hint, footer chip, README,
+  and export **filenames** (`rameau_*`). Internal `gs*` localStorage keys and `?`-hooks
+  are deliberately unchanged (plumbing, not identity — ARCHITECTURE.md "Naming and
+  plumbing"). The snapshot reader accepts **both** `"Claude Rameau"` and legacy
+  `"GuitarScope"` so v1.0.0 snapshots still load; its test extracts the guard out of
+  `index.html` and runs it. (b) **About modal** — a clone of `#howModal` carrying the
+  five docs/STORY.md paragraphs verbatim, reached by two doors (an `About` button and
+  the clickable title+slogan `.brandbtn`), `?about` hook, Esc cascade after `#howModal`.
+  Known open taste call: the `About` button wraps the `.globals` cluster to a second row
+  at 1440 px.
+- **NEXT — Rameau phase (c), the educational layer** (tasks + gates in docs/ROADMAP.md;
+  specs in docs/STORY.md, math in docs/THEORY.md; do before M3/M4, which remain gated on
+  explicit user go-ahead): **R3 discovery moments** — when a shown harmonic of one string
+  coincides with another string's fundamental (±6 cents, fixed, no control), mark it with
+  a quiet ✦ that click-opens a popover explaining the coincidence via the ratio; then
+  **R4** harmonic-ancestry info in the per-string popovers (ratio to root,
+  overtone-family vs shares-an-ancestor, the denominator rule); then **R5** interval
+  consonance explainers (joint period, comb alignment, Plomp–Levelt roughness) — R5.2/R5.3
+  blocked until the user resolves the two docs/THEORY.md §2.5 numeric caveats. Educational
+  tone: measure first, never lecture — curiosity clicks the ✦. **Gate 2 sits after R3.1 +
+  R3.2, before R3.3 starts:** `findCoincidences()` is shared block-0 code that R3.3, R3.4,
+  R4.2 and R5 all inherit.
+- 117/117 tests pass (`node tests/dsp.test.js`, including the M2.6e switch CSS contract and the R1.3 snapshot back-compat guard, extracted from `index.html` and mutation-checked). Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
   vocabulary lanes, zoomed panes, custom guitar colors incl. the recolored difference
@@ -194,7 +201,8 @@ build educational copy from it, never re-derive from scratch.
   folded), `?pop=<glosskey>` (pin a glossary/region popover open for capture),
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
-  app" walkthrough), `?debug` (reveal the hidden "Load test files" button).
+  app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
+  "Load test files" button).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new

@@ -870,3 +870,29 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   The glyph (U+25BE) occupies a small fraction of its em box in the UI fonts we
   render in, so raising `font-size` only grew the button's line box; the drawn
   chevron scales, stays crisp at any DPR, and inherits the hover color.
+
+### 2026-08-23 — R1 + R2 built (rename + About modal), gate 1 passed
+
+- **R1 — rename shipped.** `APP_NAME="Claude Rameau"` in script block 4; `<title>`,
+  header (`Claude` + thin `Rameau` + the slogan), how-to modal, PNG footer, recording
+  guide, decode-refusal hint, glossary/string popover labels, verdict and tone prose,
+  drop hint, footer chip and README all carry the new name. Export **filenames** moved
+  `guitarscope_*` → `rameau_*` — they are user-visible, so they were in scope.
+- **The one back-compat decision:** the snapshot reader accepts `app:"Claude Rameau"`
+  **and** legacy `app:"GuitarScope"`, so v1.0.0 snapshots still load. The writer only
+  ever emits `APP_NAME`. This is the single silent, retroactive failure in the rename,
+  so its test extracts the guard condition out of `index.html` and evaluates it rather
+  than re-asserting a retyped copy.
+- **Internal identifiers deliberately unchanged:** `gs*` localStorage keys and every `?`
+  hook. Plumbing, not identity — documented in ARCHITECTURE.md "Naming and plumbing".
+- **R2 — About modal.** A clone of `#howModal` holding the five paragraphs of
+  docs/STORY.md verbatim, with **two doors into one room**: an `About` button beside
+  `How to record` / `How to use this app`, and the title+slogan block as a `.brandbtn`
+  with the `help` cursor. `?about` hook, Esc cascade after `#howModal`. No new UI
+  concepts, no persisted state.
+- **Process note.** The build was handed to a cheaper builder against docs/ROADMAP.md;
+  the gate found the rename correct but the new tests largely tautological, and one
+  house-rule violation (the debug `Load test files` button briefly made visible, then
+  reverted). docs/ROADMAP.md gained three discipline bullets as a result — tests must
+  exercise shipped source and be mutation-checked, debug affordances stay hidden, and
+  unplanned commits must be declared at the top of a handoff.

@@ -657,19 +657,31 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
   }
 
   // ---- R1.3 snapshot back-compat: reader accepts both app names ----
+  // The predicate under test is EXTRACTED FROM index.html, never retyped here — a
+  // hand-copied duplicate would stay green if the shipped line ever changed.
   {
-    const hasClaudeWriter = /app:\s*APP_NAME/.test(html) || html.includes('app:\"Claude Rameau\"') || html.includes("app:'Claude Rameau'") || html.includes('Claude Rameau');
-    ok(hasClaudeWriter, "snapshot writer emits Claude Rameau");
-    ok(/snap\.app.*GuitarScope/.test(html), "snapshot reader mentions legacy GuitarScope");
-    ok(/snap\.app.*Claude Rameau|APP_NAME/.test(html), "snapshot reader mentions Claude Rameau");
-    ok(html.includes("not a \"+APP_NAME+\" snapshot") || html.includes("not a Claude Rameau snapshot"), "snapshot error mentions Claude Rameau");
-    const APP_NAME_T="Claude Rameau";
-    function validSnap(snap){ return !( !snap || (snap.app!==APP_NAME_T && snap.app!=="GuitarScope") || snap.type!=="snapshot" || !Array.isArray(snap.files) || !snap.files.length ); }
-    ok(validSnap({app:"Claude Rameau", type:"snapshot", files:[{}]}), "reader accepts Claude Rameau snapshot");
-    ok(validSnap({app:"GuitarScope", type:"snapshot", files:[{}]}), "reader accepts legacy GuitarScope snapshot");
-    ok(!validSnap({app:"Other", type:"snapshot", files:[{}]}), "reader rejects unknown app");
-    ok(!validSnap({app:"Claude Rameau", type:"export", files:[{}]}), "reader rejects wrong type");
-    ok(!validSnap({app:"Claude Rameau", type:"snapshot", files:[]}), "reader rejects empty files");
+    const nameM = html.match(/const\s+APP_NAME\s*=\s*"([^"]+)"/);
+    ok(!!nameM && nameM[1] === "Claude Rameau", "block 4 declares APP_NAME = Claude Rameau", nameM && nameM[1]);
+    const APP = nameM ? nameM[1] : "";
+
+    // Writer: both the snapshot and the per-card export stamp APP_NAME (not a literal).
+    ok(/const\s+snap\s*=\s*\{\s*app:\s*APP_NAME\s*,\s*type:\s*"snapshot"/.test(html),
+      "snapshot writer stamps app:APP_NAME");
+
+    // Reader: pull the real guard condition out of the source and run it.
+    const condM = html.match(/if\((!snap\|\|\(snap\.app[^\n]*?)\)\s*\n\s*throw new Error\(([^\n]*?)\);/);
+    ok(!!condM, "found the snapshot reader guard in index.html");
+    const rejects = new Function("snap", "APP_NAME", "return (" + condM[1] + ");");
+    const accepts = (s) => !rejects(s, APP);
+    ok(accepts({ app: APP, type: "snapshot", files: [{}] }), "reader accepts a current snapshot");
+    ok(accepts({ app: "GuitarScope", type: "snapshot", files: [{}] }), "reader accepts a legacy GuitarScope snapshot");
+    ok(!accepts({ app: "Other", type: "snapshot", files: [{}] }), "reader rejects a foreign app");
+    ok(!accepts({ app: APP, type: "export", files: [{}] }), "reader rejects a per-card export");
+    ok(!accepts({ app: APP, type: "snapshot", files: [] }), "reader rejects an empty file list");
+    ok(!accepts(null), "reader rejects null");
+
+    // The error text names the app through APP_NAME, so it renames with the constant.
+    ok(/APP_NAME/.test(condM[2]), "snapshot error message is built from APP_NAME", condM[2]);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

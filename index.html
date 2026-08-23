@@ -114,7 +114,6 @@ main{ display:flex; flex-direction:column; gap:18px; }
   font-size:21px; font-weight:600; letter-spacing:.02em;
 }
 .brand h1 .thin{ font-weight:300; color:var(--mut); }
-.brand-row{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
 .brandbtn{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; cursor:help; text-align:left; }
 .brandbtn:focus-visible{ outline:2px solid var(--hair2); outline-offset:2px; border-radius:4px; }
 .slogan{ font-size:12px; color:var(--dim); font-style:italic; }
@@ -1119,7 +1118,7 @@ kbd{
       <button class="iconbtn" id="aboutClose" aria-label="Close">✕</button>
     </div>
     <p>This app began as a simple question about two guitars.</p>
-    <p>I own a Les Paul and an SG with the same pickups, the same strings, the same tuning — everything identical except their bodies. I wanted to <em>measure</em> what my ears claimed to hear. So I built a spectrum analyzer with an AI collaborator, and while adding a small feature — overlaying each string's fundamental and harmonics on the spectrum — I noticed something I wasn't looking for: one string's harmonic landed exactly on another string's fundamental. Not close. Exact.</p>
+    <p>I own a Les Paul and an SG with the same pickups, the same strings, the same tuning — everything identical except their bodies. I wanted to <em>measure</em> what my ears claimed to hear. So I built a spectrum analyzer with an AI collaborator, and while adding a small feature — overlaying each string's fundamental and harmonics on the spectrum — I noticed something I wasn't looking for: one string's harmonic landed <em>exactly</em> on another string's fundamental. Not close. Exact.</p>
     <p>Pulling that thread led to the discovery that the 3rd and 5th notes of a major chord are literally harmonics of the root — that a chord is what one string is already quietly doing by itself. Then further: why some notes rest and others pull, why a scale is three interlocking families, why the physics of a vibrating string contains most of what we call music theory. None of it was invented. It was all sitting there, in the ratios, waiting — the same bedrock Pythagoras hit with a monochord, Rameau hit with a harpsichord in 1722, and I hit with an FFT and a Les Paul.</p>
     <p>The app is named for Jean-Philippe Rameau, the composer who first insisted harmony was physics — and for Claude, the AI I built it with. Rameau's brother was also named Claude; the family made a tradition of standing beside the material and asking questions of it.</p>
     <p>That's what this tool is for. It will show you the difference between two guitars. But its real hope is that somewhere in the overlays, you'll see a harmonic land exactly where it shouldn't be a coincidence — and ask the only question that matters: <em>yes, but why does it sound that way?</em></p>
@@ -6087,7 +6086,7 @@ function exportPNG(){
   ctx.font="11.5px "+FS;
   ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-24);
   ctx.textAlign="left";
-  _exportPngCanvas(cv, "guitarscope_"+exportBaseName()+".png");
+  _exportPngCanvas(cv, "rameau_"+exportBaseName()+".png");
   }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } finally { state.strings=_oldStrings; state.stringHarmonics=_oldHarm; }
 }
 // Per-card 300-dpi PNG / JSON / CSV (M2.6h): spectrum/diff/bands live per sub-section
@@ -6112,7 +6111,7 @@ function _cardPng(name, draw){
   ctx.restore();
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
   ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-14); ctx.textAlign="left";
-  _exportPngCanvas(cv, "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".png");
+  _exportPngCanvas(cv, "rameau-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".png");
   }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } finally { state.strings=_oldS; state.stringHarmonics=_oldH; }
 }
 function exportDiffPNG(){ if(!bothLoaded()) return; try{ _cardPng("Difference A-B", (ctx,W,H)=>{ drawDiffScene(ctx,W,H,buildDiffModel()); }); }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } }
@@ -6136,7 +6135,7 @@ function exportSgramPNG(){
   // scoped to spectrogram only — never draws envelope
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, sans-serif";
   ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-14); ctx.textAlign="left";
-  _exportPngCanvas(cv, "guitarscope-sgram_"+exportBaseName()+".png");
+  _exportPngCanvas(cv, "rameau-sgram_"+exportBaseName()+".png");
 }
 function exportEnvPNG(){
   if(!anyLoaded()) return;
@@ -6162,7 +6161,7 @@ function exportCSV(){
     L.push(GRID[k].toFixed(2)+","+(a?a[k].toFixed(2):"")+","+(b?b[k].toFixed(2):"")+","+
       (a&&b?(a[k]-b[k]).toFixed(2):""));
   }
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau_"+exportBaseName()+".csv");
 }
 function exportDiffCSV(){
   if(!bothLoaded()) return;
@@ -6171,7 +6170,7 @@ function exportDiffCSV(){
   L.push("# smoothing "+(state.smooth?"1/"+state.smooth+" oct":"off")+" · level-match "+(state.lm?fmtDb(state.lmOffset,2)+" on B":"off"));
   L.push("frequency_hz,a_minus_b_db");
   for(let k=0;k<GRID.length;k++) L.push(GRID[k].toFixed(2)+","+(a[k]-b[k]).toFixed(2));
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-diff_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau-diff_"+exportBaseName()+".csv");
 }
 function exportBandsCSV(){
   if(!anyLoaded()) return;
@@ -6193,7 +6192,7 @@ function exportBandsCSV(){
     if(pA!=null&&pB!=null&&pA>0&&pB>0) dDb=(10*Math.log10(pA/pB)).toFixed(2);
     L.push([r.label,f0.toFixed(1),f1.toFixed(1),aShare,bShare,dDb].join(","));
   }
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-bands_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau-bands_"+exportBaseName()+".csv");
 }
 function exportToneCSV(){
   if(!anyLoaded()) return;
@@ -6206,7 +6205,7 @@ function exportToneCSV(){
     const bval=row.querySelector(".vlab.b")?.innerText.replace(/\s+/g," ").trim()||"";
     L.push('"'+name.replace(/"/g,'""')+'","'+aval.replace(/"/g,'""')+'","'+bval.replace(/"/g,'""')+'"');
   });
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-tone_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau-tone_"+exportBaseName()+".csv");
 }
 function exportEnvCSV(){
   if(!anyLoaded()) return;
@@ -6220,7 +6219,7 @@ function exportEnvCSV(){
     for(const c of m.curves) row.push(c.pts&&c.pts[i]!=null? c.pts[i].db.toFixed(2):"");
     L.push(row.join(","));
   }
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-env_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau-env_"+exportBaseName()+".csv");
 }
 function _cardStateFor(name){
   // Only include settings that actually affect that card's data (no UI-only, no cross-card bleed)
@@ -6241,7 +6240,7 @@ function _exportCardJson(name, payload){
     ...(wantRegions?{regions:(VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix).regions.map(r=>({key:r.key,label:r.label,f0:regionF(r.f0),f1:regionF(r.f1)}))}:{}),
     ...payload };
   download(new Blob([JSON.stringify(base,null,2)],{type:"application/json"}),
-    "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".json");
+    "rameau-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".json");
 }
 function exportDiffJSON(){
   if(!bothLoaded()) return;
@@ -6296,7 +6295,7 @@ function exportJSON(){
                eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab },
     files };
   download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
-    "guitarscope_"+exportBaseName()+".json");
+    "rameau_"+exportBaseName()+".json");
   toast("Snapshot saved — drop the .json back onto the page to restore it.");
 }
 

@@ -54,6 +54,9 @@ and again whenever a task tempts you outside its own anchors.
 - **Do not change DSP parameters, thresholds, colours, or layout values** that a task
   did not name. The values in `CLAUDE.md` under "DSP params" and "Design brief" are
   settled decisions with reasons recorded in `docs/ARCHITECTURE.md`.
+- **Do not make a debug-only affordance visible.** The `Load test files` button is hidden
+  behind `?debug` on purpose (`CLAUDE.md`, house rules). If a task seems to want it shown,
+  it doesn't — stop and ask.
 - **Do not delete or weaken an existing test** to make a change pass. If a test now
   contradicts a task, stop and report it — that is a spec conflict, not a test bug.
 
@@ -62,6 +65,11 @@ and again whenever a task tempts you outside its own anchors.
   on interpolated text, `cssColor()`/`cssRGBA()` for anything drawn on canvas, existing
   helpers (`fmtHz`, `noteStr`, `auditionBlock`, `openPopover`) rather than new ones.
 - New pure math goes in **script block 0** and gets node tests. Nothing else goes there.
+- **A test must exercise the shipped source, not a retyped copy of it.** Read the value,
+  regex, or predicate out of `index.html` and run *that* (see the extraction pattern in
+  `docs/ARCHITECTURE.md`, and the R1.3 block in `tests/dsp.test.js`). A hand-copied
+  duplicate stays green when the app changes, which is worse than no test. Before calling
+  a test done, break the source line it guards and confirm the test goes red.
 - Copy the nearest existing thing rather than inventing a pattern: a new modal is a
   clone of `#howModal`, a new popover section is a clone of an existing one.
 - Prose in the UI matches the app's voice — plain, factual, no exclamation marks, no
@@ -87,6 +95,9 @@ and again whenever a task tempts you outside its own anchors.
    be explainable by the task text. Unexplained lines get reverted, not justified.
 4. One commit per task, subject line starting with the task id (`R1.2 — …`), body saying
    what changed and what was verified.
+5. **One commit per task and no others.** If something forced an extra commit, say so at
+   the top of the handoff with the reason — an unlisted commit is the first thing a
+   reviewer has to reconstruct.
 
 ---
 
@@ -141,7 +152,38 @@ R4 is then one stack (low risk — it reuses the reviewed detector); R5.1 review
 
 ---
 
-# R1 — Rename: GuitarScope → Claude Rameau
+## Gate 1 — reviewed 2026-08-23: **pass**
+
+Branch `rameau-r1r2`, base `675afd6`, R1.1–R1.5 + R2.1–R2.5 built by Muse Spark 1.2.
+Verified independently: 117/0 tests; the shipped snapshot reader accepts both app names
+and rejects a foreign app / a per-card export / an empty file list; the rename is
+complete in user-visible strings; the About text matches `docs/STORY.md`; both themes
+render; no DSP params, colours, layout constants or dependencies touched.
+
+Four unplanned commits landed inside the stack. `b023918` un-hid the debug `Load test
+files` button (a house-rule violation) and was reverted by `696d786`; `index.html` at the
+end of the stack is byte-identical to the end of R2.5. `a866f66` edited `docs/THEORY.md`,
+which was fenced off. Hence the three new discipline bullets above.
+
+Closed by the reviewer (commit `Gate 1 close`):
+- the R1.3 snapshot tests now **extract** the guard from `index.html` and run it, instead
+  of re-asserting a retyped copy (mutation-checked: deleting the legacy clause turns them red);
+- dead `.brand-row` CSS rule deleted (superseded by `.brandbtn` in R2.3);
+- `<em>` restored on *exactly* in About paragraph 2, per `docs/STORY.md`;
+- export filenames `guitarscope_*` → `rameau_*` (they are user-visible, so they were in
+  R1's rename scope; snapshot *reading* is unaffected).
+
+Open, deliberately not fixed — one taste call for the user:
+- the `About` button makes the `.globals` cluster wrap to a second row at 1440 px
+  (`Glossary` drops down). Master fits on one line. Every fix costs a settled layout
+  value or a copy change, so it is left as-is pending a decision.
+
+Known-good, minor, left alone: `<h1>` nested in `<button>` (`#brandBtn`) is outside the
+button content model, and its `aria-label` overrides the title as the accessible name.
+
+---
+
+# R1 — Rename: GuitarScope → Claude Rameau  ✅ built, gate 1 passed
 
 Self-contained, no behaviour change, entirely string work. 32 occurrences of the old
 name in `index.html`; `grep -n GuitarScope index.html` is the whole worklist.
@@ -212,7 +254,7 @@ Replace in place (each is a literal string in the file):
 
 ---
 
-# R2 — About modal
+# R2 — About modal  ✅ built, gate 1 passed
 
 Follows the `#howModal` pattern exactly (~line 1061). Copy its structure, don't invent.
 

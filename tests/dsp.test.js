@@ -656,6 +656,22 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
       "clamps out-of-range t and maps NaN to neutral");
   }
 
+  // ---- R1.3 snapshot back-compat: reader accepts both app names ----
+  {
+    const hasClaudeWriter = /app:\s*APP_NAME/.test(html) || html.includes('app:\"Claude Rameau\"') || html.includes("app:'Claude Rameau'") || html.includes('Claude Rameau');
+    ok(hasClaudeWriter, "snapshot writer emits Claude Rameau");
+    ok(/snap\.app.*GuitarScope/.test(html), "snapshot reader mentions legacy GuitarScope");
+    ok(/snap\.app.*Claude Rameau|APP_NAME/.test(html), "snapshot reader mentions Claude Rameau");
+    ok(html.includes("not a \"+APP_NAME+\" snapshot") || html.includes("not a Claude Rameau snapshot"), "snapshot error mentions Claude Rameau");
+    const APP_NAME_T="Claude Rameau";
+    function validSnap(snap){ return !( !snap || (snap.app!==APP_NAME_T && snap.app!=="GuitarScope") || snap.type!=="snapshot" || !Array.isArray(snap.files) || !snap.files.length ); }
+    ok(validSnap({app:"Claude Rameau", type:"snapshot", files:[{}]}), "reader accepts Claude Rameau snapshot");
+    ok(validSnap({app:"GuitarScope", type:"snapshot", files:[{}]}), "reader accepts legacy GuitarScope snapshot");
+    ok(!validSnap({app:"Other", type:"snapshot", files:[{}]}), "reader rejects unknown app");
+    ok(!validSnap({app:"Claude Rameau", type:"export", files:[{}]}), "reader rejects wrong type");
+    ok(!validSnap({app:"Claude Rameau", type:"snapshot", files:[]}), "reader rejects empty files");
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -5475,7 +5475,7 @@ function eqSettingsText(){
   const d=fit.device, s=fit.settings;
   const typeName=t=>t==="lowshelf"?"low shelf":t==="highshelf"?"high shelf":"peak";
   const lines=[];
-  lines.push("GuitarScope EQ match — "+d.name);
+  lines.push(APP_NAME+" EQ match — "+d.name);
   lines.push("Reshape "+SLOT_LETTER[fit.src]+" ("+shortName(state.slots[fit.src].name,40)+
     ") toward "+SLOT_LETTER[fit.dst]+" ("+shortName(state.slots[fit.dst].name,40)+")");
   lines.push("");
@@ -6040,8 +6040,8 @@ function exportPNG(){
   ctx.textBaseline="alphabetic";
   ctx.fillStyle=cssColor("ink");
   ctx.font="600 19px "+FS;
-  ctx.fillText("GuitarScope",40,46);
-  const bw=ctx.measureText("GuitarScope").width;
+  ctx.fillText(APP_NAME,40,46);
+  const bw=ctx.measureText(APP_NAME).width;
   ctx.font="13px "+FS;
   ctx.fillStyle=cssColor("mut");
   ctx.fillText("· long-term average spectrum",40+bw+10,46);
@@ -6067,7 +6067,7 @@ function exportPNG(){
   ctx.restore();
   ctx.fillStyle=cssColor("dim");
   ctx.font="11.5px "+FS;
-  ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-24);
+  ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-24);
   ctx.textAlign="left";
   _exportPngCanvas(cv, "guitarscope_"+exportBaseName()+".png");
   }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } finally { state.strings=_oldStrings; state.stringHarmonics=_oldHarm; }
@@ -6085,7 +6085,7 @@ function _cardPng(name, draw){
   ctx.fillRect(0,0,W,H);
   ctx.fillStyle=cssColor("ink");
   ctx.font="600 16px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-  ctx.fillText("GuitarScope · "+name, 28, 36);
+  ctx.fillText(APP_NAME+" · "+name, 28, 36);
   ctx.font="11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
   ctx.fillStyle=cssColor("mut");
   ctx.fillText(new Date().toISOString().slice(0,10)+" · "+tuningLabel()+" · A4 "+state.a4+" Hz", 28, 52);
@@ -6093,7 +6093,7 @@ function _cardPng(name, draw){
   draw(ctx,W,H-80);
   ctx.restore();
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-  ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-14); ctx.textAlign="left";
+  ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-14); ctx.textAlign="left";
   _exportPngCanvas(cv, "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".png");
   }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } finally { state.strings=_oldS; state.stringHarmonics=_oldH; }
 }
@@ -6104,7 +6104,7 @@ function exportSgramPNG(){
   const W=1240,H=hasDiff?1320:900,SC=2; const cv=document.createElement("canvas");
   cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
   ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,W,H);
-  ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText("GuitarScope · Spectrogram",28,32);
+  ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText(APP_NAME+" · Spectrogram",28,32);
   const sc=sgramScale(); let y=60;
   for(let i=0;i<2;i++){
     const m=sgramModelFor(i,sc); if(!m) continue;
@@ -6117,7 +6117,7 @@ function exportSgramPNG(){
   }
   // scoped to spectrogram only — never draws envelope
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, sans-serif";
-  ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-14); ctx.textAlign="left";
+  ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-14); ctx.textAlign="left";
   _exportPngCanvas(cv, "guitarscope-sgram_"+exportBaseName()+".png");
 }
 function exportEnvPNG(){
@@ -6129,7 +6129,7 @@ function exportEqRespPng(){ if(!bothLoaded()) return; _cardPng("EQ response", (c
 function exportCSV(){
   if(!anyLoaded()) return;
   const a=dispTarget[0], b=dispTarget[1];
-  const L=["# GuitarScope long-term average spectrum export",
+  const L=["# "+APP_NAME+" long-term average spectrum export",
            "# created: "+new Date().toISOString()];
   for(let i=0;i<2;i++){
     const s=state.slots[i];
@@ -6149,7 +6149,7 @@ function exportCSV(){
 function exportDiffCSV(){
   if(!bothLoaded()) return;
   const a=dispTarget[0], b=dispTarget[1]; if(!a||!b) return;
-  const L=["# GuitarScope difference A-B (dB)", "# created: "+new Date().toISOString()];
+  const L=["# "+APP_NAME+" difference A-B (dB)", "# created: "+new Date().toISOString()];
   L.push("# smoothing "+(state.smooth?"1/"+state.smooth+" oct":"off")+" · level-match "+(state.lm?fmtDb(state.lmOffset,2)+" on B":"off"));
   L.push("frequency_hz,a_minus_b_db");
   for(let k=0;k<GRID.length;k++) L.push(GRID[k].toFixed(2)+","+(a[k]-b[k]).toFixed(2));
@@ -6158,7 +6158,7 @@ function exportDiffCSV(){
 function exportBandsCSV(){
   if(!anyLoaded()) return;
   const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix;
-  const L=["# GuitarScope band energy — "+vocab.label, "# created: "+new Date().toISOString()];
+  const L=["# "+APP_NAME+" band energy — "+vocab.label, "# created: "+new Date().toISOString()];
   L.push("band,f0_hz,f1_hz,a_share_pct,b_share_pct,delta_db");
   for(const r of vocab.regions){
     const f0=regionF(r.f0), f1=regionF(r.f1);
@@ -6180,7 +6180,7 @@ function exportBandsCSV(){
 function exportToneCSV(){
   if(!anyLoaded()) return;
   const cand=(typeof proseCandidates==="function"?proseCandidates():[]);
-  const L=["# GuitarScope tone character", "# created: "+new Date().toISOString()];
+  const L=["# "+APP_NAME+" tone character", "# created: "+new Date().toISOString()];
   L.push("descriptor,a_value,b_value");
   document.querySelectorAll("#toneRows .tonerow").forEach(row=>{
     const name=row.querySelector(".tonename")?.innerText.replace(/\s+/g," ").trim()||"";
@@ -6193,7 +6193,7 @@ function exportToneCSV(){
 function exportEnvCSV(){
   if(!anyLoaded()) return;
   const m=buildEnvModel(); if(!m||!m.curves) return;
-  const L=["# GuitarScope envelope (per-curve, first-onset aligned at 0 s)", "# created: "+new Date().toISOString()];
+  const L=["# "+APP_NAME+" envelope (per-curve, first-onset aligned at 0 s)", "# created: "+new Date().toISOString()];
   const maxLen=Math.max(...m.curves.map(c=>c.pts?c.pts.length:0));
   L.push("time_s,"+m.curves.map(c=>c.label.replace(/,/g," ")+"_db").join(","));
   for(let i=0;i<maxLen;i++){
@@ -6217,7 +6217,7 @@ function _cardStateFor(name){
 function _exportCardJson(name, payload){
   const st=_cardStateFor(name);
   const wantRegions = !name.toLowerCase().includes("tone") && !name.toLowerCase().includes("spectrogram") && !name.toLowerCase().includes("envelope") && !name.toLowerCase().includes("eq");
-  const base={ app:"GuitarScope", type:"export", card:name, created:new Date().toISOString(),
+  const base={ app:APP_NAME, type:"export", card:name, created:new Date().toISOString(),
     state:st,
     guitars:state.slots.map((s,i)=> s?{slot:SLOT_LETTER[i], name:s.name, sampleRate:s.info.sampleRate, container:s.info.container}:null).filter(Boolean),
     ...(wantRegions?{regions:(VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix).regions.map(r=>({key:r.key,label:r.label,f0:regionF(r.f0),f1:regionF(r.f1)}))}:{}),
@@ -6271,7 +6271,7 @@ function exportJSON(){
       welch:{df:s.welch.df, frames:s.welch.frames, powerDb:db},
       metrics:sanitizeMetrics(s.metrics) });
   }
-  const snap={ app:"GuitarScope", type:"snapshot", version:1,
+  const snap={ app:APP_NAME, type:"snapshot", version:1,
     created:new Date().toISOString(),
     settings:{ tuning:state.tuning, customOffset:state.customOffset,
                a4:state.a4, smooth:state.smooth, lm:state.lm,
@@ -6288,8 +6288,8 @@ async function loadSnapshotFile(file){
   let snap;
   try{ snap=JSON.parse(txt); }
   catch(_e){ throw new Error("this file is not valid JSON."); }
-  if(!snap||snap.app!=="GuitarScope"||snap.type!=="snapshot"||!Array.isArray(snap.files)||!snap.files.length)
-    throw new Error("this JSON is not a GuitarScope snapshot.");
+  if(!snap||(snap.app!==APP_NAME&&snap.app!=="GuitarScope")||snap.type!=="snapshot"||!Array.isArray(snap.files)||!snap.files.length)
+    throw new Error("this JSON is not a "+APP_NAME+" snapshot.");
   applySnapshot(snap);
 }
 function setSmoothUI(v){

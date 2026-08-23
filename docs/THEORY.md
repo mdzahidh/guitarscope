@@ -232,7 +232,7 @@ One-line take: Rameau is what happens when a working musician demands *why* — 
 
 ## Open questions / next threads
 
-- [ ] Hear it: A/B a just-intonation major 3rd vs the fretted one (GuitarScope could measure the beating!)
+- [ ] Hear it: A/B a just-intonation major 3rd vs the fretted one (Claude Rameau could measure the beating!)
 - [ ] Pentatonic minor/major through this lens (spoiler: it deletes both "problem" semitones)
 - [ ] Why does the tritone resolve outward? (7th-chord physics)
 - [ ] South Asian classical: ragas use just-ish intervals and 22 shrutis — connect to the harmonic families

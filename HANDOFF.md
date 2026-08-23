@@ -2,8 +2,8 @@
 
 Branch: `rameau-r1r2` (not master)
 Base: `master` at 675afd6
-Commit range for Gate 1: 675afd6..6ec6d5e (8 commits, prior to R2.5 HANDOFF commit)
-Final commit for HANDOFF will be R2.5.
+Commit range for Gate 1: 675afd6..752c1b2 (9 commits, includes R2.5) + follow-up doc rename (this update)
+Final commit for HANDOFF is this update (R2.5 follow-up).
 
 ## Tasks completed
 
@@ -168,13 +168,20 @@ Screenshots were opened with the image-reading tool and verified: title/slogan/t
 
 ## Found, not fixed
 
-- `docs/ARCHITECTURE.md` still titled “GuitarScope architecture” — R1.4 only required adding the plumbing note, not renaming the markdown title; left to keep diff minimal.
+- ~~`docs/ARCHITECTURE.md` still titled “GuitarScope architecture” — R1.4 only required adding the plumbing note, not renaming the markdown title; left to keep diff minimal.~~ **Fixed 2026-08-23 follow-up:** renamed to “Claude Rameau architecture”, updated footer `made with Claude Rameau` and snapshot format `app:"Claude Rameau"` (with legacy accept note) per user request; also updated `tests/dsp.test.js` header and `docs/THEORY.md` open-question line 235 to Claude Rameau. See “Follow-up” below.
 - `.brand-row` CSS rule remains defined but unused after R2.3 (replaced by `button.brandbtn`); kept to avoid deleting a rule that future code might reference, and to keep per-task diff minimal.
 - `README.md` hook list not updated for new `?about` hook; R1.4 only required fixing stale test count, so hook table left as-is per smallest-diff discipline.
 - Download filenames still use `guitarscope_` prefix — intentional plumbing, not identity; snapshot `app` field now carries `Claude Rameau` but filenames stay for filesystem compatibility.
 - `index.html` line `if(!snap||(snap.app!==APP_NAME&&snap.app!=="GuitarScope")` retains the legacy string “GuitarScope” — intentional back-compat, the only silent failure point; test covers it.
 - `tests/verify.sh --base master` referenced in assignment does not exist in repo — skipped, used `node tests/dsp.test.js` as the verification gate instead.
 - THEORY.md §2.5 “peaks near ¼ critical bandwidth” and “~30–40 Hz” figures remain under review per ROADMAP gate-3 constraint — no educational copy in R1/R2 references them, so left untouched.
+
+## Follow-up 2026-08-23 — doc rename requested
+
+- `docs/ARCHITECTURE.md`: `# GuitarScope architecture` → `# Claude Rameau architecture`; `made with GuitarScope` → `made with Claude Rameau`; `JSON with app:"GuitarScope"` → `app:"Claude Rameau"` (note added that reader also accepts legacy `GuitarScope`).
+- `tests/dsp.test.js`: header `GuitarScope DSP unit tests` → `Claude Rameau DSP unit tests`.
+- `docs/THEORY.md:235`: `GuitarScope could measure the beating!` → `Claude Rameau could measure the beating!`.
+- `HANDOFF.md`: updated commit range and moved former “still titled GuitarScope” entry to fixed. No changes to `index.html` legacy snapshot string or `gs*` plumbing; no edits to `SPEC.md`/`CLAUDE.md` status per original gate rule.
 
 ## Notes
 

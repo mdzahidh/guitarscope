@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// GuitarScope DSP unit tests — runs the pure-DSP <script> block from
+// Claude Rameau DSP unit tests — runs the pure-DSP <script> block from
 // index.html under Node and checks the numbers against ground truth.
 // Usage: node tests/dsp.test.js
 "use strict";

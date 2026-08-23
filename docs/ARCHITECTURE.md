@@ -1,4 +1,4 @@
-# GuitarScope architecture
+# Claude Rameau architecture
 
 Implementation knowledge that is not obvious from reading the code. For scope decisions
 and their dates see SPEC.md's changelog; for the working brief see CLAUDE.md.
@@ -765,7 +765,7 @@ when a person clicks the button rather than when a test calls the function.
   right-aligned credit collided at 1240 px on long filenames. Truncating the
   left string (`e4e2ef3`) worked but read badly; the settled answer
   (`39c5c64`, `7fb174f`) is that every PNG carries exactly one footer,
-  `made with GuitarScope`, right-aligned. The analysis parameters were already
+  `made with Claude Rameau`, right-aligned. The analysis parameters were already
   in the sub-header line and in the JSON — the footer was duplicating them.
 - **The spectrogram PNG bled the envelope in** (`c8e48c5`). `exportSgramPNG`
   builds its own canvas and stacks only `sgramModelFor(0/1)` + the diff pane;
@@ -829,7 +829,7 @@ of the live canvas.
 
 ## Snapshot format
 
-JSON with `app:"GuitarScope"`, `type:"snapshot"`, `version:1`, both slots' file facts (name,
+JSON with `app:"Claude Rameau"` (snapshot reader also accepts legacy `app:"GuitarScope"` for back-compat), `type:"snapshot"`, `version:1`, both slots' file facts (name,
 container, sample rate, bit depth, channels, duration, channel mode), the raw (unsmoothed)
 grid spectra, tone metrics, band table, peaks, and the analysis settings that produced
 them. Reload path treats a snapshot like a file drop: everything recomputable is

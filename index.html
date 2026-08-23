@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>GuitarScope</title>
+<title>Claude Rameau</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315181d'/%3E%3Cpath d='M4 20 C8 20 8 9 12 9 S16 24 20 24 24 13 28 13' stroke='%23f0a13e' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* ============================================================
-   GuitarScope — stylesheet
+   Claude Rameau — stylesheet
    Palette discipline: color encodes data (slot A amber, slot B
    teal). Chrome stays monochrome. One type family, tabular
    numerals for every readout.
@@ -114,6 +114,9 @@ main{ display:flex; flex-direction:column; gap:18px; }
   font-size:21px; font-weight:600; letter-spacing:.02em;
 }
 .brand h1 .thin{ font-weight:300; color:var(--mut); }
+.brandbtn{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; cursor:help; text-align:left; }
+.brandbtn:focus-visible{ outline:2px solid var(--hair2); outline-offset:2px; border-radius:4px; }
+.slogan{ font-size:12px; color:var(--dim); font-style:italic; }
 .tagline{ font-size:12px; color:var(--dim); letter-spacing:.04em; margin-top:1px; }
 .globals{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
 .field{ display:flex; align-items:center; gap:8px; }
@@ -458,7 +461,7 @@ table.datatable tr.grp td{
   box-shadow:0 18px 50px rgba(0,0,0,.5); padding:16px 18px 15px;
   opacity:0; transform:translateY(5px); pointer-events:none;
   transition:opacity 170ms var(--ease), transform 170ms var(--ease);
-  max-height:min(70vh, 560px); overflow-y:auto;
+  max-height:min(70vh, 560px); overflow-y:auto; overscroll-behavior:contain;
 }
 .popover.open{ opacity:1; transform:none; pointer-events:auto; }
 .pop-term{ font-size:15px; font-weight:600; letter-spacing:.01em; }
@@ -509,7 +512,7 @@ table.datatable tr.grp td{
 }
 #glossSearch:focus{ border-color:var(--hair2); }
 #glossSearch::placeholder{ color:var(--faint); }
-.glosslist{ overflow-y:auto; flex:1; padding:6px 8px 30px; }
+.glosslist{ overflow-y:auto; overscroll-behavior:contain; flex:1; padding:6px 8px 30px; }
 .glosscat{
   font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
   color:var(--faint); padding:16px 14px 5px;
@@ -584,7 +587,7 @@ kbd{
 
 /* recording guide */
 .modal .inner.guide{
-  max-width:660px; max-height:min(82vh,760px); overflow-y:auto;
+  max-width:660px; max-height:min(82vh,760px); overflow-y:auto; overscroll-behavior:contain;
   padding:26px 30px 24px;
 }
 .guide .ghead{ display:flex; justify-content:space-between; align-items:baseline; gap:16px; }
@@ -676,7 +679,10 @@ kbd{
 
   <header class="topbar">
     <div class="brand">
-      <h1>Guitar<span class="thin">Scope</span></h1>
+      <button class="brandbtn" id="brandBtn" aria-label="About Claude Rameau">
+        <h1>Claude <span class="thin">Rameau</span></h1>
+        <span class="slogan">“Yes — but why does it sound that way?”</span>
+      </button>
       <div class="tagline">long-term average spectrum · A/B comparison</div>
     </div>
     <div class="globals">
@@ -711,6 +717,7 @@ kbd{
       </div>
       <!-- development affordance: hidden in the shipped app, revealed by ?debug -->
       <button class="btn" id="debugLoadBtn" style="display:none" title="Load demo bright + warm pair (Karplus–Strong, 44.1k vs 48k)">Load test files</button>
+      <button class="btn" id="aboutBtn">About</button>
       <button class="btn" id="howBtn">How to use this app</button>
       <button class="btn" id="guideBtn">How to record</button>
       <button class="btn" id="glossaryBtn">Glossary</button>
@@ -1003,7 +1010,7 @@ kbd{
       <div id="paramsLine"></div>
       <div class="footright">
         <button class="linkish" id="shortcutsBtn"><kbd>?</kbd> shortcuts</button>
-        <span>GuitarScope · offline · files never leave this page</span>
+        <span>Claude Rameau · offline · files never leave this page</span>
       </div>
       <div class="settingsFoot" id="settingsFoot">
         <span class="sfInfo">Remembered: tuning · A4 · EQ device · smoothing · Strings · Harmonics — not level-match · <button class="linkish" id="resetSettingsBtn">Reset saved settings</button></span>
@@ -1104,6 +1111,20 @@ kbd{
   </div>
 </div>
 
+<div class="modal" id="aboutModal">
+  <div class="inner guide">
+    <div class="ghead">
+      <h3>About Claude Rameau</h3>
+      <button class="iconbtn" id="aboutClose" aria-label="Close">✕</button>
+    </div>
+    <p>This app began as a simple question about two guitars.</p>
+    <p>I own a Les Paul and an SG with the same pickups, the same strings, the same tuning — everything identical except their bodies. I wanted to <em>measure</em> what my ears claimed to hear. So I built a spectrum analyzer with an AI collaborator, and while adding a small feature — overlaying each string's fundamental and harmonics on the spectrum — I noticed something I wasn't looking for: one string's harmonic landed <em>exactly</em> on another string's fundamental. Not close. Exact.</p>
+    <p>Pulling that thread led to the discovery that the 3rd and 5th notes of a major chord are literally harmonics of the root — that a chord is what one string is already quietly doing by itself. Then further: why some notes rest and others pull, why a scale is three interlocking families, why the physics of a vibrating string contains most of what we call music theory. None of it was invented. It was all sitting there, in the ratios, waiting — the same bedrock Pythagoras hit with a monochord, Rameau hit with a harpsichord in 1722, and I hit with an FFT and a Les Paul.</p>
+    <p>The app is named for Jean-Philippe Rameau, the composer who first insisted harmony was physics — and for Claude, the AI I built it with. Rameau's brother was also named Claude; the family made a tradition of standing beside the material and asking questions of it.</p>
+    <p>That's what this tool is for. It will show you the difference between two guitars. But its real hope is that somewhere in the overlays, you'll see a harmonic land exactly where it shouldn't be a coincidence — and ask the only question that matters: <em>yes, but why does it sound that way?</em></p>
+  </div>
+</div>
+
 <!-- recording guide -->
 <div class="modal" id="guideModal">
   <div class="inner guide">
@@ -1181,7 +1202,7 @@ kbd{
 <div id="dropOverlay">
   <div class="inner">
     <div class="t1" id="dropTitle">Drop audio file</div>
-    <div class="t2">WAV · AIFF · MP3 · M4A · FLAC — or a GuitarScope snapshot (.json)</div>
+    <div class="t2">WAV · AIFF · MP3 · M4A · FLAC — or a Claude Rameau snapshot (.json)</div>
   </div>
 </div>
 
@@ -1189,7 +1210,7 @@ kbd{
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — DSP core
+   Claude Rameau — DSP core
    Everything above the NODE-TEST BOUNDARY is pure computation on
    typed arrays (no DOM, no Web Audio) and is exercised by the
    node test harness in tests/.
@@ -1405,6 +1426,80 @@ const TUNINGS = {
 function tuningMidi(key, customOffset){
   if(key==="custom") return TUNINGS.estd.midi.map(m=>m+(customOffset|0));
   return (TUNINGS[key]||TUNINGS.estd).midi.slice();
+}
+
+// ---------- discovery moments: harmonic ↔ open-string coincidences ----------
+// The app's origin story (docs/STORY.md): a harmonic of one string landing on
+// another string's open fundamental. findCoincidences() locates those landings so
+// the UI can mark them with a ✦; it reports arithmetic only, never prose.
+//
+// Threshold — fixed at ±6 cents, deliberately not a user control:
+//   · 12-TET's fifth is 2¢ off just (docs/THEORY.md §5), so the real 3rd-harmonic
+//     landings must sit inside the window;
+//   · the tempered major third is 14¢ off (§5) — a near-miss, not a landing, and
+//     the ear reads it that way (§2.6, "tolerance bands");
+//   · ordinary tuning slop lives under a few cents.
+// A test-only ?tol= hook may override it; nothing persists it.
+const COINCIDENCE_CENTS = 6;
+
+// Signed interval from f1 to f2 in cents. Positive ⇒ f2 is the higher pitch.
+function centsBetween(f1, f2){ return 1200 * Math.log2(f2 / f1); }
+
+function gcdInt(a, b){ a = Math.abs(a); b = Math.abs(b); while(b){ const t = a % b; a = b; b = t; } return a; }
+
+// Fold the ratio h:1 into a single octave, lowest terms, plus how many octaves
+// were removed: 2 → 1/1 (+1 oct), 3 → 3/2 (+1), 4 → 1/1 (+2), 5 → 5/4 (+2), 6 → 3/2 (+2).
+function octaveFold(h){
+  let d = 1;
+  while(h / d >= 2) d *= 2;
+  const g = gcdInt(h, d) || 1;
+  return { n: h / g, d: d / g, octaves: Math.round(Math.log2(d)) };
+}
+
+// Names for octave-folded harmonic ratios, from the docs/THEORY.md §1 table.
+// Ratios that table declines to name (11/8, 13/8) stay null rather than invent one.
+const HARMONIC_INTERVALS = {
+  "1/1": "unison",           "3/2": "perfect fifth",  "5/4": "major third",
+  "7/4": "harmonic seventh", "9/8": "major second",   "15/8": "major seventh",
+};
+
+// marks: [{f, si, midi, harm}] in stringAxisMarkers() shape — every open-string
+// fundamental (harm 1) plus whichever harmonics the user has switched on.
+// Pairs each harmonic (harm > 1) against every OTHER string's fundamental.
+// Returns [{f, cents, harm, from, onto, ratio, reduced, octaves, interval}] sorted
+// by frequency; `cents` is signed, open string relative to the harmonic, so the
+// 12-TET fifth's −2¢ prints as the harmonic sitting fractionally above the string.
+function findCoincidences(marks, tolCents){
+  if(!Array.isArray(marks)) return [];
+  const tol = (tolCents == null) ? COINCIDENCE_CENTS : Math.abs(tolCents);
+  const opens = marks.filter(m => m && m.f > 0 && ((m.harm | 0) || 1) === 1);
+  const out = [];
+  for(const h of marks){
+    if(!h || !(h.f > 0) || (h.harm | 0) < 2) continue;
+    const hn = h.harm | 0;
+    for(const o of opens){
+      if(o.si === h.si) continue;
+      let cents = centsBetween(h.f, o.f);
+      // An exact landing (h×f computed one way, the open string another) leaves a
+      // sub-picocent float residue; snap it so a true unison reads 0, not −0.0.
+      if(Math.abs(cents) < 1e-9) cents = 0;
+      if(!(Math.abs(cents) <= tol)) continue;
+      const fold = octaveFold(hn);
+      out.push({
+        f: h.f,
+        cents,
+        harm: hn,
+        from: { si: h.si, midi: h.midi, f: h.f / hn },
+        onto: { si: o.si, midi: o.midi, f: o.f },
+        ratio: { n: hn, d: 1 },
+        reduced: { n: fold.n, d: fold.d },
+        octaves: fold.octaves,
+        interval: HARMONIC_INTERVALS[fold.n + "/" + fold.d] || null,
+      });
+    }
+  }
+  out.sort((a, b) => a.f - b.f || a.from.si - b.from.si || a.harm - b.harm);
+  return out;
 }
 
 // ---------- STFT band envelopes (for onsets & decay) ----------
@@ -2262,7 +2357,7 @@ function divergeColor(t){
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — audio decode (browser side)
+   Claude Rameau — audio decode (browser side)
    Sample-rate policy: rate is read from the container bytes, then
    decoding happens in an OfflineAudioContext AT that rate, so
    decodeAudioData never silently resamples. If the container can't
@@ -2311,7 +2406,7 @@ function mixChannel(audioBuf, mode){
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — glossary
+   Claude Rameau — glossary
    Every term the app prints is defined here with three registers:
    what musicians mean, the scientific definition, and the exact
    measurement THIS app performs — with current values for the
@@ -2398,7 +2493,7 @@ const GLOSSARY=[
   { key:"eq-low-end", name:"Low end", cat:"EQ regions", hook:"EQ-speak: ≈60–250 Hz",
     musician:"What moves when you turn an amp's bass knob: thump, weight, the part of the sound you feel more than hear. Cut it to tighten, boost it for heft.",
     science:"Fundamentals of the guitar's lower strings and their first harmonics, up to roughly 250 Hz.",
-    measure:"Annotation only — the lane marks where the word points on the frequency axis; region boundaries are colloquial (± half an octave by speaker) and no GuitarScope metric integrates over exactly this range. The share below is measured live over 60–250 Hz for reference.",
+    measure:"Annotation only — the lane marks where the word points on the frequency axis; region boundaries are colloquial (± half an octave by speaker) and no Claude Rameau metric integrates over exactly this range. The share below is measured live over 60–250 Hz for reference.",
     values(state){ return _bandVals(state, 60, 250); } },
 
   { key:"eq-low-mids", name:"Low mids", cat:"EQ regions", hook:"EQ-speak: ≈250–800 Hz",
@@ -2741,7 +2836,7 @@ function termHtml(key, text){
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — canvas rendering
+   Claude Rameau — canvas rendering
    Draw functions are parameterized by (ctx, cssW, cssH, model) so
    the same code renders the live plots and the 2× PNG export.
    Term "links" inside canvases are recorded as hit rectangles.
@@ -3903,10 +3998,11 @@ function drawEqRespScene(ctx, w, h, model){
 <script>
 "use strict";
 /* ============================================================
-   GuitarScope — application
+   Claude Rameau — application
    State, file loading, analysis pipeline, rendering, exports,
    glossary UI, snapshots, demo pair, keyboard, drag & drop.
    ============================================================ */
+const APP_NAME="Claude Rameau";
 
 // ---------- theme ----------
 // Applied before anything renders (inline scripts run pre-first-paint).
@@ -3998,6 +4094,7 @@ const guideModal=el("guideModal"), guideBtn=el("guideBtn"),
       guideLink=el("guideLink"), guideClose=el("guideClose");
 const howModal=el("howModal"), howBtn=el("howBtn"), howLink=el("howLink"),
       howClose=el("howClose"), howToRecordLink=el("howToRecordLink");
+const aboutModal=el("aboutModal"), aboutBtn=el("aboutBtn"), aboutClose=el("aboutClose"), brandBtn=el("brandBtn");
 const resetSettingsBtn=el("resetSettingsBtn");
 const debugLoadBtn=el("debugLoadBtn");
 const magModal=el("magModal"), magTitle=el("magTitle"),
@@ -4033,7 +4130,7 @@ async function loadFileIntoSlot(i,file){
     const sniffed=sniffAudioInfo(buf);
     if(!sniffed){
       const e=new Error("Couldn't determine this file's sample rate from its bytes.");
-      e.hint="GuitarScope refuses to guess a rate. Try a WAV, AIFF, FLAC, MP3 or M4A export.";
+      e.hint="Claude Rameau refuses to guess a rate. Try a WAV, AIFF, FLAC, MP3 or M4A export.";
       throw e;
     }
     setCardProgress(i,"Decoding at "+sniffed.sampleRate+" Hz…",0.08);
@@ -5314,7 +5411,7 @@ function renderProse(){
   const cands=proseCandidates();
   const text=cands.length
     ? cands.slice(0,4).map(c=>c.html).join(" ")
-    : "These two spectra are closely matched — no difference clears GuitarScope's reporting thresholds. Try turning smoothing off, or the Difference plot with "+termHtml("level-match","level-match")+" on, to hunt for finer detail.";
+    : "These two spectra are closely matched — no difference clears Claude Rameau's reporting thresholds. Try turning smoothing off, or the Difference plot with "+termHtml("level-match","level-match")+" on, to hunt for finer detail.";
   prosePara.style.display="";
   prosePara.innerHTML='<span class="lead">Reading the measurements</span>'+text;
 }
@@ -5375,7 +5472,7 @@ function renderVerdict(){
     const cands=proseCandidates();
     if(cands.length) parts.push(cands[0].html);
     else if(!bd||Math.abs(bd.d)<1)
-      parts.push("No tone difference clears GuitarScope's reporting thresholds — these two are closely matched.");
+      parts.push("No tone difference clears Claude Rameau's reporting thresholds — these two are closely matched.");
   }
   verdictPara.innerHTML='<span class="lead">At a glance</span>'+parts.join(" ");
 }
@@ -5469,7 +5566,7 @@ function eqSettingsText(){
   const d=fit.device, s=fit.settings;
   const typeName=t=>t==="lowshelf"?"low shelf":t==="highshelf"?"high shelf":"peak";
   const lines=[];
-  lines.push("GuitarScope EQ match — "+d.name);
+  lines.push(APP_NAME+" EQ match — "+d.name);
   lines.push("Reshape "+SLOT_LETTER[fit.src]+" ("+shortName(state.slots[fit.src].name,40)+
     ") toward "+SLOT_LETTER[fit.dst]+" ("+shortName(state.slots[fit.dst].name,40)+")");
   lines.push("");
@@ -5818,7 +5915,7 @@ function termSections(t){
     : '<div class="pop-none">'+(anyLoaded()?"No measured value for the loaded audio.":"Load audio to see live values here.")+'</div>';
   return '<div class="pop-sec"><div class="pop-label">Musician’s ear</div><p>'+t.musician+'</p></div>'+
     '<div class="pop-sec"><div class="pop-label">The physics</div><p>'+t.science+'</p></div>'+
-    '<div class="pop-sec"><div class="pop-label">How GuitarScope measures it</div><div class="pop-formula">'+t.measure+'</div></div>'+
+    '<div class="pop-sec"><div class="pop-label">How Claude Rameau measures it</div><div class="pop-formula">'+t.measure+'</div></div>'+
     '<div class="pop-sec"><div class="pop-label">Current values</div>'+valHtml+'</div>';
 }
 function termContentHtml(key){
@@ -5882,10 +5979,96 @@ function stringContentHtml(si){
     '<div class="pop-sec"><div class="pop-label">The physics</div><p>Equal temperament places every pitch at '+
       'A4 × 2^((MIDI − 69)⁄12). This string is MIDI note '+midi+' with your A4 reference at '+
       state.a4.toFixed(1)+' Hz.</p></div>'+
-    '<div class="pop-sec"><div class="pop-label">How GuitarScope places it</div><div class="pop-formula">f = '+
+    '<div class="pop-sec"><div class="pop-label">How Claude Rameau places it</div><div class="pop-formula">f = '+
       state.a4.toFixed(1)+' × 2^(('+midi+' − 69)⁄12) = '+esc(fmtHz(f))+'</div></div>'+
     '<div class="pop-sec"><div class="pop-label">Current values — harmonics toggle their guides</div><div class="pop-vals">'+rows+'</div></div>';
 }
+// ---------- discovery moments: the ✦ popover (R3.4) ----------
+// Copy discipline: every claim traces to docs/THEORY.md — §1 (the series and its
+// ratio table), §2.6 (tolerance bands; comb alignment), §3.4 (the denominator rule),
+// §5 (12-TET errors: octave exact, 5th −2¢, major 3rd +14¢), §6 (fretboard nodes).
+// No section symbols or file names appear in the copy itself: the app states the
+// physics, it does not cite its homework. Tone: measure first, never lecture.
+const OCT_WORD=["","an octave","two octaves","three octaves","four octaves"];
+// Where the player can touch the string to sound this harmonic (THEORY §6 node map).
+const HARM_NODES={2:"12th fret",3:"7th & 19th fret",4:"5th & 24th fret",5:"≈4th, 9th & 16th fret"};
+// Why the gap isn't zero, keyed by the octave-folded ratio (THEORY §5 error table).
+const TEMPER_NOTE={
+  "1/1":"Octaves are the one interval equal temperament renders exactly, so there is nothing to compromise here — the gap is zero by construction.",
+  "3/2":"The fret system tunes its fifths about 2 ¢ narrow of a true 3:2 so that all twelve keys behave alike. That compromise is the whole of the gap above.",
+  "5/4":"The fret system’s major third sits about 14 ¢ sharp of a true 5:4 — the largest compromise equal temperament makes, and an audible one. A gap that wide is a near-miss rather than a landing; it shows here only because the tolerance was widened.",
+};
+// The house fmtHz() rounds to whole Hz above 100, which would print a real
+// 2 ¢ gap as the same number twice. Coincidence copy needs the decimal.
+function fmtHzFine(f){
+  if(f==null||!isFinite(f)) return "—";
+  return f>=1000 ? (f/1000).toFixed(3)+" kHz" : f.toFixed(1)+" Hz";
+}
+function fmtCents(c){
+  if(!isFinite(c)) return "—";
+  if(c===0) return "0 ¢";
+  return (c>0?"+":"−")+Math.abs(c).toFixed(1)+" ¢";
+}
+function coincidenceContentHtml(hit){
+  if(!hit) return "";
+  const h=hit.harm, fromOrd=STRING_ORD[hit.from.si], ontoOrd=STRING_ORD[hit.onto.si];
+  const n=hit.reduced.n, d=hit.reduced.d, ratio=n+"/"+d;
+  const exact=hit.cents===0;
+  const gap=fmtCents(hit.cents);
+  const hName=noteInfo(hit.f,state.a4).name, oName=noteInfo(hit.onto.f,state.a4).name;
+  const octPhrase=(OCT_WORD[hit.octaves]||hit.octaves+" octaves")+
+    (ratio==="1/1" ? "" : " and "+(hit.interval? "a "+hit.interval : ratio))+" above";
+  // THEORY §2.6, tolerance bands: consonance minima are basins with width, so a
+  // couple of cents passes as one pitch — but a 14 ¢ third sits up the wall of the
+  // basin and is audibly not the same note. Only widened tolerances reach that case.
+  const nearness=exact
+    ? "the same frequency, exactly"
+    : Math.abs(hit.cents).toFixed(1)+" ¢ apart"+(Math.abs(hit.cents)<=COINCIDENCE_CENTS
+        ? " — well inside the width the ear grants one pitch"
+        : " — near enough to see, wide enough to hear");
+  const temper=TEMPER_NOTE[ratio];
+  // The denominator rule (THEORY §3.4) is the point for 3/2 and 5/4; at 1/1 there is
+  // nothing left to fold and stating the rule would be vacuous, so say what's true.
+  const ancestry=(d===1)
+    ? "fold the octaves away and nothing is left to fold: the ratio is 1/1, the same note. The octave is the series’ first step, which is why it lands this exactly."
+    : "fold the octaves away and the ratio is "+ratio+". That denominator is a power of two — the signature of one note living inside another’s series rather than merely near it.";
+  const node=HARM_NODES[h];
+
+  let vals=
+    '<div class="pop-val"><span class="dot" style="background:'+_stringColor(hit.from.si,0.9)+'"></span>'+
+      '<span class="l">Harmonic '+h+' of the '+fromOrd+' string</span>'+
+      '<span class="v">'+esc(fmtHzFine(hit.f)+"  ·  "+hName)+'</span></div>'+
+    '<div class="pop-val"><span class="dot" style="background:'+_stringColor(hit.onto.si,0.9)+'"></span>'+
+      '<span class="l">Open '+ontoOrd+' string</span>'+
+      '<span class="v">'+esc(fmtHzFine(hit.onto.f)+"  ·  "+oName)+'</span></div>'+
+    '<div class="pop-val"><span class="dot" style="background:var(--dim)"></span>'+
+      '<span class="l">Gap</span><span class="v">'+esc(gap+"  ·  ratio "+ratio)+'</span></div>';
+  if(node) vals+=
+    '<div class="pop-val"><span class="dot" style="background:var(--dim)"></span>'+
+      '<span class="l">Touch the '+fromOrd+' string at</span><span class="v">'+esc(node)+'</span></div>';
+
+  return '<div class="pop-term">'+esc(hName)+' — harmonic '+h+' of the '+fromOrd+' string</div>'+
+    '<div class="pop-cat">lands on the open '+ontoOrd+' string · '+esc(gap)+'</div>'+
+    '<div class="pop-sec"><div class="pop-label">Musician’s ear</div><p>Two strings, one pitch. '+
+      'Harmonic '+h+' of the open '+fromOrd+' string falls on the open '+ontoOrd+' string’s own '+
+      '<button class="term" data-term="fundamental">fundamental</button> — '+esc(nearness)+'. '+
+      'You don’t have to play the '+ontoOrd+' string to hear this note: the '+fromOrd+
+      ' string is already sounding it, quietly, every time it rings.</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">The physics</div><p>A plucked string vibrates at f and at '+
+      '2f, 3f, 4f, 5f… all at once — its '+
+      '<button class="term" data-term="harmonic-series">harmonic series</button>, and the recipe for its timbre. '+
+      'Harmonic '+h+' sits '+esc(octPhrase)+' the '+fromOrd+' string’s fundamental; '+ancestry+
+      ' So the '+ontoOrd+' string’s partials are the '+fromOrd+' string’s partials too — one comb sitting '+
+      'inside the other, to within the gap above.</p></div>'+
+    (temper? '<div class="pop-sec"><div class="pop-label">Equal temperament</div><p>'+esc(temper)+'</p></div>' : "")+
+    '<div class="pop-sec"><div class="pop-label">How Claude Rameau places it</div><div class="pop-formula">'+
+      esc(fmtHzFine(hit.from.f))+' × '+h+' = '+esc(fmtHzFine(hit.f))+'   ·   open '+ontoOrd+' = '+
+      esc(fmtHzFine(hit.onto.f))+'   ·   Δ = '+esc(gap)+'</div>'+
+      '<p>Marked when the gap is '+COINCIDENCE_CENTS+' ¢ or less — wide enough to admit equal temperament’s own '+
+      '2 ¢ error on the fifth, narrow enough to exclude its 14 ¢ major third.</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">Current values</div><div class="pop-vals">'+vals+'</div></div>';
+}
+// ---------- end ✦ popover copy ----------
 function openStringPopover(si,anchor){
   const html=stringContentHtml(si);
   if(!html) return;
@@ -6034,8 +6217,8 @@ function exportPNG(){
   ctx.textBaseline="alphabetic";
   ctx.fillStyle=cssColor("ink");
   ctx.font="600 19px "+FS;
-  ctx.fillText("GuitarScope",40,46);
-  const bw=ctx.measureText("GuitarScope").width;
+  ctx.fillText(APP_NAME,40,46);
+  const bw=ctx.measureText(APP_NAME).width;
   ctx.font="13px "+FS;
   ctx.fillStyle=cssColor("mut");
   ctx.fillText("· long-term average spectrum",40+bw+10,46);
@@ -6061,9 +6244,9 @@ function exportPNG(){
   ctx.restore();
   ctx.fillStyle=cssColor("dim");
   ctx.font="11.5px "+FS;
-  ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-24);
+  ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-24);
   ctx.textAlign="left";
-  _exportPngCanvas(cv, "guitarscope_"+exportBaseName()+".png");
+  _exportPngCanvas(cv, "rameau_"+exportBaseName()+".png");
   }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } finally { state.strings=_oldStrings; state.stringHarmonics=_oldHarm; }
 }
 // Per-card 300-dpi PNG / JSON / CSV (M2.6h): spectrum/diff/bands live per sub-section
@@ -6079,7 +6262,7 @@ function _cardPng(name, draw){
   ctx.fillRect(0,0,W,H);
   ctx.fillStyle=cssColor("ink");
   ctx.font="600 16px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-  ctx.fillText("GuitarScope · "+name, 28, 36);
+  ctx.fillText(APP_NAME+" · "+name, 28, 36);
   ctx.font="11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
   ctx.fillStyle=cssColor("mut");
   ctx.fillText(new Date().toISOString().slice(0,10)+" · "+tuningLabel()+" · A4 "+state.a4+" Hz", 28, 52);
@@ -6087,8 +6270,8 @@ function _cardPng(name, draw){
   draw(ctx,W,H-80);
   ctx.restore();
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-  ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-14); ctx.textAlign="left";
-  _exportPngCanvas(cv, "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".png");
+  ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-14); ctx.textAlign="left";
+  _exportPngCanvas(cv, "rameau-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".png");
   }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } finally { state.strings=_oldS; state.stringHarmonics=_oldH; }
 }
 function exportDiffPNG(){ if(!bothLoaded()) return; try{ _cardPng("Difference A-B", (ctx,W,H)=>{ drawDiffScene(ctx,W,H,buildDiffModel()); }); }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } }
@@ -6098,7 +6281,7 @@ function exportSgramPNG(){
   const W=1240,H=hasDiff?1320:900,SC=2; const cv=document.createElement("canvas");
   cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
   ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,W,H);
-  ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText("GuitarScope · Spectrogram",28,32);
+  ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText(APP_NAME+" · Spectrogram",28,32);
   const sc=sgramScale(); let y=60;
   for(let i=0;i<2;i++){
     const m=sgramModelFor(i,sc); if(!m) continue;
@@ -6111,8 +6294,8 @@ function exportSgramPNG(){
   }
   // scoped to spectrogram only — never draws envelope
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, sans-serif";
-  ctx.textAlign="right"; ctx.fillText("made with GuitarScope",W-40,H-14); ctx.textAlign="left";
-  _exportPngCanvas(cv, "guitarscope-sgram_"+exportBaseName()+".png");
+  ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-14); ctx.textAlign="left";
+  _exportPngCanvas(cv, "rameau-sgram_"+exportBaseName()+".png");
 }
 function exportEnvPNG(){
   if(!anyLoaded()) return;
@@ -6123,7 +6306,7 @@ function exportEqRespPng(){ if(!bothLoaded()) return; _cardPng("EQ response", (c
 function exportCSV(){
   if(!anyLoaded()) return;
   const a=dispTarget[0], b=dispTarget[1];
-  const L=["# GuitarScope long-term average spectrum export",
+  const L=["# "+APP_NAME+" long-term average spectrum export",
            "# created: "+new Date().toISOString()];
   for(let i=0;i<2;i++){
     const s=state.slots[i];
@@ -6138,21 +6321,21 @@ function exportCSV(){
     L.push(GRID[k].toFixed(2)+","+(a?a[k].toFixed(2):"")+","+(b?b[k].toFixed(2):"")+","+
       (a&&b?(a[k]-b[k]).toFixed(2):""));
   }
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau_"+exportBaseName()+".csv");
 }
 function exportDiffCSV(){
   if(!bothLoaded()) return;
   const a=dispTarget[0], b=dispTarget[1]; if(!a||!b) return;
-  const L=["# GuitarScope difference A-B (dB)", "# created: "+new Date().toISOString()];
+  const L=["# "+APP_NAME+" difference A-B (dB)", "# created: "+new Date().toISOString()];
   L.push("# smoothing "+(state.smooth?"1/"+state.smooth+" oct":"off")+" · level-match "+(state.lm?fmtDb(state.lmOffset,2)+" on B":"off"));
   L.push("frequency_hz,a_minus_b_db");
   for(let k=0;k<GRID.length;k++) L.push(GRID[k].toFixed(2)+","+(a[k]-b[k]).toFixed(2));
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-diff_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau-diff_"+exportBaseName()+".csv");
 }
 function exportBandsCSV(){
   if(!anyLoaded()) return;
   const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix;
-  const L=["# GuitarScope band energy — "+vocab.label, "# created: "+new Date().toISOString()];
+  const L=["# "+APP_NAME+" band energy — "+vocab.label, "# created: "+new Date().toISOString()];
   L.push("band,f0_hz,f1_hz,a_share_pct,b_share_pct,delta_db");
   for(const r of vocab.regions){
     const f0=regionF(r.f0), f1=regionF(r.f1);
@@ -6169,12 +6352,12 @@ function exportBandsCSV(){
     if(pA!=null&&pB!=null&&pA>0&&pB>0) dDb=(10*Math.log10(pA/pB)).toFixed(2);
     L.push([r.label,f0.toFixed(1),f1.toFixed(1),aShare,bShare,dDb].join(","));
   }
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-bands_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau-bands_"+exportBaseName()+".csv");
 }
 function exportToneCSV(){
   if(!anyLoaded()) return;
   const cand=(typeof proseCandidates==="function"?proseCandidates():[]);
-  const L=["# GuitarScope tone character", "# created: "+new Date().toISOString()];
+  const L=["# "+APP_NAME+" tone character", "# created: "+new Date().toISOString()];
   L.push("descriptor,a_value,b_value");
   document.querySelectorAll("#toneRows .tonerow").forEach(row=>{
     const name=row.querySelector(".tonename")?.innerText.replace(/\s+/g," ").trim()||"";
@@ -6182,12 +6365,12 @@ function exportToneCSV(){
     const bval=row.querySelector(".vlab.b")?.innerText.replace(/\s+/g," ").trim()||"";
     L.push('"'+name.replace(/"/g,'""')+'","'+aval.replace(/"/g,'""')+'","'+bval.replace(/"/g,'""')+'"');
   });
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-tone_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau-tone_"+exportBaseName()+".csv");
 }
 function exportEnvCSV(){
   if(!anyLoaded()) return;
   const m=buildEnvModel(); if(!m||!m.curves) return;
-  const L=["# GuitarScope envelope (per-curve, first-onset aligned at 0 s)", "# created: "+new Date().toISOString()];
+  const L=["# "+APP_NAME+" envelope (per-curve, first-onset aligned at 0 s)", "# created: "+new Date().toISOString()];
   const maxLen=Math.max(...m.curves.map(c=>c.pts?c.pts.length:0));
   L.push("time_s,"+m.curves.map(c=>c.label.replace(/,/g," ")+"_db").join(","));
   for(let i=0;i<maxLen;i++){
@@ -6196,7 +6379,7 @@ function exportEnvCSV(){
     for(const c of m.curves) row.push(c.pts&&c.pts[i]!=null? c.pts[i].db.toFixed(2):"");
     L.push(row.join(","));
   }
-  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"guitarscope-env_"+exportBaseName()+".csv");
+  download(new Blob([L.join("\n")+"\n"],{type:"text/csv"}),"rameau-env_"+exportBaseName()+".csv");
 }
 function _cardStateFor(name){
   // Only include settings that actually affect that card's data (no UI-only, no cross-card bleed)
@@ -6211,13 +6394,13 @@ function _cardStateFor(name){
 function _exportCardJson(name, payload){
   const st=_cardStateFor(name);
   const wantRegions = !name.toLowerCase().includes("tone") && !name.toLowerCase().includes("spectrogram") && !name.toLowerCase().includes("envelope") && !name.toLowerCase().includes("eq");
-  const base={ app:"GuitarScope", type:"export", card:name, created:new Date().toISOString(),
+  const base={ app:APP_NAME, type:"export", card:name, created:new Date().toISOString(),
     state:st,
     guitars:state.slots.map((s,i)=> s?{slot:SLOT_LETTER[i], name:s.name, sampleRate:s.info.sampleRate, container:s.info.container}:null).filter(Boolean),
     ...(wantRegions?{regions:(VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.mix).regions.map(r=>({key:r.key,label:r.label,f0:regionF(r.f0),f1:regionF(r.f1)}))}:{}),
     ...payload };
   download(new Blob([JSON.stringify(base,null,2)],{type:"application/json"}),
-    "guitarscope-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".json");
+    "rameau-"+sanitizeName(name).toLowerCase()+"_"+exportBaseName()+".json");
 }
 function exportDiffJSON(){
   if(!bothLoaded()) return;
@@ -6265,14 +6448,14 @@ function exportJSON(){
       welch:{df:s.welch.df, frames:s.welch.frames, powerDb:db},
       metrics:sanitizeMetrics(s.metrics) });
   }
-  const snap={ app:"GuitarScope", type:"snapshot", version:1,
+  const snap={ app:APP_NAME, type:"snapshot", version:1,
     created:new Date().toISOString(),
     settings:{ tuning:state.tuning, customOffset:state.customOffset,
                a4:state.a4, smooth:state.smooth, lm:state.lm,
                eqDir:state.eqDir, eqDevice:state.eqDevice, vocab:state.vocab },
     files };
   download(new Blob([JSON.stringify(snap)],{type:"application/json"}),
-    "guitarscope_"+exportBaseName()+".json");
+    "rameau_"+exportBaseName()+".json");
   toast("Snapshot saved — drop the .json back onto the page to restore it.");
 }
 
@@ -6282,8 +6465,8 @@ async function loadSnapshotFile(file){
   let snap;
   try{ snap=JSON.parse(txt); }
   catch(_e){ throw new Error("this file is not valid JSON."); }
-  if(!snap||snap.app!=="GuitarScope"||snap.type!=="snapshot"||!Array.isArray(snap.files)||!snap.files.length)
-    throw new Error("this JSON is not a GuitarScope snapshot.");
+  if(!snap||(snap.app!==APP_NAME&&snap.app!=="GuitarScope")||snap.type!=="snapshot"||!Array.isArray(snap.files)||!snap.files.length)
+    throw new Error("this JSON is not a "+APP_NAME+" snapshot.");
   applySnapshot(snap);
 }
 function setSmoothUI(v){
@@ -6646,6 +6829,7 @@ function escCascade(){
   if(shortcutsModal.classList.contains("open")) return shortcutsModal.classList.remove("open");
   if(guideModal.classList.contains("open")) return guideModal.classList.remove("open");
   if(howModal.classList.contains("open")) return howModal.classList.remove("open");
+  if(aboutModal.classList.contains("open")) return aboutModal.classList.remove("open");
   if(dropOverlay.classList.contains("show")) hideDropOverlay();
 }
 
@@ -6809,6 +6993,12 @@ function boot(){
   howToRecordLink.addEventListener("click",e=>{                 // hand off to the recording guide
     e.preventDefault(); howModal.classList.remove("open"); guideModal.classList.add("open");
   });
+  aboutBtn.addEventListener("click",()=>aboutModal.classList.add("open"));
+  aboutClose.addEventListener("click",()=>aboutModal.classList.remove("open"));
+  aboutModal.addEventListener("click",e=>{
+    if(e.target===aboutModal) aboutModal.classList.remove("open");
+  });
+  brandBtn.addEventListener("click",()=>aboutModal.classList.add("open"));
   magBtns.forEach(b=>b.addEventListener("click",()=>openMag(b.dataset.mag)));
 
   document.querySelectorAll(".collbtn").forEach(b=>{
@@ -7008,6 +7198,7 @@ function boot(){
   if(al) setSgAlign(al[1].toLowerCase());
   if(/[?&]guide(?:&|$)/i.test(location.search)) guideModal.classList.add("open");   // test hook
   if(/[?&]how(?:&|$)/i.test(location.search)) howModal.classList.add("open");       // test hook
+  if(/[?&]about(?:&|$)/i.test(location.search)) aboutModal.classList.add("open");
   const op=location.search.match(/[?&]open=([a-z,]+)(?:&|$)/i);                     // test hook
   if(op){        // session-only unfold: "all" or a comma list of panel keys
     const ks=op[1].toLowerCase()==="all"?Object.keys(COLL_CARDS):op[1].toLowerCase().split(",");

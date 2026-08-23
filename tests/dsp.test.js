@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// GuitarScope DSP unit tests — runs the pure-DSP <script> block from
+// Claude Rameau DSP unit tests — runs the pure-DSP <script> block from
 // index.html under Node and checks the numbers against ground truth.
 // Usage: node tests/dsp.test.js
 "use strict";
@@ -18,6 +18,7 @@ fs.writeFileSync(modFile, dspSrc + `
 module.exports = { welch, powerToDb, smoothOct, bandPower, spectralCentroid,
   spectralTilt, detectPeaks, makeLogGrid, resampleToGrid, noteInfo, midiToFreq,
   TUNINGS, tuningMidi, autocorrF0, sniffAudioInfo, dynamicsMetrics, attackTimes,
+  COINCIDENCE_CENTS, centsBetween, octaveFold, findCoincidences, HARMONIC_INTERVALS,
   spectrogramLog, decimateEnvelope, magmaColor, MAGMA,
   eqPeakingDb, eqLowShelfDb, eqHighShelfDb, eqShapeDb, EQ_DEVICES, EQ_DEVICE_BY_ID,
   lsqSolve, fitGraphicEq, fitParametricEq, eqSettingsResponseDb,
@@ -645,6 +646,20 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
     ok(!/--slot-[ab]/.test(sw[0]), "switch CSS does not use guitar slot colors");
   }
 
+  // ---- scroll containers don't chain to the page (popover/glossary/modal) ----
+  {
+    const css = (html.match(/<style>[\s\S]*?<\/style>/g) || []).join("\n");
+    const blocks = css.split("}").filter(b => /overflow-y:\s*auto/.test(b));
+    ok(blocks.length >= 3, "found the scrollable containers", blocks.length + " rules");
+    const leaky = blocks.filter(b => !/overscroll-behavior:\s*contain/.test(b))
+      .map(b => (b.match(/([.#][\w-]+)[^{]*\{[^{]*$/) || ["", "?"])[1]);
+    ok(leaky.length === 0,
+      "every scrollable overlay contains its own overscroll", leaky.join(" ") || "none leak");
+    const pop = css.match(/\.popover\{[^}]+/);
+    ok(!!pop && /overscroll-behavior:\s*contain/.test(pop[0]),
+      "popover scroll never reaches the page (which would close it mid-read)");
+  }
+
   // ---- M2.5 divergeColor: endpoints are the slot accents ----
   {
     const p = D.divergeColor(1), z = D.divergeColor(0), m = D.divergeColor(-1);
@@ -654,6 +669,197 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
     const hi = D.divergeColor(5), lo = D.divergeColor(-5), nn = D.divergeColor(NaN);
     ok(hi[0] === 240 && lo[2] === 212 && nn[0] === 14 && nn[1] === 16 && nn[2] === 20,
       "clamps out-of-range t and maps NaN to neutral");
+  }
+
+  // ---- R1.3 snapshot back-compat: reader accepts both app names ----
+  // The predicate under test is EXTRACTED FROM index.html, never retyped here — a
+  // hand-copied duplicate would stay green if the shipped line ever changed.
+  {
+    const nameM = html.match(/const\s+APP_NAME\s*=\s*"([^"]+)"/);
+    ok(!!nameM && nameM[1] === "Claude Rameau", "block 4 declares APP_NAME = Claude Rameau", nameM && nameM[1]);
+    const APP = nameM ? nameM[1] : "";
+
+    // Writer: both the snapshot and the per-card export stamp APP_NAME (not a literal).
+    ok(/const\s+snap\s*=\s*\{\s*app:\s*APP_NAME\s*,\s*type:\s*"snapshot"/.test(html),
+      "snapshot writer stamps app:APP_NAME");
+
+    // Reader: pull the real guard condition out of the source and run it.
+    const condM = html.match(/if\((!snap\|\|\(snap\.app[^\n]*?)\)\s*\n\s*throw new Error\(([^\n]*?)\);/);
+    ok(!!condM, "found the snapshot reader guard in index.html");
+    const rejects = new Function("snap", "APP_NAME", "return (" + condM[1] + ");");
+    const accepts = (s) => !rejects(s, APP);
+    ok(accepts({ app: APP, type: "snapshot", files: [{}] }), "reader accepts a current snapshot");
+    ok(accepts({ app: "GuitarScope", type: "snapshot", files: [{}] }), "reader accepts a legacy GuitarScope snapshot");
+    ok(!accepts({ app: "Other", type: "snapshot", files: [{}] }), "reader rejects a foreign app");
+    ok(!accepts({ app: APP, type: "export", files: [{}] }), "reader rejects a per-card export");
+    ok(!accepts({ app: APP, type: "snapshot", files: [] }), "reader rejects an empty file list");
+    ok(!accepts(null), "reader rejects null");
+
+    // The error text names the app through APP_NAME, so it renames with the constant.
+    ok(/APP_NAME/.test(condM[2]), "snapshot error message is built from APP_NAME", condM[2]);
+  }
+
+  // ---- R3.1 findCoincidences: a harmonic landing on another open string ----
+  {
+    ok(D.COINCIDENCE_CENTS === 6, "threshold is ±6 cents", D.COINCIDENCE_CENTS);
+    ok(approx(D.centsBetween(100, 200), 1200, 1e-9), "centsBetween: an octave is 1200¢");
+    ok(approx(D.centsBetween(200, 100), -1200, 1e-9), "centsBetween is signed");
+    ok(D.centsBetween(440, 440) === 0, "centsBetween: unison is 0¢");
+
+    const fold = h => { const r = D.octaveFold(h); return r.n + "/" + r.d + "+" + r.octaves; };
+    ok(fold(2) === "1/1+1", "octaveFold 2 → 1/1, one octave", fold(2));
+    ok(fold(3) === "3/2+1", "octaveFold 3 → 3/2, one octave", fold(3));
+    ok(fold(4) === "1/1+2", "octaveFold 4 → 1/1, two octaves", fold(4));
+    ok(fold(5) === "5/4+2", "octaveFold 5 → 5/4, two octaves", fold(5));
+    ok(fold(6) === "3/2+2", "octaveFold 6 → 3/2, two octaves", fold(6));
+
+    // Build the marker list the app builds: every open string, plus harmonics 2–5.
+    const marksFor = (midis, harms, a4) => {
+      a4 = a4 || 440;
+      const out = [];
+      midis.forEach((m, si) => {
+        const f = D.midiToFreq(m, a4);
+        out.push({ f, si, midi: m, harm: 1 });
+        for (const h of (harms || [])) out.push({ f: f * h, si, midi: m, harm: h });
+      });
+      return out;
+    };
+    const H = [2, 3, 4, 5];
+    const estd = D.TUNINGS.estd.midi;                       // E2 A2 D3 G3 B3 E4
+    const hits = D.findCoincidences(marksFor(estd, H));
+    const key = c => c.from.si + "h" + c.harm + "→" + c.onto.si;
+    const got = hits.map(key).join(" ");
+
+    // E standard has exactly three: 6th string's 3rd harmonic on the 2nd string (B3),
+    // its 4th harmonic on the 1st string (E4), and the 5th string's 3rd on the 1st.
+    ok(hits.length === 3, "E standard, harmonics 2–5 on every string → 3 coincidences", got);
+    ok(got === "0h3→4 0h4→5 1h3→5", "the three are E2×3→B3, E2×4→E4, A2×3→E4", got);
+
+    const h3 = hits.find(c => c.from.si === 0 && c.harm === 3);
+    ok(!!h3 && approx(h3.cents, -1.955, 0.01),
+      "E2's 3rd harmonic sits ~2¢ above the tempered B3 (docs/THEORY.md §5)", h3 && h3.cents);
+    ok(!!h3 && h3.reduced.n === 3 && h3.reduced.d === 2 && h3.interval === "perfect fifth",
+      "…and reports the folded ratio 3/2, a perfect fifth", h3 && h3.interval);
+    ok(!!h3 && approx(h3.f, D.midiToFreq(40, 440) * 3, 1e-9) && approx(h3.from.f, D.midiToFreq(40, 440), 1e-9),
+      "hit frequency is the harmonic's; from.f is the open string it came from");
+    ok(!!h3 && h3.onto.midi === 59 && h3.from.midi === 40, "from/onto carry the open-string MIDI numbers");
+
+    const h4 = hits.find(c => c.harm === 4);
+    ok(!!h4 && h4.cents === 0, "the exact-unison pair (E2 ×4 = E4) reports 0 cents", h4 && h4.cents);
+    ok(!!h4 && h4.reduced.n === 1 && h4.reduced.d === 1 && h4.octaves === 2 && h4.interval === "unison",
+      "…as two octaves, folded ratio 1/1");
+
+    // Tolerance behaviour. The tempered major third is 13.686¢ off the 5th harmonic
+    // (docs/THEORY.md §5) — a near-miss the ±6¢ window must reject.
+    const third = marksFor([40, 68], [5]);                  // E2 and G♯4, 28 semitones apart
+    const t6 = D.findCoincidences(third, 6), t15 = D.findCoincidences(third, 15);
+    ok(t6.length === 0, "tempered major third (13.7¢) is NOT a coincidence at ±6¢", t6.length);
+    ok(t15.length === 1 && t15[0].harm === 5 && t15[0].interval === "major third",
+      "…and IS one at ±15¢, reported as 5/4", t15.length);
+    ok(t15.length === 1 && approx(t15[0].cents, 13.686, 0.01), "its miss is +13.7¢", t15[0] && t15[0].cents);
+    ok(D.findCoincidences(third).length === 0, "default tolerance is the ±6¢ constant");
+    ok(D.findCoincidences(marksFor(estd, H), 0).length === 1,
+      "at ±0¢ only the exact octave pair survives");
+
+    // Structural rules.
+    ok(D.findCoincidences(marksFor(estd, [])).length === 0,
+      "no harmonics shown → no coincidences (fundamentals never pair with each other)");
+    // "Another string" is the rule, not "another frequency": if the same string index
+    // were listed twice, its own octave must still not read as a discovery moment.
+    const selfDup = [
+      { f: 100, si: 0, midi: 40, harm: 1 },
+      { f: 200, si: 0, midi: 40, harm: 1 },
+      { f: 200, si: 0, midi: 40, harm: 2 },
+    ];
+    ok(D.findCoincidences(selfDup).length === 0, "a harmonic never lands on its own string's fundamental",
+      D.findCoincidences(selfDup).length);
+    ok(D.findCoincidences(marksFor([40, 52], [2])).length === 1,
+      "E2's octave harmonic lands on an E3 string");
+    // Harmonic-on-harmonic is not a discovery moment: only open fundamentals count.
+    const both = D.findCoincidences(marksFor([40, 47], [2, 3]));
+    ok(both.every(c => c.onto.midi != null && [40, 47].indexOf(c.onto.midi) >= 0),
+      "hits always land on an open fundamental, never on another harmonic");
+
+    // A4 is a user setting; the detector must be ratio-based, so it cannot care.
+    const at432 = D.findCoincidences(marksFor(estd, H, 432));
+    ok(at432.map(key).join(" ") === got, "the same hits at A4 = 432 Hz (ratios, not absolute Hz)");
+
+    ok(D.findCoincidences(null).length === 0 && D.findCoincidences([]).length === 0,
+      "no markers → no hits, no throw");
+    const sorted = D.findCoincidences(marksFor(estd, H)).map(c => c.f);
+    ok(sorted.every((f, i) => i === 0 || f >= sorted[i - 1]), "results are sorted by frequency");
+  }
+
+  // ---- R3.4 ✦ popover copy: extracted from index.html and rendered ----
+  // The copy is the app's first user-facing physics prose; docs/ROADMAP.md R3.4 owns
+  // its sourcing. These tests pin the claims that must not drift and prove the
+  // template survives every branch (exact octave / tempered fifth / widened third).
+  {
+    const A = "// ---------- discovery moments: the ✦ popover (R3.4) ----------";
+    const Z = "// ---------- end ✦ popover copy ----------";
+    const i = html.indexOf(A), j = html.indexOf(Z);
+    ok(i > 0 && j > i, "index.html still carries the ✦ popover copy block between its sentinels");
+    const copySrc = html.slice(i, j);
+
+    // Stubs for the block-4 helpers the copy calls; each mirrors the real one.
+    const STRING_ORD = ["6th", "5th", "4th", "3rd", "2nd", "1st"];
+    const STRING_COLORS = ["#e74c3c", "#e67e22", "#27ae60", "#3498db", "#8e44ad", "#d64582"];
+    const _stringColor = (si, a) => {
+      const [r, g, b] = [1, 3, 5].map(k => parseInt(STRING_COLORS[si % 6].slice(k, k + 2), 16));
+      return `rgba(${r},${g},${b},${a})`;
+    };
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const render = new Function("STRING_ORD", "_stringColor", "esc", "noteInfo",
+      "COINCIDENCE_CENTS", "state", copySrc + "\nreturn coincidenceContentHtml;")(
+      STRING_ORD, _stringColor, esc, D.noteInfo, D.COINCIDENCE_CENTS, { a4: 440 });
+
+    const marks = [];
+    D.tuningMidi("standard", 0).forEach((m, si) => {
+      for (let hh = 1; hh <= 5; hh++) marks.push({ f: D.midiToFreq(m, 440) * hh, si, midi: m, harm: hh });
+    });
+    const hits = D.findCoincidences(marks);
+    const htmls = hits.map(render);
+    ok(htmls.length === 3 && htmls.every(x => x && x.length > 400), "every E-standard hit renders copy");
+    ok(render(null) === "", "no hit → no popover content, no throw");
+
+    // Section scaffold must match stringContentHtml()'s idiom, or the popover CSS
+    // renders unstyled prose.
+    for (const need of ["pop-term", "pop-cat", "pop-sec", "pop-label", "pop-formula", "pop-vals", "pop-val"])
+      ok(htmls.every(x => x.includes('class="' + need + '"')), "copy uses the popover class " + need);
+    ok(htmls.every(x => x.includes('data-term="fundamental"') && x.includes('data-term="harmonic-series"')),
+      "copy links both glossary terms that exist");
+    ok(!/§|THEORY|docs\//.test(htmls.join("")),
+      "copy states the physics without citing its sources at the user");
+
+    // The tempered fifth: E2 harmonic 3 → open B3, 2 ¢ narrow (THEORY §5).
+    const fifth = htmls[hits.findIndex(c => c.harm === 3 && c.from.si === 0)];
+    ok(fifth.includes("−2.0 ¢") && fifth.includes("ratio 3/2") && fifth.includes("perfect fifth"),
+      "the 6th-string fifth prints its gap, ratio and interval name");
+    ok(fifth.includes("2 ¢ narrow of a true 3:2"), "the fifth's gap is attributed to equal temperament");
+    ok(fifth.includes("247.2 Hz") && fifth.includes("246.9 Hz"),
+      "the formula resolves the 2 ¢ gap into visibly different numbers");
+    ok(fifth.includes("7th &amp; 19th fret"), "the fifth names its fretboard nodes");
+    ok(fifth.includes("denominator is a power of two"), "the fifth invokes the denominator rule");
+
+    // The exact octave: no tempering to explain, and no vacuous denominator claim.
+    const oct = htmls[hits.findIndex(c => c.harm === 4)];
+    ok(oct.includes("the same frequency, exactly") && oct.includes("0 ¢"), "the exact octave says so");
+    ok(oct.includes("nothing is left to fold") && !oct.includes("denominator is a power of two"),
+      "1/1 does not assert the denominator rule at itself");
+    ok(oct.includes("Octaves are the one interval equal temperament renders exactly"),
+      "the octave explains why its gap is zero");
+
+    // Widened tolerance reaches the tempered major third — a near-miss, and the copy
+    // must not call 14 ¢ inaudible (THEORY §2.6: it sits up the wall of the basin).
+    const m3 = D.findCoincidences([
+      { f: D.midiToFreq(40, 440), si: 0, midi: 40, harm: 1 },
+      { f: D.midiToFreq(40, 440) * 5, si: 0, midi: 40, harm: 5 },
+      { f: D.midiToFreq(68, 440), si: 1, midi: 68, harm: 1 },
+    ], 15);
+    const third = render(m3[0]);
+    ok(third.includes("wide enough to hear") && !third.includes("well inside the width"),
+      "a 14 ¢ near-miss is never described as one pitch");
+    ok(third.includes("14 ¢ sharp of a true 5:4"), "the tempered third names its error");
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

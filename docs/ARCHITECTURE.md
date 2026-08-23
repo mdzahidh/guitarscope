@@ -844,6 +844,20 @@ metrics) are carried as stored values and labeled as such.
   for sniffing (it detaches/neuters the buffer in some engines).
 - Chrome headless: `--virtual-time-budget` fast-forwards `setTimeout` chains (the Welch
   yields), making `?demo` screenshots deterministic and instant.
+- **Chrome headless hangs indefinitely with `--user-data-dir`.** With a throwaway profile
+  it renders and writes the PNG, then never exits — minutes per shot instead of ~3 s.
+  Suppressing the usual suspects (`--no-first-run`, `--no-default-browser-check`,
+  `--disable-search-engine-choice-screen`, `--disable-component-update`,
+  `--disable-sync`) does not help. `tests/headless.js` therefore passes no
+  `--user-data-dir` at all and relies on `?demo` writing no localStorage (settings save
+  on explicit clicks only); its determinism assertion would catch it if that changed.
+  Give any Chrome invocation a `timeout` anyway.
+- **`--dump-dom` output contains the whole app's source.** `index.html` ships its five
+  `<script>` blocks inline, so every string literal in the app appears in the dump
+  whether or not anything rendered. An assertion like "the popover says X" passes
+  vacuously against the raw dump; scope it to the target element first. Extracting
+  `#popover` needs `<div>`-depth counting, not a lazy regex — its content is full of
+  nested divs, so `[\s\S]*?</div>` stops at the first inner close.
 - zsh: `echo =====` triggers globbing errors; quote such literals in shell commands.
 - **Flex wrapping is decided by content width, not by shrink.** A `flex-wrap:wrap`
   row lays items out at their hypothetical (content) size and wraps when the sum
@@ -871,6 +885,39 @@ metrics) are carried as stored values and labeled as such.
   spectrogram-difference alignment/NaN propagation, and diverging-colormap endpoints.
 - `tests/make_samples.js`: regenerates the demo WAVs and round-trips them through the
   app's own sniffer.
+- **The R3 gate (session 16): `./tests/verify.sh`.** Written *before* the milestone it
+  guards, because the builder of R3.2–R3.5 is delegated (Muse Spark) and writes no tests
+  of its own. Three properties make it worth the trouble:
+  - **Red by design.** `tests/r3.test.js` asserts the block-0 coincidence math (green
+    already — the detector is reviewer-authored) *and* the R3.2/R3.3/R3.4 wiring
+    contracts, read out of `index.html`'s own source with the usual extraction pattern.
+    Those are red until the wiring lands; "done" is `exit 0`, not a judgement call.
+  - **Differential pixels, no golden image.** `tests/headless.js` renders the same page
+    twice differing in exactly one query parameter (`?tol=0` vs the default) and asserts
+    on the *difference*: pixels changed, 1–4 blobs, each glyph-sized, all within 6 px on
+    x (both frequency plots share the axis), and none within 24/channel of either guitar
+    accent (the ✦ belongs to neither string). Nothing to re-bless when unrelated pixels
+    move. It proves determinism first — two identical runs must be byte-identical —
+    which is what licenses every other pixel claim. `tests/png.js` is a dependency-free
+    decoder (node `zlib` only; validated against PIL) since there is no package.json.
+  - **Tamper guards.** `git diff <base>...HEAD -- tests/` must be empty, and the frozen
+    ✦-popover copy between its sentinel comments must match a recorded SHA-256. A builder
+    free to edit the gate can always pass it; the educational prose in particular is
+    traced to docs/THEORY.md and reviewed, so wiring it up is the task and rewriting it
+    is not.
+  Canvas and DOM are unreachable from node, which is why R3.2 owes the gate one hook,
+  `?pop=coin<N>` — the only way to confirm the frozen copy renders inside real popover
+  chrome.
+- **Measure before asserting.** Three assertions in the first draft of `tests/r3.test.js`
+  were written from the design rather than from data, and all three were false: no 5/4
+  landing exists in E standard at any tolerance (only *open strings* are candidate
+  targets, and none sits near another string's 5th harmonic), so "widen the tolerance and
+  the tempered major third appears" cannot happen, and drop D finds *fewer* landings than
+  E standard, not more. Ground truth across the stocked tunings: E std / Eb / D std 3 each,
+  drop D 2, DADGAD 5 (4 exact); every landing a fifth (−1.955 ¢) or an octave (exactly 0);
+  every one folds to a power-of-two denominator; 6 ¢ → 50 ¢ admits nothing new anywhere.
+  The tests now pin those properties, and that insensitivity is the empirical argument for
+  a fixed ±6 ¢ constant instead of a user slider.
 - A numeric probe replicating `computeTimeMetrics` end-to-end was used to validate the
   demo pair (onset times/count, attack, T20s, DR, f0, richness) against what the UI
   displays; the reference numbers live in the SPEC changelog discussion of 2026-08-19.

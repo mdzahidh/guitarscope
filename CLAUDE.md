@@ -132,7 +132,7 @@ build educational copy from it, never re-derive from scratch.
   (`.popover`, `.glosslist`, the modal body). CSS only; a test asserts every rule
   carrying `overflow-y:auto` also contains its overscroll, so a fourth scrollable
   overlay can't be added without one.
-- **Rameau phase R1 + R2 BUILT (branch `rameau-r1r2`, gate 1 passed 2026-08-23).**
+- **Rameau phase R1 + R2 BUILT — gate 1 passed and merged to master 2026-08-23 (`f4046bf`).**
   (a) **Rename** GuitarScope → **Claude Rameau** in every user-visible string —
   `<title>`, header title + slogan, how-to modal, PNG footer, recording guide,
   glossary/string popover labels, verdict/tone prose, drop hint, footer chip, README,
@@ -145,6 +145,24 @@ build educational copy from it, never re-derive from scratch.
   the clickable title+slogan `.brandbtn`), `?about` hook, Esc cascade after `#howModal`.
   Known open taste call: the `About` button wraps the `.globals` cluster to a second row
   at 1440 px.
+- **R3 gate harness BUILT (session 16, `0c713b7`) — the milestone itself is not.** The
+  user's workflow from here is: a delegated builder (Muse Spark) implements a milestone
+  and opens a PR, I review and merge. Spark writes no tests, so the gate exists first:
+  **`./tests/verify.sh`** is the definition of done and is **deliberately red** until
+  R3.2–R3.5 land. It runs `tests/dsp.test.js` (shipped-math baseline),
+  `tests/r3.test.js` (block-0 coincidence math, green, + the R3.2/R3.3/R3.4 wiring
+  contracts read out of `index.html`'s own source, red), `tests/headless.js` (drives
+  real Chrome and compares two builds of the same page differing in one query
+  parameter — no golden image to maintain), then two tamper guards: `tests/`
+  byte-identical to the base, and the frozen ✦-popover copy matching its SHA-256.
+  **`tests/` is read-only for the builder** — that guard is what makes the rest mean
+  anything, and it is written into ROADMAP's "Working discipline". R3.2 owes the gate
+  one new hook, **`?pop=coin<N>`** (canvas is unreachable from node). Measured while
+  building it, and now asserted: only *open strings* are coincidence targets, so
+  widening the tolerance 6 ¢ → 50 ¢ admits **nothing new in any stocked tuning** —
+  every landing is a fifth (−1.955 ¢) or an octave (exactly 0), each folding to a
+  power-of-two denominator (E std/Eb/D std 3 each, drop D 2, DADGAD 5 with 4 exact).
+  That insensitivity is the empirical case for a fixed ±6 ¢ over a slider.
 - **NEXT — Rameau phase (c), the educational layer** (tasks + gates in docs/ROADMAP.md;
   specs in docs/STORY.md, math in docs/THEORY.md; do before M3/M4, which remain gated on
   explicit user go-ahead): **R3 discovery moments** — when a shown harmonic of one string
@@ -176,6 +194,17 @@ build educational copy from it, never re-derive from scratch.
   + popovers, **3** canvas rendering, **4** app state/UI/synth/exports.
 - `tests/dsp.test.js` — extracts script block 0 from index.html, runs it under node.
   No framework; prints `N passed, M failed`, exit code 1 on failure.
+- `tests/verify.sh` — **the R3 gate**; the one command a delegated builder must get to
+  exit 0 before opening a PR. Runs the three node suites plus the untouched-`tests/`
+  and frozen-copy guards; `BASE=<ref>` picks the comparison base (default `master`).
+- `tests/r3.test.js` — the R3 suite: `findCoincidences()` math (green) and the R3.2–R3.4
+  wiring contracts (red until built), all read out of `index.html`.
+- `tests/headless.js` — differential pixel + DOM checks through real Chrome. Note two
+  traps recorded in ARCHITECTURE: `--user-data-dir` makes headless Chrome hang forever
+  in first-run setup, and `index.html` carries its own source inline, so `--dump-dom`
+  contains every string literal — scope copy assertions to the target element.
+- `tests/png.js` — dependency-free PNG decode / pixel diff / blob clustering (node
+  `zlib` only), used by `headless.js`.
 - `tests/make_samples.js` — regenerates `samples/*.wav` (deterministic Karplus–Strong,
   same seeds/math as the in-app demo — the two must stay in lockstep), then verifies the
   app's own sniffer reads the rates back.
@@ -211,6 +240,7 @@ build educational copy from it, never re-derive from scratch.
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
   "Load test files" button).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
+- `./tests/verify.sh` — the R3 gate (all suites + tamper guards). Red until R3.2–R3.5 land.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
   --disable-gpu --hide-scrollbars --window-size=1440,2900 --virtual-time-budget=30000

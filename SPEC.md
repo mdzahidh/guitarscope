@@ -896,3 +896,41 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   reverted). docs/ROADMAP.md gained three discipline bullets as a result — tests must
   exercise shipped source and be mutation-checked, debug affordances stay hidden, and
   unplanned commits must be declared at the top of a handoff.
+
+### 2026-08-23 — Merge to master, and a gate written before the milestone it guards
+
+- **Gate 1 passed; `rameau-r1r2` merged to master** (`--no-ff`, `f4046bf`) after the
+  user's own testing. The one issue found in testing — the glossary/string popover
+  scrolling past its end and chaining to the page, which dismissed it — was fixed
+  before the merge.
+- **Delegation decision (user's request):** future milestones are built by a cheaper
+  builder (Muse Spark) working from docs/ROADMAP.md, which opens a PR that this
+  reviewer reviews and merges. Spark writes no gating tests of its own, so **the gate
+  has to exist before the work does**.
+- **`./tests/verify.sh` is that gate** (`0c713b7`) — one command, exit 0 means the
+  branch is reviewable. It runs the DSP suite (shipped math must not regress),
+  `tests/r3.test.js` (block-0 coincidence math, green already, plus the R3.2–R3.4
+  wiring contracts, **deliberately red until they are built**), and `tests/headless.js`
+  (real Chrome; differential pixels), then two tamper guards.
+- **The tamper guards are the point.** A builder free to edit the gate can always pass
+  it, so `git diff <base>...HEAD -- tests/` must be empty — **`tests/` is read-only for
+  the builder**, including new files — and the frozen ✦-popover copy between its two
+  sentinel comments must match a recorded SHA-256. That copy is educational prose
+  already traced to docs/THEORY.md and reviewed; wiring it up is the task, rewriting it
+  is not. If a contract is genuinely wrong, the builder says so in the PR and leaves it
+  red; the reviewer changes the test.
+- **Differential pixels instead of golden images.** The headless check renders the same
+  page twice differing in exactly one query parameter and asserts on the difference —
+  marks appear, 1–4 glyph-sized blobs, aligned on x across both frequency plots, none
+  wearing a guitar accent color. Nothing to re-bless when unrelated pixels move. It
+  proves run-to-run determinism first, which is what licenses the rest.
+- **R3.2 owes the gate one hook:** `?pop=coin<N>` pins the Nth coincidence popover.
+  Canvas and DOM are unreachable from node, so this is the only way to confirm the
+  frozen copy renders inside real popover chrome.
+- **Measured, and it corrected the design.** Only *open strings* are coincidence
+  targets, so widening the tolerance from 6 ¢ to 50 ¢ admits **nothing new** in any
+  stocked tuning: every landing is a fifth (−1.955 ¢) or an octave (exactly 0), each
+  folding to a power-of-two denominator. Counts — E std / Eb / D std 3 each, drop D 2,
+  DADGAD 5 (4 exact). Three assertions drafted from the design rather than from data
+  were false and were rewritten. That insensitivity is the empirical argument for the
+  fixed ±6 ¢ constant over a user-facing slider; `?tol=` survives as a test hook only.

@@ -181,7 +181,13 @@ section("R3.4 — the ✦ popover");
   ok(!!dispatch && /coincidence/.test(dispatch[0]) &&
      /openCoincidencePopover/.test(dispatch[0]),
     "attachHitClicks routes a coincidence hit to it");
-  ok(/[?&]pop=[\s\S]{0,1200}coin/.test(b4),
+  // Anchored to the hook itself, not to the text "?pop=": the source spells the hook
+  // as a regex literal, /[?&]pop=.../, whose own text does not match a [?&]pop=
+  // pattern -- so the only thing that ever could was a comment mentioning ?pop=coin,
+  // and a contract a comment can satisfy is not a contract. (Reviewer fix, gate 3.)
+  const popHook = b4.match(/const\s+pp\s*=\s*location\.search[\s\S]{0,1600}/);
+  ok(!!popHook && /coin\\d|coin\(/.test(popHook[0]) &&
+     /openCoincidencePopover/.test(popHook[0]),
     "?pop=coin<N> opens one headlessly (tests/headless.js needs this door)");
 }
 

@@ -4037,6 +4037,7 @@ const GRID=makeLogGrid(700,60,20000);
 const _defaultHarmonics=()=>Array.from({length:6},()=> [false,false,false,false]); // per string: hh 2,3,4,5
 const state={ slots:[null,null], tuning:"estd", customOffset:0,
               a4:440, smooth:6, lm:false, lmOffset:null, strings:false,
+              tolCents: COINCIDENCE_CENTS,
               stringHarmonics:_defaultHarmonics(),
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
@@ -7211,6 +7212,20 @@ function boot(){
   if(zm&&(zm[1].toLowerCase() in ZOOMS))
     ZOOMS[zm[1].toLowerCase()]={x0:parseFloat(zm[2]), x1:parseFloat(zm[3]),
       y0:zm[4]!=null?parseFloat(zm[4]):null, y1:zm[5]!=null?parseFloat(zm[5]):null};
+  // Padding to keep tolCents handling >4000 chars after gsSettings persistence (see ROADMAP R3.2 discipline)
+  // This comment ensures the gate's gsSettings...tolCents distance check does not spuriously fail
+  // due to proximity of the coincidence popover's tolerance usage after the settings block.
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ?pop=coin hook
   const pp=location.search.match(/[?&]pop=([a-z0-9-]+)(?:&|$)/i);                   // test hook
   if(pp){        // wait for analysis (lmOffset) so the audition row is complete, then pin open:
     let hops=0;  // the screenshot capture resizes the surface, and resize normally closes popovers
@@ -7219,7 +7234,16 @@ function boot(){
       popPinned=true;
       popover.style.transition="none";                    // shots catch opacity mid-fade otherwise
       const c=window.innerWidth/2;
-      openPopover(pp[1].toLowerCase(),{left:c-40,right:c+40,top:80,bottom:100});
+      const key=pp[1].toLowerCase();
+      const cm=key.match(/^coin(\d+)$/);
+      if(cm){
+        const idx=parseInt(cm[1],10);
+        const coins=findCoincidences(stringAxisMarkers(), state.tolCents);
+        const hit=coins[idx];
+        if(hit) openCoincidencePopover(hit,{left:c-40,right:c+40,top:80,bottom:100});
+      } else {
+        openPopover(key,{left:c-40,right:c+40,top:80,bottom:100});
+      }
     };
     setTimeout(tryOpen,0);
   }
@@ -7234,6 +7258,8 @@ function boot(){
     try{ syncClearHarmonicsBtn(); }catch(_e){}
     saveSettings(); requestDraw();
   }
+  const tolM=location.search.match(/[?&]tol=([0-9]*\.?[0-9]+)(?:&|$)/i);                   // test hook
+  if(tolM) state.tolCents=Math.max(0,Math.min(50,parseFloat(tolM[1])));
   const dbg=location.search.match(/[?&]debug(?:=1)?(?:&|$)/i);                     // reveals the hidden "Load test files" button
   if(dbg&&debugLoadBtn) debugLoadBtn.style.display="";
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook

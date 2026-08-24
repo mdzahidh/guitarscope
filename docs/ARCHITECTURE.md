@@ -844,14 +844,18 @@ metrics) are carried as stored values and labeled as such.
   for sniffing (it detaches/neuters the buffer in some engines).
 - Chrome headless: `--virtual-time-budget` fast-forwards `setTimeout` chains (the Welch
   yields), making `?demo` screenshots deterministic and instant.
-- **Chrome headless hangs indefinitely with `--user-data-dir`.** With a throwaway profile
-  it renders and writes the PNG, then never exits — minutes per shot instead of ~3 s.
+- **Chrome headless does not exit when given `--user-data-dir`.** With a throwaway
+  profile it renders and writes the PNG on time (~3 s), then sits there. Two runs left
+  going overnight both finally returned **after 23 h 20 m**, and the last lines of each
+  log say what was holding them: `chrome/updater/updater.cc … UpdaterMain (--wake-all)`.
+  So the shot is never the problem — the process is, and only the *process* hangs.
   Suppressing the usual suspects (`--no-first-run`, `--no-default-browser-check`,
   `--disable-search-engine-choice-screen`, `--disable-component-update`,
-  `--disable-sync`) does not help. `tests/headless.js` therefore passes no
-  `--user-data-dir` at all and relies on `?demo` writing no localStorage (settings save
-  on explicit clicks only); its determinism assertion would catch it if that changed.
-  Give any Chrome invocation a `timeout` anyway.
+  `--disable-sync`) does not help; the updater is attached to the profile, not to the
+  page. `tests/headless.js` therefore passes no `--user-data-dir` at all and relies on
+  `?demo` writing no localStorage (settings save on explicit clicks only); its
+  determinism assertion would catch it if that changed. Give any Chrome invocation a
+  `timeout` anyway — the PNG is complete long before the process admits it.
 - **`--dump-dom` output contains the whole app's source.** `index.html` ships its five
   `<script>` blocks inline, so every string literal in the app appears in the dump
   whether or not anything rendered. An assertion like "the popover says X" passes

@@ -35,6 +35,14 @@ This codebase is finished software being extended, not a project being explored.
 default answer to "should I also…" is **no**. Read this section before the first task
 and again whenever a task tempts you outside its own anchors.
 
+**Where the instructions live.** This file is the contract and outlives any one
+milestone. A delegated build also gets a task order under `docs/handoff/` —
+`docs/handoff/spark-r3.md` for the R3 milestone — naming which tasks to build now, on
+which branch, against which gate, and what to report back. It is committed before the
+work starts so the PR can be reviewed against exactly what was asked. Where a handoff
+and this file disagree, **this file wins**; say so in the PR rather than picking one.
+A handoff is not the builder's to edit.
+
 **Scope**
 - Build **one task at a time, in order**, and stop at its "done when" line. A task that
   looks trivial still ends at its boundary.
@@ -116,9 +124,12 @@ and again whenever a task tempts you outside its own anchors.
 
 - **✦ tolerance: ±6 cents, fixed, no visible control.** It is a perceptual claim, not
   user intent, and user intent is what earns a control in this app. ±6¢ clears tuning
-  slop and the 12-TET fifth-chain error (~2¢) while excluding the tempered major
-  third's 13.7¢ near-miss — that exclusion is deliberate, the ET third becomes its own
-  teachable moment later. `?tol=` exists for headless testing only.
+  slop and admits the 12-TET fifth's −1.955¢ error, which is what nearly every landing
+  is. **Measured afterwards:** because only *open strings* are candidate targets, no
+  tempered-major-third landing exists to exclude — in any stocked tuning, widening 6¢
+  → 50¢ admits nothing new at all (see R3.1 below). A slider would therefore be a
+  control that changes nothing, which is the strongest argument for the constant.
+  `?tol=` exists for headless testing only.
 - **About has two doors, one room:** a real `About` button beside `How to record` /
   `How to use this app`, *and* the title + slogan clickable to the same modal with the
   `help` cursor. Zero new UI concepts.

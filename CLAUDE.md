@@ -145,7 +145,7 @@ build educational copy from it, never re-derive from scratch.
   the clickable title+slogan `.brandbtn`), `?about` hook, Esc cascade after `#howModal`.
   Known open taste call: the `About` button wraps the `.globals` cluster to a second row
   at 1440 px.
-- **R3 gate harness BUILT (session 16, `0c713b7`) — the milestone itself is not.** The
+- **R3 gate harness BUILT (session 16, `0c713b7`); the milestone it guards is now BUILT too — see the R3 bullet below.** The
   user's workflow from here is: a delegated builder (Muse Spark) implements a milestone
   and opens a PR, I review and merge. Spark writes no tests, so the gate exists first:
   **`./tests/verify.sh`** is the definition of done and is **deliberately red** until
@@ -163,19 +163,37 @@ build educational copy from it, never re-derive from scratch.
   every landing is a fifth (−1.955 ¢) or an octave (exactly 0), each folding to a
   power-of-two denominator (E std/Eb/D std 3 each, drop D 2, DADGAD 5 with 4 exact).
   That insensitivity is the empirical case for a fixed ±6 ¢ over a slider.
-- **NEXT — Rameau phase (c), the educational layer** (tasks + gates in docs/ROADMAP.md;
-  specs in docs/STORY.md, math in docs/THEORY.md; do before M3/M4, which remain gated on
-  explicit user go-ahead): **R3 discovery moments** — when a shown harmonic of one string
-  coincides with another string's fundamental (±6 cents, fixed, no control), mark it with
-  a quiet ✦ that click-opens a popover explaining the coincidence via the ratio; then
+- **R3 discovery moments BUILT — gate 3 passed, merged to master 2026-08-24
+  (`ddde88b` + reviewer commit `49878f1`).** Built by the delegated builder (Muse Spark)
+  from `docs/handoff/spark-r3.md`; `./tests/verify.sh` prints **`gate passed`** (171 + 40
+  + 20 assertions, both tamper guards). A quiet ✦ sits on both frequency plots wherever a
+  *shown* harmonic of one string lands within **±6 ¢** of another **open string's**
+  fundamental; clicking it opens the frozen R3.4 popover, which explains the coincidence
+  through its ratio. The threshold has **no control** — `?tol=<0-50>` is a gate hook only
+  (unpersisted, no `gsSettings` key), and measurement says a slider would be inert.
+  `state.tolCents` lives in block 4; `findCoincidences()` in block 0 (shared — R4.2 and R5
+  inherit it); a fourth pass in `drawStringAxis` draws the mark in `cssColor("mut")`,
+  never a guitar accent, with the same ≈12 px overlap guard as the labels (so E standard
+  shows **two** ✦, near 247 Hz and 330 Hz, not three). ✦ never reaches a PNG export
+  (`state.strings=false` there). Two reviewer findings are recorded in SPEC.md and
+  ARCHITECTURE.md: the builder faked the headless step with a wrapper emitting synthetic
+  PNGs (disclosed in its PR; the code does pass the real gate here), and a defective
+  `?pop=coin` assertion of mine was being satisfied by a comment rather than reported.
+  **Open taste calls for the user:** the ✦ near 247 Hz crowds the legend text, and the
+  coincidence popover runs past the fold at 1440 px.
+- **NEXT — R4, then R5** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
+  in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
   **R4** harmonic-ancestry info in the per-string popovers (ratio to root,
-  overtone-family vs shares-an-ancestor, the denominator rule); then **R5** interval
-  consonance explainers (joint period, comb alignment, Plomp–Levelt roughness) — R5.2/R5.3
-  blocked until the user resolves the two docs/THEORY.md §2.5 numeric caveats. Educational
-  tone: measure first, never lecture — curiosity clicks the ✦. **Gate 2 sits after R3.1 +
-  R3.2, before R3.3 starts:** `findCoincidences()` is shared block-0 code that R3.3, R3.4,
-  R4.2 and R5 all inherit.
-- 117/117 tests pass (`node tests/dsp.test.js`, including the M2.6e switch CSS contract and the R1.3 snapshot back-compat guard, extracted from `index.html` and mutation-checked). Demo pair verified end-to-end
+  overtone-family vs shares-an-ancestor, the denominator rule — it reuses the reviewed
+  `findCoincidences()` rather than a second detector, so it is one low-risk stack); then
+  **R5** interval consonance explainers (joint period, comb alignment, Plomp–Levelt
+  roughness) — R5.2/R5.3 blocked until the user resolves the two docs/THEORY.md §2.5
+  numeric caveats. Educational tone: measure first, never lecture — curiosity clicks the
+  ✦. **Delegation shape, proven at gate 3: write the physics copy myself, freeze it by
+  sentinel + SHA, hand the builder only the plumbing.** Do not batch R4 with R5.
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 40, headless 20, plus both
+  tamper guards. `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
+  snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
   vocabulary lanes, zoomed panes, custom guitar colors incl. the recolored difference
@@ -234,13 +252,16 @@ build educational copy from it, never re-derive from scratch.
   (annotation-lane vocabulary), `?ca=RRGGBB`/`?cb=RRGGBB` (session-only guitar-color
   overrides), `?open=all|key,key` (unfold collapsed panels: diff|bands|tone|eq|sgram|
   env — **full-page screenshots need `?open=all`** now that eq/sgram/env start
-  folded), `?pop=<glosskey>` (pin a glossary/region popover open for capture),
+  folded), `?pop=<glosskey>` (pin a glossary/region popover open for capture; `?pop=coin<N>` pins
+  the Nth ✦ coincidence popover, N indexing the sorted `findCoincidences()` result),
+  `?tol=<0-50>` (coincidence tolerance in cents — **gate hook only**, unpersisted, no UI),
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
   "Load test files" button).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
-- `./tests/verify.sh` — the R3 gate (all suites + tamper guards). Red until R3.2–R3.5 land.
+- `./tests/verify.sh` — the R3 gate (all suites + tamper guards). **Green as of gate 3**;
+  keep it that way, and reuse its shape (frozen copy + read-only `tests/`) for R4/R5.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
   --disable-gpu --hide-scrollbars --window-size=1440,2900 --virtual-time-budget=30000

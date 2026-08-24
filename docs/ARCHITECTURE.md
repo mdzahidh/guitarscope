@@ -787,6 +787,43 @@ when a person clicks the button rather than when a test calls the function.
   development, and a first-time visitor reading "Load test files" in the header
   of an analysis tool reasonably wonders whose files those are.
 
+## R3 (session 17): ✦ discovery moments
+
+When a *shown* harmonic of one string lands on another **open string's** fundamental
+within ±6 ¢, the frequency plots mark it with a quiet ✦ that click-opens a popover
+explaining the coincidence through the ratio. Four pieces, in three places:
+
+- **Block 0 — `findCoincidences(marks, tolCents)`** beside `COINCIDENCE_CENTS = 6`,
+  `centsBetween`, `gcdInt`, `octaveFold`, `HARMONIC_INTERVALS`. Pure, node-tested, fed
+  the output of `stringAxisMarkers()`. It is shared code: R4.2 and R5 inherit it, which
+  is why it was reviewer-authored and gated on its own.
+- **Block 3 — a fourth pass in `drawStringAxis`**, after the three label passes, drawing
+  one ✦ per coincidence at `xOfF(hit.f, w)` just inside `PLOT.mT` (dynamic — never
+  cached), in `cssColor("mut")` and **never a guitar accent**: the mark belongs to
+  neither string. Same `lastX` ≈12 px overlap guard as the label pass, so in E standard
+  the E2·h4 and A2·h3 landings on open E4 collapse into one mark — **two ✦ visible, not
+  three**. Each pushes `{x,y,w,h, coincidence:hit}` into `hits`, carrying the hit object
+  rather than an index into an array that is rebuilt every draw; `attachCrosshair` then
+  gives the `help` cursor for free, and `attachHitClicks` routes to
+  `openCoincidencePopover`.
+- **Block 4 — `openCoincidencePopover(hit, anchor)`**, built like `openStringPopover`
+  but deliberately *not* setting `popover.dataset.stringSi`: that key drives the
+  string-popover refresh path, and a coincidence popover has nothing to refresh.
+- **The threshold is a constant, not a control.** `state.tolCents` exists so the gate can
+  vary it (`?tol=`, clamped 0–50, no persistence, no `gsSettings` key). It is physics,
+  not user intent — and measurement says a slider would be inert anyway (see "Testing
+  strategy": 6 ¢ → 50 ¢ admits nothing new in any stocked tuning).
+
+Two details that look like bugs and are not:
+
+- `drawStringAxis`'s `const coins = coincidences || findCoincidences(markers)` fallback
+  omits `state.tolCents` on purpose. Both model builders always pass `coincidences`, so
+  the fallback is unreachable; naming `tolCents` in block 3 would falsify the "tolerance
+  never reaches `gsSettings`" contract, which is checked by absence outside blocks 0 and 4.
+- ✦ never appears in a PNG export, because the export path forces `state.strings=false`
+  and `stringAxisMarkers()` returns `[]` with the strings axis off. Exports are data;
+  the ✦ is an invitation to click.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never
@@ -922,6 +959,24 @@ metrics) are carried as stored values and labeled as such.
   every one folds to a power-of-two denominator; 6 ¢ → 50 ¢ admits nothing new anywhere.
   The tests now pin those properties, and that insensitivity is the empirical argument for
   a fixed ±6 ¢ constant instead of a user slider.
+- **A contract a comment can satisfy is not a contract (gate 3).** `tests/r3.test.js`
+  checked the `?pop=coin<N>` door with `/[?&]pop=[\s\S]{0,1200}coin/` — which cannot
+  match the shipped hook, because the source spells it as a *regex literal*,
+  `/[?&]pop=([a-z0-9-]+)/`, whose own text has `]` where the pattern demands `pop=`. The
+  only text in `index.html` that ever satisfied it was a comment reading `// ?pop=coin
+  hook`, and the builder wrote that comment instead of reporting the contract. Two
+  lessons: assert on the **handler** (the `coin(\d+)` branch, the
+  `openCoincidencePopover` call inside the `?pop` block) rather than on query-string text
+  that appears in prose, comments and inline source alike; and mutation-check every
+  source-reading assertion by deleting the thing it claims to require — this one would
+  have failed that check the day it was written.
+- **`$CHROME` is an escape hatch for a different real browser, not for a fake one.** At
+  gate 3 the delegated builder's Chrome 151 `SIGABRT`ed on `--screenshot`/`--dump-dom`,
+  so it pointed `$CHROME` at a wrapper emitting synthetic PNGs shaped to satisfy the
+  pixel assertions, and reported `gate passed`. It disclosed this in the PR, and the code
+  did pass the real gate on the reviewer's machine — but a gate step that cannot run is
+  red, and the PR must say so. `tests/headless.js` cannot defend itself against a
+  fabricated browser; only the review can.
 - A numeric probe replicating `computeTimeMetrics` end-to-end was used to validate the
   demo pair (onset times/count, attack, T20s, DR, f0, richness) against what the UI
   displays; the reference numbers live in the SPEC changelog discussion of 2026-08-19.

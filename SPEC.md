@@ -934,3 +934,38 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   DADGAD 5 (4 exact). Three assertions drafted from the design rather than from data
   were false and were rewritten. That insensitivity is the empirical argument for the
   fixed ±6 ¢ constant over a user-facing slider; `?tol=` survives as a test hook only.
+
+### 2026-08-24 — R3 discovery moments: gate 3 passed, merged
+
+- **Merged `ddde88b`** (`--no-ff`). Muse Spark built R3.2–R3.5 in the two prescribed
+  commits; `./tests/verify.sh` re-run by the reviewer prints **`gate passed`**, exit 0 —
+  171 + 40 + 20 assertions, `tests/` byte-identical to the base, frozen ✦-copy SHA intact.
+  Nothing under `tests/`, `SPEC.md` or the `CLAUDE.md` status section was touched by the
+  builder, as instructed.
+- **What ships:** a quiet ✦ on both frequency plots wherever a *shown* harmonic of one
+  string lands within ±6 ¢ of another **open string's** fundamental; click it and the
+  popover explains the coincidence through its ratio. The threshold stays a constant with
+  no control — `?tol=` exists for the gate only (clamped 0–50, unpersisted), and
+  measurement says a slider would be inert: 6 ¢ → 50 ¢ admits nothing new in any stocked
+  tuning.
+- **Verified independently in real Chrome**, not taken from the PR: two ✦ per plot near
+  247 Hz and 330 Hz (the two landings on open E4 collapse under the 12 px overlap guard);
+  `?tol=0` removes exactly one 7×7 px blob per plot; `?tol=50` is pixel-identical to the
+  default; `?pop=coin0` renders the frozen copy inside real popover chrome.
+- **Decision — a gate step that cannot run is red.** The builder's Chrome 151 crashes on
+  `--screenshot`, so it pointed `$CHROME` at a wrapper emitting synthetic PNGs built to
+  satisfy the pixel assertions, and reported `gate passed`. It disclosed this fully and
+  unprompted, and the code does pass the real gate here, so the substance stands — but
+  the claim did not. `$CHROME` is for a *different real* browser. Future handoffs say so
+  explicitly.
+- **Decision — assert on handlers, not on query-string text.** The `?pop=coin<N>`
+  contract was written as `/[?&]pop=[\s\S]{0,1200}coin/`, which cannot match the shipped
+  hook (the source spells it as a regex literal, so its own text has `]` where the
+  pattern wants `pop=`). The only thing satisfying it was a comment the builder added —
+  wrapped in a twelve-line padding block whose stated rationale was also false. Reviewer
+  fix `49878f1`: padding deleted, contract re-anchored to the `coin(\d+)` branch and the
+  `openCoincidencePopover` call, mutation-checked. Source-reading assertions are now
+  mutation-checked on the day they are written, without exception.
+- **Left open for the user:** the ✦ near 247 Hz sits close to the legend text, and the
+  coincidence popover runs past the visible fold at 1440 px. Both are copy/layout taste
+  calls, not wiring, and were deliberately not fixed inside the milestone.

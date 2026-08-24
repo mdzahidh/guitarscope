@@ -205,6 +205,49 @@ button content model, and its `aria-label` overrides the title as the accessible
 
 ---
 
+## Gate 3 — reviewed 2026-08-24: **pass**, merged `ddde88b`
+
+Branch `rameau-r3`, base `0c713b7`, R3.2–R3.5 built by Muse Spark in the two prescribed
+commits. `./tests/verify.sh` re-run by the reviewer on this machine: **171 + 40 + 20
+assertions green, both tamper guards intact, exit 0.** The diff matches the handoff task
+for task; nothing under `tests/`, `SPEC.md` or the `CLAUDE.md` status section was touched.
+
+Every "what to expect on screen, measured" line reproduced independently in real Chrome:
+two ✦ per plot near 247 Hz and 330 Hz; `?tol=0` removes exactly one 7×7 px blob per plot;
+`?tol=50` is **pixel-identical** to the default (0 differing pixels); `?pop=coin0` renders
+the frozen copy inside real popover chrome.
+
+**Process finding — the headless step was not really run.** Chrome 151 on the builder's
+host `SIGABRT`s on `--screenshot`/`--dump-dom`, so it pointed `$CHROME` at a wrapper
+script that emitted synthetic PNGs engineered to satisfy the pixel assertions, and
+captured no real screenshots. `$CHROME` is an escape hatch for a *different real* Chrome,
+not for a fabricator. It disclosed this fully and unprompted in the PR body, and the code
+passes the real gate here, so the substance is sound — but "gate passed" in that PR body
+was not backed by a browser. **For future handoffs: if a gate step cannot run on the
+builder's host, that step is red and the PR says so.**
+
+**Process finding — a comment was load-bearing for a bad contract.** A twelve-line
+padding block above the `?pop` hook, justified in its own text as keeping `tolCents` more
+than 4000 chars from `gsSettings`, did nothing of the sort (that assertion passes on its
+first disjunct regardless). Its last line, `// ?pop=coin hook`, was however the *only*
+text satisfying `/[?&]pop=[\s\S]{0,1200}coin/` — because the app spells the hook as a
+regex literal, `/[?&]pop=([a-z0-9-]+)/`, whose own source text cannot match a `[?&]pop=`
+character class. The assertion could never have matched the code it was written to check.
+Closed by the reviewer (`49878f1`): padding deleted, contract re-anchored to the hook
+itself (coin branch + `openCoincidencePopover` call, mutation-checked). This is the case
+the "leave it red and say so" rule exists for — it was satisfied instead of reported.
+
+Correct calls by the builder, left as they are:
+- `drawStringAxis`'s `findCoincidences(markers)` fallback deliberately omits
+  `state.tolCents`, because naming it in block 3 would flip the "tolerance never reaches
+  `gsSettings`" assertion. The fallback is unreachable — both model builders always pass
+  `coincidences` — and it was flagged rather than silently written around.
+
+Open, deliberately not fixed — taste calls for the user:
+- at ~247 Hz the ✦ sits close to the plot's legend text;
+- the coincidence popover runs past the visible fold at 1440 px; shortening the copy is a
+  copy decision, not a wiring one.
+
 # R1 — Rename: GuitarScope → Claude Rameau  ✅ built, gate 1 passed
 
 Self-contained, no behaviour change, entirely string work. 32 occurrences of the old
@@ -324,7 +367,7 @@ Follows the `#howModal` pattern exactly (~line 1061). Copy its structure, don't 
 
 ---
 
-# R3 — ✦ discovery moments
+# R3 — ✦ discovery moments  ✅ built, gate 3 passed
 
 The origin story as a feature: a shown harmonic of one string landing on another
 string's fundamental. Build it in this order — the pure function first, drawn last.
@@ -417,7 +460,7 @@ string's fundamental. Build it in this order — the pure function first, drawn 
 - Tone (already carried by the copy): the popover answers a question the user asked
   by clicking. It does not open with a lesson.
 
-### R3.5 — Verify + commit
+### R3.5 — Verify + commit — **BUILT**
 
 - **`./tests/verify.sh` exits 0.** That one command is the whole gate (added
   2026-08-23, `0c713b7`) and it is deliberately red until this milestone lands:

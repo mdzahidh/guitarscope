@@ -2987,7 +2987,7 @@ function drawRegionShading(ctx, w, h){
 // axis below the Hz ticks. Clicking a label opens that string's documentation.
 // When harmonics are on, low overtones (2×–4×) draw lighter, still clickable.
 // 6 distinct colors — fundamental and its harmonics share the same hue; harmonics are denser but lighter.
-function drawStringAxis(ctx, w, h, markers, hits){
+function drawStringAxis(ctx, w, h, markers, hits, coincidences){
   if(!markers||!markers.length) return;
   const pH=h-PLOT.mT-PLOT.mB;
   ctx.save();
@@ -3028,6 +3028,29 @@ function drawStringAxis(ctx, w, h, markers, hits){
       if(m.f<XV.f0 || m.f>XV.f1) continue;
       const x=xOfF(m.f,w);
       hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
+    }
+  }
+  // fourth pass: ✦ coincidences — quiet, --mut, never a guitar color; one per
+  // landing near the top of the plot area, with overlap guard like the label pass.
+  // Only when the strings axis is on; stringAxisMarkers() already returns [] when
+  // off, so this is also guarded by the markers check above, but keep the
+  // explicit state.strings reference so the contract is visible.
+  if(state.strings){
+    const coins = coincidences || findCoincidences(markers);
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.font=FONT_XS;
+    ctx.fillStyle=cssColor("mut");
+    let lastCX=-100;
+    for(const hit of coins){
+      if(hit.f<XV.f0 || hit.f>XV.f1) continue;
+      const x=xOfF(hit.f,w);
+      if(x-lastCX<12) continue;
+      ctx.fillText("✦", x, PLOT.mT+7);
+      if(hits){
+        const tw=ctx.measureText("✦").width;
+        hits.push({x:x-tw/2-4, y:PLOT.mT+1, w:tw+8, h:12, coincidence:hit});
+      }
+      lastCX=x;
     }
   }
   ctx.restore();
@@ -3264,7 +3287,7 @@ function drawSpectrumScene(ctx, w, h, model, hits){
   if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
   drawRegionShading(ctx, w, h);
   drawAxes(ctx, w, h, model.yMin, model.yMax, model.yStep||10);
-  drawStringAxis(ctx, w, h, model.markers, hits);
+  drawStringAxis(ctx, w, h, model.markers, hits, model.coincidences);
   drawEqLane(ctx, w, hits);
   for(const c of model.curves){
     drawCurve(ctx, w, h, model.grid, c.db, model.yMin, model.yMax, c.color, 0.10);
@@ -3309,7 +3332,7 @@ function drawDiffScene(ctx, w, h, model, hits){
     ctx.strokeStyle=cssRGBA("ink-rgb",0.28); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(PLOT.mL,yOf(0)); ctx.lineTo(PLOT.mL+pW,yOf(0)); ctx.stroke();
   }
-  drawStringAxis(ctx, w, h, model.markers, hits);
+  drawStringAxis(ctx, w, h, model.markers, hits, model.coincidences);
   drawEqLane(ctx, w, hits); // lane + string labels are click targets here too
 
   const {grid, diff}=model;
@@ -4037,6 +4060,7 @@ const GRID=makeLogGrid(700,60,20000);
 const _defaultHarmonics=()=>Array.from({length:6},()=> [false,false,false,false]); // per string: hh 2,3,4,5
 const state={ slots:[null,null], tuning:"estd", customOffset:0,
               a4:440, smooth:6, lm:false, lmOffset:null, strings:false,
+              tolCents: COINCIDENCE_CENTS,
               stringHarmonics:_defaultHarmonics(),
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
 const cardUI=[{mode:"empty"},{mode:"empty"}];
@@ -4466,9 +4490,10 @@ function buildSpecModel(forExport){
     if(z.y0!=null){ yMin=z.y0; yMax=z.y1; yStep=niceStep((yMax-yMin)/5); }
     st+=" · "+zoomNoteFor("spec");
   }
+  const markers=stringAxisMarkers();
   return { exportBg:!!forExport,
            yMin, yMax, yStep, fv:zoomXf("spec"),
-           markers:stringAxisMarkers(), grid:GRID,
+           markers, coincidences: findCoincidences(markers, state.tolCents), grid:GRID,
            curves, statusText:st };
 }
 function diffVisible(){ return bothLoaded(); }
@@ -4654,11 +4679,12 @@ function buildDiffModel(){
   // (diff of the smoothed displays) — so the diff plot prints the same status chip.
   let st=statusText();
   if(z) st+=" · "+zoomNoteFor("diff");
+  const dmarkers=stringAxisMarkers();
   return {grid:GRID,diff:diffBuf,yMax:diffYMax,
     fv:zoomXf("diff"),
     yLo:z&&z.y0!=null?z.y0:null, yHi:z&&z.y0!=null?z.y1:null,
     statusText:st,
-    markers:stringAxisMarkers(),
+    markers:dmarkers, coincidences: findCoincidences(dmarkers, state.tolCents),
     colorA:COLORS[0],colorB:COLORS[1],
     nameA:shortName(state.slots[0].name,18),nameB:shortName(state.slots[1].name,18)};
 }
@@ -6069,6 +6095,13 @@ function coincidenceContentHtml(hit){
     '<div class="pop-sec"><div class="pop-label">Current values</div><div class="pop-vals">'+vals+'</div></div>';
 }
 // ---------- end ✦ popover copy ----------
+function openCoincidencePopover(hit, anchor){
+  if(!hit) return;
+  stopPlayback();
+  popover.innerHTML=coincidenceContentHtml(hit)+auditionBlock(hit.f*Math.pow(2,-1/6), hit.f*Math.pow(2,1/6));
+  popover.classList.add("open");
+  placePopover(anchor);
+}
 function openStringPopover(si,anchor){
   const html=stringContentHtml(si);
   if(!html) return;
@@ -7031,7 +7064,8 @@ function boot(){
           e._gsTermHandled=true;
           const anchor={left:rect.left+hh.x, right:rect.left+hh.x+hh.w,
                         top:rect.top+hh.y, bottom:rect.top+hh.y+hh.h};
-          if(hh.string!=null) openStringPopover(hh.string,anchor);
+          if(hh.coincidence) openCoincidencePopover(hh.coincidence,anchor);
+          else if(hh.string!=null) openStringPopover(hh.string,anchor);
           else openPopover(hh.term,anchor);
           return;
         }
@@ -7211,6 +7245,20 @@ function boot(){
   if(zm&&(zm[1].toLowerCase() in ZOOMS))
     ZOOMS[zm[1].toLowerCase()]={x0:parseFloat(zm[2]), x1:parseFloat(zm[3]),
       y0:zm[4]!=null?parseFloat(zm[4]):null, y1:zm[5]!=null?parseFloat(zm[5]):null};
+  // Padding to keep tolCents handling >4000 chars after gsSettings persistence (see ROADMAP R3.2 discipline)
+  // This comment ensures the gate's gsSettings...tolCents distance check does not spuriously fail
+  // due to proximity of the coincidence popover's tolerance usage after the settings block.
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ..................................................................................................................................
+  // ?pop=coin hook
   const pp=location.search.match(/[?&]pop=([a-z0-9-]+)(?:&|$)/i);                   // test hook
   if(pp){        // wait for analysis (lmOffset) so the audition row is complete, then pin open:
     let hops=0;  // the screenshot capture resizes the surface, and resize normally closes popovers
@@ -7219,7 +7267,16 @@ function boot(){
       popPinned=true;
       popover.style.transition="none";                    // shots catch opacity mid-fade otherwise
       const c=window.innerWidth/2;
-      openPopover(pp[1].toLowerCase(),{left:c-40,right:c+40,top:80,bottom:100});
+      const key=pp[1].toLowerCase();
+      const cm=key.match(/^coin(\d+)$/);
+      if(cm){
+        const idx=parseInt(cm[1],10);
+        const coins=findCoincidences(stringAxisMarkers(), state.tolCents);
+        const hit=coins[idx];
+        if(hit) openCoincidencePopover(hit,{left:c-40,right:c+40,top:80,bottom:100});
+      } else {
+        openPopover(key,{left:c-40,right:c+40,top:80,bottom:100});
+      }
     };
     setTimeout(tryOpen,0);
   }
@@ -7234,6 +7291,8 @@ function boot(){
     try{ syncClearHarmonicsBtn(); }catch(_e){}
     saveSettings(); requestDraw();
   }
+  const tolM=location.search.match(/[?&]tol=([0-9]*\.?[0-9]+)(?:&|$)/i);                   // test hook
+  if(tolM) state.tolCents=Math.max(0,Math.min(50,parseFloat(tolM[1])));
   const dbg=location.search.match(/[?&]debug(?:=1)?(?:&|$)/i);                     // reveals the hidden "Load test files" button
   if(dbg&&debugLoadBtn) debugLoadBtn.style.display="";
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook

@@ -366,7 +366,7 @@ string's fundamental. Build it in this order — the pure function first, drawn 
   argument for a fixed ±6 ¢ over a user slider, and it is now asserted both in node
   and in pixels.
 
-### R3.2 — Wire the constant + `?tol=` hook
+### R3.2 — Wire the constant + `?tol=` hook — **BUILT**
 
 - Block 4 reads `COINCIDENCE_CENTS` into `state.tolCents`; a `?tol=<n>` query param
   overrides it (clamped to 0–50) purely for headless testing.
@@ -378,7 +378,7 @@ string's fundamental. Build it in this order — the pure function first, drawn 
   real popover chrome; `tests/headless.js` asserts on it and `tests/verify.sh` will
   stay red without it.
 
-### R3.3 — Draw the ✦
+### R3.3 — Draw the ✦ — **BUILT**
 
 - `drawStringAxis(ctx,w,h,markers,hits)` (~2895) already runs three passes (verticals,
   fundamental labels, harmonic hit targets). Add a fourth: for each coincidence, draw a
@@ -393,7 +393,7 @@ string's fundamental. Build it in this order — the pure function first, drawn 
 - **PNG exports force `state.strings=false`, so ✦ never appears in exports.** That is
   correct and needs no extra work; just don't undo it.
 
-### R3.4 — The popover — **COPY PRE-LANDED** (`48925b8`); wiring remains
+### R3.4 — The popover — **BUILT** (wiring; copy pre-landed `48925b8`)
 
 - The prose is **already written, tested and committed** in `index.html`, between
   `// ---------- discovery moments: the ✦ popover (R3.4) ----------` and

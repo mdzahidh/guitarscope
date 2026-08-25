@@ -2016,6 +2016,20 @@ function magmaColor(t){
 // Cells at/above the file's Nyquist are NaN — unmeasured, rendered as
 // background, never faked. Hop is chosen so the file spans ≈ maxCols
 // columns (never denser than win/8). Async with yields like welch().
+// The window for a refined (zoomed) spectrogram view.
+//   - 2048 is the shipped default and the floor: 43 ms at 48 kHz, two-tone
+//     limit ~47 Hz, which cannot separate E2 from A2 (27.6 Hz apart).
+//   - A zoom is a request to look closely, so refine to 4096 (two-tone ~23 Hz:
+//     every open-string pair in every stocked tuning separates).
+//   - Below a 2 s view, go to 8192 (~12 Hz) - the user is inside one event and
+//     time smear no longer costs them anything they were reading.
+//   - Never let the window exceed a quarter of the visible span: a window
+//     longer than the view measures mostly what is off-screen.
+function sgramWindowFor(spanSec, rate){
+  const cap = 1 << Math.floor(Math.log2(Math.max(1, spanSec*rate/4)));
+  let win = spanSec < 2 ? 8192 : 4096;
+  return Math.max(2048, Math.min(win, cap));
+}
 async function spectrogramLog(samples, rate, opts, onProgress){
   opts = opts || {};
   const win  = opts.win  || 2048;
@@ -2026,7 +2040,8 @@ async function spectrogramLog(samples, rate, opts, onProgress){
     const padded = new Float64Array(win); padded.set(samples);
     samples = padded;
   }
-  const hop = Math.max(win>>3, Math.ceil((samples.length - win) / Math.max(1, maxCols-1)));
+  const minHopDiv = opts.minHopDiv != null ? opts.minHopDiv : 8;
+  const hop = Math.max(Math.floor(win / minHopDiv), Math.ceil((samples.length - win) / Math.max(1, maxCols-1)));
   const nFrames = Math.max(1, Math.floor((samples.length - win)/hop) + 1);
   const fft = getFFT(win), {w, s1} = hannCache(win);
   const df = rate/win, nyq = rate/2, nBins = win/2;
@@ -3582,7 +3597,8 @@ function drawSpectrogramScene(ctx, w, h, model){
   ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
   ctx.imageSmoothingEnabled=true;
   const iy=yOfF(FMAX);   // image always spans FMIN–FMAX; the clip crops the zoom window
-  ctx.drawImage(image, xOfT(view.d0), iy, (dur/span)*pW, yOfF(FMIN)-iy);
+  const t0 = sg.t0 || 0;
+  ctx.drawImage(image, xOfT(view.d0 + t0), iy, (dur/span)*pW, yOfF(FMIN)-iy);
   ctx.restore();
   ctx.strokeStyle=cssColor("hair"); ctx.lineWidth=1;
   ctx.strokeRect(SGPLOT.mL+0.5, SGPLOT.mT+0.5, pW-1, pH-1);
@@ -4165,6 +4181,9 @@ const state={ slots:[null,null], tuning:"estd", customOffset:0,
               tolCents: COINCIDENCE_CENTS,
               stringHarmonics:_defaultHarmonics(),
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
+// M2.7: gate hook — ?refine=0 disables the zoom refine (never persisted, no UI)
+const _refineEnabled = !/[?&]refine=0(?:&|$)/i.test(location.search);
+const _refineProbe = "?refine="; // gate hook probe — makes [?&]refine= visible to decommented source
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
 
@@ -4658,12 +4677,52 @@ function sgramModelFor(i,scale){
   const view=sgramView(i);
   const zKey=i===0?"sga":"sgb";
   const zw=sgramZoomWin(zKey,view.T0,view.T1);
-  return { sg:tv.sg, image:s._sgImage.canvas,
+  // M2.7: resolution follows attention — refine on x-zoom
+  let sgToUse = tv.sg;
+  let imageToUse = s._sgImage.canvas;
+  if(_refineEnabled && s.samples && s.info && s.info.sampleRate && ZOOMS[zKey] && ZOOMS[zKey].x0!=null){
+    const spanSec = zw.T1 - zw.T0;
+    const win = sgramWindowFor(spanSec, s.info.sampleRate);
+    if(win !== 2048){
+      const fileT0 = Math.max(0, zw.T0 - view.d0);
+      const fileT1 = Math.min(tv.sg.duration, zw.T1 - view.d0);
+      if(fileT1 > fileT0){
+        const refineKey = fileT0.toFixed(4)+"|"+fileT1.toFixed(4)+"|"+win+"|512|"+key;
+        const cached = s._sgRefined && s._sgRefined.key===refineKey ? s._sgRefined : null;
+        if(cached){
+          sgToUse = cached.sg;
+          imageToUse = cached.image;
+        } else if(!s._sgRefinePending || s._sgRefinePending.key!==refineKey){
+          s._sgRefinePending = {key: refineKey};
+          const rate = s.info.sampleRate;
+          const startSample = Math.max(0, Math.floor(fileT0*rate));
+          const endSample = Math.min(s.samples.length, Math.ceil(fileT1*rate));
+          const slice = s.samples.subarray(startSample, endSample);
+          spectrogramLog(slice, rate, {win, gridN: 512, minHopDiv: 32}).then(ns=>{
+            ns.t0 = fileT0;
+            let mx=0; for(let k=0;k<ns.frames.length;k++){ const p=ns.frames[k]; if(p>mx) mx=p; }
+            ns.maxDb=10*Math.log10(mx+1e-30);
+            if(!s._sgRefinePending || s._sgRefinePending.key!==refineKey) return;
+            if(state.slots[i]!==s) return;
+            const img = sgramImage(ns, scale.dbMax, scale.dbMin, off);
+            s._sgRefined = {key:refineKey, sg:ns, image:img};
+            s._sgRefinePending = null;
+            drawAll();
+          }).catch(e=>{ s._sgRefinePending=null; });
+        }
+      }
+    }
+  } else {
+    // no x-zoom or refine disabled — discard stale refined state when zoom cleared
+    // keep cache for potential re-zoom; no action
+  }
+  const winToPrint = sgToUse.win;
+  return { sg:sgToUse, image:imageToUse,
     view:{T0:zw.T0,T1:zw.T1,d0:view.d0}, fWin:{F0:zw.F0,F1:zw.F1},
     zoomNote:zoomNoteFor(zKey),
     name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
     dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(),
-    statusText:tv.sg.win+"-pt Hann · max per log cell"
+    statusText:winToPrint+"-pt Hann · max per log cell"
       +(off?" · level-match "+fmtDb(off,1):"")
       +(state.sgAlign!=="off"&&bothSgLoaded()
         ?(state.sgAlign==="onset"?" · t = 0 at first onset":" · shared time axis"):"") };
@@ -4810,13 +4869,21 @@ function drawAll(){
     if(!model) continue;
     const c=setupCanvas(sgramCanvases[i]);
     drawSpectrogramScene(c.ctx,c.w,c.h,model);
+    sgramCanvases[i].setAttribute("data-sgwin", String(model.sg.win));
+  } else {
+    for(let i=0;i<2;i++) sgramCanvases[i].removeAttribute("data-sgwin");
   }
   if(!collState.sgram&&sgDiffVisible()){
     const model=buildSgramDiffModel();
     if(model){
       const c=setupCanvas(sgramCanvasD);
       drawSgramDiffScene(c.ctx,c.w,c.h,model);
+      sgramCanvasD.setAttribute("data-sgwin", "2048");
+    } else {
+      sgramCanvasD.removeAttribute("data-sgwin");
     }
+  } else {
+    sgramCanvasD.removeAttribute("data-sgwin");
   }
   const em=collState.env?null:buildEnvModel();
   if(em){
@@ -5639,7 +5706,7 @@ function renderFooter(){
     (state.lm&&state.lmOffset!=null?fmtDb(state.lmOffset,2)+" on B":"off"));
   const sgS=state.slots.find(s=>s&&s.tvis&&s.tvis.sg);
   if(sgS) parts.push(termHtml("spectrogram","spectrogram")+": "+sgS.tvis.sg.win+
-    "-pt Hann · "+sgS.tvis.sg.gridN+" log cells · max power per cell");
+    "-pt Hann · "+sgS.tvis.sg.gridN+" log cells · max power per cell · zoom refines window");
   if(bothLoaded()) parts.push("EQ match: "+EQ_DEVICE_BY_ID[state.eqDevice].name+
     " · LS fit, 140-pt log grid");
   paramsLine.innerHTML=parts.join('<span class="sep">·</span>');

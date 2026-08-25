@@ -1028,3 +1028,46 @@ click on the ignore button over and over again."*
 - Recorded in `docs/ARCHITECTURE.md` "Browser quirks", `docs/ROADMAP.md` "Working
   discipline" (both the sandbox rule and the reviewer-side `muse exec` invocation for R4
   onward), and CLAUDE.md "Run / test".
+
+### Session 18 (2026-08-24) — the R4 gate, written before the milestone it guards
+
+Same order as R3: the gate first, then the handoff, then the builder. Two commits,
+`fe6a5f5` (gate) and `e999b05` (handoff), both on master before any R4 code exists.
+
+- **The physics is pre-landed and inert.** Block 0 gains `JUST_INTERVALS`, `isPow2` and
+  `stringAncestry()` (node-tested); block 4 gains a second frozen copy block —
+  `ANCESTRY_TEMPER`, `harmonicIntervalPhrase`, `landingFor`, `harmonicRowNoteHtml`,
+  `ancestrySectionHtml`, `denominatorRuleHtml` — between
+  `// ---------- harmonic ancestry copy (R4) ----------` and its end sentinel. Nothing
+  calls them yet; wiring them up is the delegated task. Every claim traces to
+  `docs/THEORY.md` §1, §3, §3.4, §3.5, §3.7, §5, §6; the whole tone's −4 ¢ is arithmetic
+  from THEORY's 9/8, not a new claim. `landingFor()` calls R3's reviewed
+  `findCoincidences()` with the same `state.tolCents`, so a popover row and the ✦ on the
+  plot can never disagree — one detector, as at R3.
+- **The adjacent string, not the lowest.** The task originally said "an overtone of the
+  currently-lowest string", which is not safely sourceable: E→D is 10 semitones and
+  THEORY fixes the minor seventh only as 9/5 (§4), with unmentioned rivals 16/9 and 7/4
+  and an ambiguity it raises (§3.5) and never resolves. Every *adjacent* pair in all five
+  stocked tunings is 5, 4, 7 or 2 semitones — 4/3, 5/4, 3/2, 9/8, all fixed by §3 and
+  error-tabulated in §5. `tests/r4.test.js` asserts that coverage claim over all five
+  tunings rather than trusting it. House rule applied as written: flag the gap, don't
+  improvise physics.
+- **`tests/verify.sh` is now five steps** and carries **two** frozen SHAs
+  (`FROZEN_SHA_R4` beside `FROZEN_SHA`). A trap worth recording: the awk programs must
+  stay inline — a pattern passed through `awk -v` has its backslashes eaten by the
+  assignment, matches nothing, and hashes the *empty string* to `e3b0c442…`, which is a
+  guard that silently passes on a mismatch. Both guards briefly did exactly that.
+- **Mutation-checked the day it was written** — the gate-3 lesson, made mechanical. A
+  scratch copy of the app with ~30 lines of R4 plumbing flips every red assertion:
+  `tests/r4.test.js` 49/11 → **60/0** and `tests/headless.js` 22/5 → **27/0**, while
+  unwired master stays red on exactly those 16 lines. That proves the contracts are both
+  satisfiable and non-vacuous, and it independently measures the build as a small diff.
+  Three defects were caught this way: an assertion anchored on `Current values` (which
+  occurs 3× in the file), a landing assertion aimed at a string whose harmonics land
+  nowhere (D3 → switched to the low E, whose 4th harmonic lands on open E4), and two
+  R4.3 contracts that passed vacuously until they were scoped to a window around the
+  `openStringPopover(` call site.
+- `docs/handoff/spark-r4.md` states the two rules gate 3 paid for — `tests/` is read-only,
+  and a step that cannot run is red, never a stub — and refreshes the ROADMAP anchors the
+  gate commit itself moved (`stringContentHtml` 6012 → 6077, the `?pop=` hook 7282 →
+  7496, the `.pop-*` CSS 487 → 482).

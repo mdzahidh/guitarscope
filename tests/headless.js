@@ -46,11 +46,36 @@ function section(t) { console.log("\n" + t); }
 // nothing here: ?demo writes no localStorage (settings save on explicit clicks
 // only), and the determinism check below would catch it if that ever changed.
 function chrome(args, query, extra) {
-  return execFileSync(CHROME, [
-    "--headless=new", "--disable-gpu", "--hide-scrollbars",
-    "--window-size=1440,2600", "--virtual-time-budget=30000",
-    ...args, APP + "?" + query,
-  ], { maxBuffer: 1 << 28, timeout: 120000, stdio: ["ignore", "pipe", "ignore"], ...(extra || {}) });
+  try {
+    return execFileSync(CHROME, [
+      "--headless=new", "--disable-gpu", "--hide-scrollbars",
+      "--window-size=1440,2600", "--virtual-time-budget=30000",
+      ...args, APP + "?" + query,
+    ], { maxBuffer: 1 << 28, timeout: 120000, stdio: ["ignore", "pipe", "ignore"], ...(extra || {}) });
+  } catch (e) {
+    if (e && (e.signal === "SIGABRT" || e.status === 134)) sandboxDiagnosis();
+    throw e;
+  }
+}
+
+// Chrome dies with SIGABRT inside HIServices _RegisterApplication when it cannot reach
+// launchservicesd — which is exactly what a seatbelt sandbox does to it. Agent runners
+// (Muse among them) sandbox shell commands by default, so every launch aborts and macOS
+// pops a crash dialog for each one: a whole suite run buries the operator in "Ignore"
+// clicks and looks like a mysteriously broken gate. Say what it is on the FIRST abort
+// and stop there, so it costs one dialog rather than twenty.
+//
+// This step is not optional and must never be stubbed. A gate step that cannot run is
+// red: re-run outside the sandbox, do not hand the suite a fake Chrome.
+function sandboxDiagnosis() {
+  console.error("\nChrome aborted at startup (SIGABRT in _RegisterApplication).");
+  console.error("It is not a flaky renderer: something is denying it launchservicesd,");
+  console.error("and a seatbelt sandbox around the shell is the usual something.");
+  console.error("  • Muse:  muse --disable-sandbox …   (or: muse exec --disable-sandbox …)");
+  console.error("  • check: sandbox-exec around this process, or $CHROME pointing elsewhere");
+  console.error("Stopping after one launch — each abort raises a macOS crash dialog.");
+  console.error("Do not stub Chrome to get past this. A step that cannot run is red.\n");
+  process.exit(1);
 }
 const shotCache = new Map();
 function shot(query) {

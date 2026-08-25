@@ -1002,3 +1002,29 @@ complaints fixed in block 3 alone; no copy, no state, no new control.
   All four were mutation-checked against a deliberately broken `index.html`.
 - PNG exports are untouched: they force `state.strings=false`, so no marks, no key, and
   no legend shift.
+
+### Session 18 (2026-08-24) — the crash storm was the sandbox, not Chrome
+
+User report: *"when muse uses chrome headless it crashes a lot and makes me having to
+click on the ignore button over and over again."*
+
+- **Diagnosed, not guessed.** All 24 crash reports from the delegated run end
+  `abort ← ___RegisterApplication_block_invoke ← _RegisterApplication ←
+  TransformProcessType ← ChromeMain`: Chrome registering itself with HIServices and not
+  reaching `com.apple.coreservices.launchservicesd`. Reproduced deliberately under
+  `sandbox-exec` with a two-line profile denying exactly that mach service — exit **134**
+  (128 + SIGABRT), no screenshot, one ReportCrash dialog. The abort precedes crashpad
+  init, so nothing inside Chrome can suppress the dialog. Unsandboxed, the same binary is
+  not flaky at all: 12 sequential launches, 12 successes, mean 3.0 s. Agent runners
+  sandbox shell commands by default and `muse sandbox` offers no macOS allowlist, so the
+  fix is `--disable-sandbox` on the runner — verified 2026-08-24: `muse exec
+  --disable-sandbox` runs non-interactively and Chrome renders inside it, exit 0.
+- **The repo fails fast instead of failing twenty times.** `chrome()` in
+  `tests/headless.js` catches `SIGABRT`/status 134 and calls `sandboxDiagnosis()`, which
+  names the cause, gives the flag, and exits on the **first** abort — one dialog, not
+  twenty — and says out loud what gate 3 learned: *do not stub Chrome to get past this; a
+  step that cannot run is red*. The diagnosis path was exercised with a stub that exits
+  134 (prints, exit 1); the full gate re-run green afterwards.
+- Recorded in `docs/ARCHITECTURE.md` "Browser quirks", `docs/ROADMAP.md` "Working
+  discipline" (both the sandbox rule and the reviewer-side `muse exec` invocation for R4
+  onward), and CLAUDE.md "Run / test".

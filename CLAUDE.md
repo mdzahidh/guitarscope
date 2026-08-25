@@ -279,6 +279,13 @@ build educational copy from it, never re-derive from scratch.
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
 - `./tests/verify.sh` — the R3 gate (all suites + tamper guards). **Green as of gate 3**;
   keep it that way, and reuse its shape (frozen copy + read-only `tests/`) for R4/R5.
+  **It must not run inside a shell sandbox** — Chrome aborts at startup in
+  `_RegisterApplication` (exit 134) when it cannot reach `launchservicesd`, and macOS
+  pops a crash dialog per launch. `tests/headless.js` recognises that abort, prints the
+  cause and the fix, and stops on the first one. Delegated builds therefore launch as
+  `/usr/local/bin/muse exec --disable-sandbox --prompt-file docs/handoff/spark-<task>.md`
+  (add `--disable-approval` unattended, `-w create` for a worktree). Never point `$CHROME`
+  at a stub to get past it: a gate step that cannot run is red.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
   --disable-gpu --hide-scrollbars --window-size=1440,2900 --virtual-time-budget=30000

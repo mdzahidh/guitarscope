@@ -914,6 +914,27 @@ metrics) are carried as stored values and labeled as such.
   vacuously against the raw dump; scope it to the target element first. Extracting
   `#popover` needs `<div>`-depth counting, not a lazy regex — its content is full of
   nested divs, so `[\s\S]*?</div>` stops at the first inner close.
+- **Chrome aborts at startup inside a seatbelt sandbox — and macOS pops a crash dialog
+  for every launch.** Reported by the user (session 18) while a delegated builder ran the
+  gate: "chrome headless crashes a lot and makes me having to click on the ignore button
+  over and over again." The crash reports all end the same way — `abort` ←
+  `___RegisterApplication_block_invoke` ← `_RegisterApplication` ← `TransformProcessType`
+  ← `ChromeMain` — i.e. Chrome asking HIServices to register the process and not reaching
+  `com.apple.coreservices.launchservicesd`. Reproduced deliberately with a two-line
+  profile (`(allow default)` + `(deny mach-lookup (global-name
+  "com.apple.coreservices.launchservicesd"))`) under `sandbox-exec`: exit **134**
+  (128 + SIGABRT), no screenshot, one ReportCrash dialog — the abort happens before
+  crashpad initializes, so nothing suppresses it from inside Chrome. Unsandboxed the same
+  binary is not flaky at all: 12 sequential launches, 12 successes, mean 3.0 s. The cause
+  is therefore the *runner*, not the browser — agent runners sandbox shell commands by
+  default (Muse does; `muse sandbox` offers a Windows setup only, no macOS allowlist), so
+  every Chrome launch in a suite aborts and every abort raises a dialog. Two responses:
+  run the builder with `--disable-sandbox` (recorded in docs/ROADMAP.md "Working
+  discipline"), and — in the repo, where it can't be forgotten — `chrome()` in
+  `tests/headless.js` catches `SIGABRT`/status 134, prints the diagnosis with that fix,
+  and exits on the **first** abort, so a bad run costs one dialog instead of twenty. The
+  message also says out loud what gate 3 learned the hard way: do not point `$CHROME` at
+  a stub to get past this — a step that cannot run is red.
 - zsh: `echo =====` triggers globbing errors; quote such literals in shell commands.
 - **Flex wrapping is decided by content width, not by shrink.** A `flex-wrap:wrap`
   row lays items out at their hypothetical (content) size and wraps when the sum

@@ -118,6 +118,30 @@ A handoff is not the builder's to edit.
    the top of the handoff with the reason — an unlisted commit is the first thing a
    reviewer has to reconstruct.
 
+**Running the gate on macOS: no sandbox around Chrome.** Step 3 of `verify.sh` drives a
+real Chrome, and Chrome cannot start inside a seatbelt sandbox — it aborts in
+`_RegisterApplication` (exit 134) because it cannot reach `launchservicesd`, and macOS
+raises a crash dialog for *every* launch, which is the operator clicking "Ignore" twenty
+times. Agent runners sandbox shell commands by default, so run the build with sandboxing
+off: `muse exec --disable-sandbox …`. `tests/headless.js` recognises this abort, prints
+the fix, and stops on the first one. **Never point `$CHROME` at a stub or wrapper to get
+past it.** A gate step that cannot run is **red**, not passed — report the blocker and
+stop. (Gate 3 was reported as passed off a wrapper emitting synthetic PNGs; disclosed
+honestly, but the run proved nothing.)
+
+**Launching the delegated builder (reviewer's side, from R4 on).** The reviewer starts
+Muse directly rather than the user driving it by hand:
+
+```
+/usr/local/bin/muse exec --disable-sandbox --prompt-file docs/handoff/spark-r4.md
+```
+
+`--disable-sandbox` is not optional — see "Running the gate on macOS" above. Add
+`--disable-approval` for an unattended run, `-w create` to build in a fresh worktree.
+Verified 2026-08-24: `muse exec --disable-sandbox` runs non-interactively and Chrome
+starts cleanly inside it (headless screenshot, exit 0). The handoff file is committed
+before the run, as always.
+
 ---
 
 ## Decisions already made (do not re-litigate)

@@ -484,6 +484,9 @@ table.datatable tr.grp td{
 .pop-val .l{ color:var(--mut); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pop-val .v{ margin-left:auto; color:var(--ink); white-space:nowrap; }
 .pop-val .v small{ color:var(--dim); }
+.pop-sub{ font-size:11px; color:var(--dim); margin:-1px 0 2px 16px; }
+.pop-more{ margin-top:10px; font-size:11.5px; line-height:1.55; color:var(--mut); }
+.pop-more summary{ cursor:pointer; color:var(--ink); }
 .pop-none{ font-size:12px; color:var(--faint); font-style:italic; }
 .pop-audit{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .pop-audit .popplay{ font-variant-numeric:tabular-nums; min-width:52px; }
@@ -6094,6 +6097,7 @@ function stringContentHtml(si){
     rows+='<div class="pop-val" style="gap:8px"><span class="dot" style="background:'+col+'"></span>'+
       '<span class="l">'+(hh===1?"Fundamental":"Harmonic "+hh)+'</span>'+
       '<span class="v">'+esc(fmtHz(hf)+"  ·  "+noteInfo(hf,state.a4).name)+'</span>'+toggle+'</div>';
+    rows+=harmonicRowNoteHtml(si,hh);
   }
   return '<div class="pop-term">'+esc(name)+' — open '+STRING_ORD[si]+' string</div>'+
     '<div class="pop-cat">'+esc(tun)+' · string '+(6-si)+' of 6</div>'+
@@ -6106,7 +6110,8 @@ function stringContentHtml(si){
       state.a4.toFixed(1)+' Hz.</p></div>'+
     '<div class="pop-sec"><div class="pop-label">How Claude Rameau places it</div><div class="pop-formula">f = '+
       state.a4.toFixed(1)+' × 2^(('+midi+' − 69)⁄12) = '+esc(fmtHz(f))+'</div></div>'+
-    '<div class="pop-sec"><div class="pop-label">Current values — harmonics toggle their guides</div><div class="pop-vals">'+rows+'</div></div>';
+    ancestrySectionHtml(si)+
+    '<div class="pop-sec"><div class="pop-label">Current values — harmonics toggle their guides</div><div class="pop-vals">'+rows+'</div></div>'+denominatorRuleHtml();
 }
 // ---------- discovery moments: the ✦ popover (R3.4) ----------
 // Copy discipline: every claim traces to docs/THEORY.md — §1 (the series and its
@@ -7502,8 +7507,12 @@ function boot(){
       popover.style.transition="none";                    // shots catch opacity mid-fade otherwise
       const c=window.innerWidth/2;
       const key=pp[1].toLowerCase();
+      const sm=key.match(/^str(\d+)$/);
       const cm=key.match(/^coin(\d+)$/);
-      if(cm){
+      if(sm){
+        const n=parseInt(sm[1],10);
+        if(n>=0&&n<6) openStringPopover(n,{left:c-40,right:c+40,top:80,bottom:100});
+      } else if(cm){
         const idx=parseInt(cm[1],10);
         const coins=findCoincidences(stringAxisMarkers(), state.tolCents);
         const hit=coins[idx];

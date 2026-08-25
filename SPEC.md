@@ -1161,3 +1161,43 @@ the app has drawn anything: `--virtual-time-budget` fast-forwards timers, not au
 decodes, so the budget expires in real-time terms while `?demo` is still decoding.
 Identical at 30 s and 90 s of budget — the fix is a retry that checks the page really
 drew, not a bigger number. `drew()`/`domDrawn()`/`shotDrawn()` in `tests/headless.js`.
+
+### Session 20 (2026-08-24) — M2.7 built, reviewed, merged
+
+Third delegate-and-gate cycle, same order as R3 and R4: gate first (`529a498`), the two
+contradicted documents corrected before the code (`42e8154`), handoff
+(`docs/handoff/spark-m27.md`, `7d7f6a5`), Muse Spark builds (`3272e23`), reviewer merges
+(`c6ab4f9`) and fixes (`f96e806`). `./tests/verify.sh` prints `gate passed`: dsp 171,
+r3 42, r4 60, **m27 51**, headless 34, all three tamper verdicts intact. The shipped
+behaviour is the one the gate was written against — an unzoomed pane pixel-identical to
+v1.0.0 and reporting `data-sgwin="2048"`, a zoomed pane re-analysed over just its visible
+span, per pane, `drawAll()` still synchronous.
+
+**Four reviewer findings, all fixed in `f96e806` and all made contracts.**
+
+1. **The hover readout was reading an analysis the pane had not drawn.** A refined slice
+   carries its own `sg.t0`, and the crosshair was still sampling the base pass under a
+   refined picture, so the number under the cursor could disagree with the pixel beneath
+   it. That is precisely the "every visible number defensible" rule, so it was a defect
+   and not a polish item. The pane now publishes what it drew (`s._sgShown`) and the
+   crosshair offsets by that slice's `t0`. `tests/m27.test.js` grew a section for it.
+2. **One refine per gesture, not one per frame.** A pan or a wheel zoom fired a job for
+   every intermediate window. Debounced at `SG_REFINE_SETTLE_MS = 120` around a single
+   `want` object; a job whose window is no longer wanted when it returns is dropped
+   rather than allowed to overwrite a newer one.
+3. **`?refine=0` was not a real hook** — the assertion was being satisfied by a decoy
+   string elsewhere in the source, the same defect class as the `?pop=coin` assertion
+   caught at R3. The contract now reads the handler's shape, and like every
+   source-reading assertion it was mutation-checked the day it was written.
+4. Pane D states its window from the data it rendered, not from a constant.
+
+**Verified by hand where the gate cannot reach.** The magnify overlay refines too, which
+M2.7.2 required by construction (the refine lives inside `sgramModelFor` and caches on the
+slot, so the overlay cannot diverge from the inline pane): at
+`?demo&open=all&zoom=sga:1.0,2.4&mag=sga` it prints 8192-pt Hann in both themes with
+visibly crisper partials while the pane nobody zoomed still reports 2048. One capture in
+six shows the base window instead — the session-19 headless race, not a defect, since by
+design the pane draws the base pass until the finer one lands. Proven with a scratch copy
+of `index.html` publishing `_sgShown` as a DOM attribute (canvas state is unreachable from
+`--dump-dom` otherwise). **Known gap, recorded rather than papered over:** nothing in the
+gate asserts the overlay's window, because the race makes a naive assertion flaky.

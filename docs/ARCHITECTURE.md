@@ -385,6 +385,18 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   number for the gate. The recompute is a background job — `drawAll()` stays
   synchronous, today's coarse crop keeps drawing, and the finer image swaps in on a
   later frame; a stale job whose zoom has moved on is discarded, not drawn.
+  Three details that keep it honest, all reviewer fixes after the delegated build:
+  the refine lives **inside `sgramModelFor` and caches on the slot**, never on the pane
+  canvas — that is why the magnify overlay inherits it for free (`MAG_VIEWS.sga/sgb`
+  call the same model builder), and why zooming pane A never re-analyses pane B; the
+  pane **publishes the slice it drew** as `s._sgShown` and `attachSgramCrosshair`
+  offsets by that slice's `t0`, so the hover readout can never report the base analysis
+  under a refined picture; and the request is **debounced** (`SG_REFINE_SETTLE_MS = 120`)
+  around a single `want` object, so a drag or a wheel spin asks once for the window it
+  settles on rather than once per intermediate frame. `?refine=0` disables the whole
+  pass, which is how the gate compares a refined pane against the crop it replaced.
+  Note the window follows the **time span**, not the canvas width: magnifying without
+  zooming shows the same analysis, larger, and a frequency-only zoom is still a crop.
 - **String labels outside the plot (f).** `SGPLOT.mR` 64→98; the colorbar is pinned at
   `cbX = w−50` and the string-frequency labels sit in the new gap with leader ticks
   into the plot. Labels over the colormap were unreadable at exactly the frequencies

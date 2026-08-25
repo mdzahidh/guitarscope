@@ -226,14 +226,40 @@ build educational copy from it, never re-derive from scratch.
   `tests/r4.test.js`), so moving or folding the section is a reviewer edit to source *and*
   contract. Note for anyone editing the guards: **the awk programs in `verify.sh` must stay inline** — `awk -v` eats
   backslashes, so a pattern passed that way matches nothing and hashes the empty string.
+- **M2.7 resolution follows attention BUILT — gate 6 passed, merged to master 2026-08-24
+  (`c6ab4f9`, builder commit `3272e23`; reviewer fixes `f96e806`).** Same delegate-and-gate
+  order as R3/R4 — gate first (`529a498`), docs corrected before the code (`42e8154`),
+  handoff (`docs/handoff/spark-m27.md`, `7d7f6a5`), Muse Spark builds, reviewer merges and
+  fixes. **Spectrogram zoom is no longer only a crop:** when a pane carries an x-zoom the
+  STFT is recomputed for that window at a finer resolution — `sgramWindowFor(spanSec, rate)`
+  in block 0 (8192 below 2 s, 4096 at/above, floor 2048, capped by `1<<floor(log2(span*rate/4))`,
+  deliberately **non-monotone** in span), with `spectrogramLog`'s new `opts.minHopDiv`
+  (default **8**, so every shipped caller is byte-identical; the refine passes **32**) and
+  `gridN:512`. An **unzoomed pane is pixel-identical to v1.0.0** and reports
+  `data-sgwin="2048"`; refinement is per pane, so zooming A never re-analyses B. The refine
+  lives **inside `sgramModelFor`** and caches **on the slot**, which is why the magnify
+  overlay gets it for free — verified by hand in both themes (8192-pt Hann at a 1.4 s span).
+  `drawAll()` stays synchronous: the pane draws the base pass and swaps in the finer one when
+  it lands. Reviewer additions (M2.7.4, not in the handoff): the crosshair now reads the slice
+  the pane actually drew (`s._sgShown`, offset by that slice's `t0`) so the hover number can't
+  disagree with the pixel under it; one refine per gesture (`SG_REFINE_SETTLE_MS = 120`, stale
+  jobs dropped rather than overwriting a newer one); `?refine=0` made a real hook (its contract
+  had been satisfied by a decoy string). **No third frozen copy block** — M2.7 ships no
+  educational prose. Known gap: nothing in the gate asserts the *magnify overlay's* window
+  (≈1 headless launch in 6 races the refine); the by-hand check is recorded in ROADMAP M2.7.
 - **NEXT — R5** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
-  **R5** interval consonance explainers (joint period, comb alignment, Plomp–Levelt
-  roughness) — R5.2/R5.3 blocked until the user resolves the two docs/THEORY.md §2.5
-  numeric caveats. Educational tone: measure first, never lecture — curiosity clicks the
-  ✦. **Delegation shape, proven at gates 3 and 4: write the physics copy myself, freeze it
+  **R5** harmonic tracks on the spectrogram (shown harmonics drawn as horizontal tracks,
+  inheriting R3's `findCoincidences()` and R4's `stringAncestry()` — one detector, never a
+  second copy; it wanted M2.7's sharper picture underneath it, which is why M2.7 ran first).
+  **R5's task split is deliberately unwritten**: two product questions are the user's to
+  answer (one string at a time vs free-form overlay; whether "audition a single harmonic"
+  jumps the queue as R5.0). **R6** is the old R5 — interval consonance explainers (joint
+  period, comb alignment, Plomp–Levelt roughness) — still blocked until the user resolves
+  the two docs/THEORY.md §2.5 numeric caveats. Educational tone: measure first, never
+  lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3 and 4: write the physics copy myself, freeze it
   by sentinel + SHA, hand the builder only the plumbing.**
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, headless 27, plus
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, headless 34, plus
   all three tamper guards (`tests/` untouched, both frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -254,13 +280,15 @@ build educational copy from it, never re-derive from scratch.
   + popovers, **3** canvas rendering, **4** app state/UI/synth/exports.
 - `tests/dsp.test.js` — extracts script block 0 from index.html, runs it under node.
   No framework; prints `N passed, M failed`, exit code 1 on failure.
-- `tests/verify.sh` — **the Rameau gate** (R3, then R4); the one command a delegated builder must get to
-  exit 0 before opening a PR. Runs the three node suites plus the untouched-`tests/`
-  and frozen-copy guards; `BASE=<ref>` picks the comparison base (default `master`).
+- `tests/verify.sh` — **the Rameau gate** (R3, then R4, then M2.7); the one command a delegated
+  builder must get to exit 0 before opening a PR. Runs the four node suites plus
+  `tests/headless.js` and the untouched-`tests/` and frozen-copy guards; `BASE=<ref>` picks the comparison base (default `master`).
 - `tests/r3.test.js` — the R3 suite: `findCoincidences()` math and the R3.2–R3.4 wiring
   contracts, all read out of `index.html`. `tests/r4.test.js` — the same shape for R4:
   `stringAncestry()`/`isPow2` math plus the R4.1–R4.4 wiring contracts and the frozen
-  ancestry-copy SHA.
+  ancestry-copy SHA. `tests/m27.test.js` — the M2.7 suite: `sgramWindowFor()` math, the
+  M2.7.1–M2.7.4 wiring contracts, and the guard that ARCHITECTURE.md's "zoom is a crop"
+  bullet was rewritten and SPEC.md appended (docs the code contradicts are a gate failure).
 - `tests/headless.js` — differential pixel + DOM checks through real Chrome. Note two
   traps recorded in ARCHITECTURE: `--user-data-dir` makes headless Chrome hang forever
   in first-run setup, and `index.html` carries its own source inline, so `--dump-dom`
@@ -280,7 +308,8 @@ build educational copy from it, never re-derive from scratch.
   §2.5, consonance §2.6, denominator rule §3.4, narrative §3.6, dynasty of
   fifths/Tonnetz §3.7, Rameau appendix) — ground truth for all educational features.
 - `docs/ROADMAP.md` — the Rameau phase (R1 rename, R2 About modal, R3 ✦ discovery
-  moments, R4 ancestry, R5 consonance) split into individually buildable, testable,
+  moments, R4 ancestry, M2.7 resolution-follows-attention, R5 harmonic tracks,
+  R6 consonance) split into individually buildable, testable,
   commit-sized tasks with file anchors and done-when criteria. Read before starting
   any Rameau-phase work; update the task's status there when it lands. Its "Working
   discipline" section is the scope contract for anyone (human or model) building these
@@ -300,13 +329,18 @@ build educational copy from it, never re-derive from scratch.
   the Nth ✦ coincidence popover, N indexing the sorted `findCoincidences()` result;
   `?pop=str<N>` pins the open-string popover for string N = 0–5, low E first),
   `?tol=<0-50>` (coincidence tolerance in cents — **gate hook only**, unpersisted, no UI),
+  `?refine=0` (disable M2.7's zoom refinement, restoring the crop-only spectrogram —
+  **gate hook only**, unpersisted, no UI; each sgram pane canvas also carries
+  `data-sgwin="<window>"`, the window that pane actually rendered, for the same reason:
+  the canvas is unreachable from node),
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
   "Load test files" button).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
-- `./tests/verify.sh` — the Rameau gate (all suites + tamper guards). **Green as of gate 4**;
-  keep it that way, and reuse its shape (frozen copy + read-only `tests/`) for R5.
+- `./tests/verify.sh` — the Rameau gate (all suites + tamper guards; six steps as of M2.7).
+  **Green as of gate 6**; keep it that way, and reuse its shape (frozen copy + read-only
+  `tests/`) for R5.
   **It must not run inside a shell sandbox** — Chrome aborts at startup in
   `_RegisterApplication` (exit 134) when it cannot reach `launchservicesd`, and macOS
   pops a crash dialog per launch. `tests/headless.js` recognises that abort, prints the
@@ -404,8 +438,13 @@ build educational copy from it, never re-derive from scratch.
   Plot zoom (line plots **and** spectrogram panes) is **display-only** (`ZOOMS{}` in
   data units, baked in by the model builders, shared with the magnify overlay):
   metrics/band table/tone panel never read it, and the active window is always printed
-  on the plot. Sgram zoom crops the rendered colormap image (no STFT recompute), so
-  deep zooms blur rather than resolve.
+  on the plot. **Sgram zoom refines (M2.7):** an x-zoomed pane re-runs the STFT over just
+  that window at `sgramWindowFor(span, rate)` (up to 8192-pt, hop `win>>5`, `gridN:512`) and
+  the pane says which window it drew — in the status chip, in the crosshair readout, and in
+  `data-sgwin`. Refinement is per pane and lives inside `sgramModelFor` (cached on the slot),
+  so the magnify overlay inherits it; an **unzoomed** pane still crops the base 2048-pt image
+  and is pixel-identical to v1.0.0. A frequency-only zoom is still a crop — the window follows
+  the **time** span. `drawAll()` stays synchronous; the finer pass swaps in when it lands.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

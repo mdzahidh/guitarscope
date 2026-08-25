@@ -585,7 +585,13 @@ fails the gate. The tasks below are wiring.
 
 ---
 
-# M2.7 — Resolution follows attention (hi-res spectrogram on zoom)
+# M2.7 — Resolution follows attention (hi-res spectrogram on zoom)  ✅ built, gate 6 passed
+
+**Merged to master 2026-08-24** — delegated build `c6ab4f9` (builder commit `3272e23`,
+from `docs/handoff/spark-m27.md`), reviewer fixes `f96e806`. `./tests/verify.sh` prints
+`gate passed`: dsp 171, r3 42, r4 60, **m27 51**, headless 34, plus all three tamper
+verdicts (`tests/` untouched, both frozen copy SHAs). The builder made **no ROADMAP
+edits**; the statuses below are the reviewer's.
 
 Not a Rameau task and not education — an **instrument** improvement, filed here because
 it is next and because R5 (harmonic tracks) draws on the spectrogram this milestone
@@ -634,7 +640,7 @@ not a recompute" bullet is **rewritten**; `SPEC.md` is an **append-only** change
 its `(e)` entry stays exactly as it is as the historical record and M2.7 **appends** a new
 entry that supersedes it and says so. `tests/m27.test.js` checks both.
 
-### M2.7.1 — `sgramWindowFor()` in block 0
+### M2.7.1 — `sgramWindowFor()` in block 0 — **BUILT** (`3272e23`)
 
 Pure, node-testable, no callers yet. Block 0, beside `spectrogramLog`.
 
@@ -664,9 +670,9 @@ at **any** practical window; the app teaches those through R3's mark, not throug
   `(1.5,48000)→8192`, `(0.3,48000)→2048` (cap 3600 floors to 2048), never above 8192,
   never below 2048, and the cap tested on its own. The function is deliberately
   **non-monotone** in span (0.3 s → 2048, 1.5 s → 8192, 10 s → 4096); that is the cap
-  doing its job, not a bug to smooth out.
+  doing its job, not a bug to smooth out. ✅
 
-### M2.7.2 — Refine on zoom
+### M2.7.2 — Refine on zoom — **BUILT** (`3272e23`, reworked by the reviewer in `f96e806`)
 
 `spectrogramLog` today floors the hop at `win>>3`, which is right for a full-file pass and
 badly wrong for a refined one — a 2 s view at 8192 would yield **86 columns**. Add
@@ -707,9 +713,9 @@ the refine pass passes **32**:
   milestone most benefits. Note what stays fixed: the window follows the **time span**, not
   the canvas width, so magnifying without zooming shows the same window, larger.
 - **Done when:** an unzoomed pane is pixel-identical to `master` (headless asserts this),
-  a zoomed pane resolves detail the crop could not, and `drawAll()` is still synchronous.
+  a zoomed pane resolves detail the crop could not, and `drawAll()` is still synchronous. ✅
 
-### M2.7.3 — Say what you did
+### M2.7.3 — Say what you did — **BUILT** (`3272e23`)
 
 - `statusText` in `sgramModelFor` already prints `tv.sg.win+"-pt Hann · max per log cell"`.
   When a **refined** image is in use it must print the refined window, not the base one —
@@ -721,7 +727,40 @@ the refine pass passes **32**:
   window actually rendered in that pane, so `tests/headless.js` can read it out of
   `--dump-dom`. An attribute, not UI; it never appears on screen or in an export.
 - **Done when:** `?demo&zoom=sga:1,3` reports 8192 on pane A and 2048 on the untouched
-  pane B, and the visible chip agrees with the attribute.
+  pane B, and the visible chip agrees with the attribute. ✅
+
+### M2.7.4 — Reviewer additions (`f96e806`) — **BUILT**
+
+Not in the handoff; found in review of the delegated build and written by the reviewer,
+source **and** contract (`tests/m27.test.js` grew the section *“the hover readout reads
+the analysis the pane drew”*, and its `?refine=0` contract was repaired).
+
+- **The hover readout must read the analysis the pane drew.** A refined slice carries its
+  own `sg.t0`; the crosshair was still sampling the base pass under a refined picture, so
+  the number under the cursor could disagree with the pixel beneath it — exactly the
+  “every visible number defensible” rule. The pane now publishes what it drew as
+  `s._sgShown`, and `attachSgramCrosshair` offsets by that slice's `t0`.
+- **One refine per gesture, not one per frame.** A pan or a wheel zoom fired a refine job
+  on every intermediate window; the request is now debounced
+  (`SG_REFINE_SETTLE_MS = 120`) around a single `want` object, and a job whose window is
+  no longer wanted when it returns is dropped instead of overwriting a newer one.
+- **`?refine=0` is a real hook.** The shipped handler was being satisfied by a decoy
+  string in the source; the contract now reads the handler's shape, and was
+  mutation-checked like every other source-reading assertion.
+- **Pane D states its window from the data it rendered**, not from a constant.
+- **Done when:** the gate is green and the crosshair, the status chip and `data-sgwin`
+  all name the same analysis. ✅
+
+### Verified by hand (reviewer, 2026-08-24)
+
+The magnify overlay refines too, as M2.7.2 requires: at `?demo&open=all&zoom=sga:1.0,2.4&mag=sga`
+the overlay prints **8192-pt Hann** in both themes with visibly crisper partials, while the
+pane nobody zoomed still reports `data-sgwin="2048"`. One capture in six shows the base
+window instead — that is the known headless race (the refine had not landed before the
+virtual-time budget expired), not a defect: by design the pane draws the base pass until the
+finer one arrives. Proven with a scratch copy of `index.html` publishing `_sgShown` as a DOM
+attribute. **Nothing asserts the overlay's window in the gate** — the race makes a naive
+assertion flaky, and a non-flaky one is still owed.
 
 - Verify + commit per task, and run `./tests/verify.sh` to `gate passed` before the PR.
   The gate grows a **sixth step** (`tests/m27.test.js`); the two frozen-copy SHAs and the

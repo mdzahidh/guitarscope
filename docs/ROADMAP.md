@@ -506,7 +506,7 @@ string's fundamental. Build it in this order — the pure function first, drawn 
 
 ---
 
-# R4 — Harmonic ancestry in the per-string popover
+# R4 — Harmonic ancestry in the per-string popover — **BUILT**, gate 4 pending review
 
 The ✦ answers "these two strings are sounding the same note". R4 answers the question
 that follows: **where does this string sit in its neighbour's sound?** Same door (the
@@ -538,7 +538,7 @@ prose between `// ---------- harmonic ancestry copy (R4) ----------` and
 is SHA-256 frozen by `tests/verify.sh` and by `tests/r4.test.js`; changing one character
 fails the gate. The tasks below are wiring.
 
-### R4.1 — Interval + landing on each harmonic row
+### R4.1 — Interval + landing on each harmonic row — **BUILT** (`5780f50`)
 
 - In `stringContentHtml()`'s `for(let hh=1;hh<=5;hh++)` loop, after each row, append
   `harmonicRowNoteHtml(si,hh)` (frozen). It emits a `<div class="pop-sub">` carrying what
@@ -552,7 +552,7 @@ fails the gate. The tasks below are wiring.
 - **Done when:** every shown harmonic row names its interval, the rows that land say so,
   and no other row layout changed.
 
-### R4.2 — "Where this string sits" section
+### R4.2 — "Where this string sits" section — **BUILT** (`5780f50`)
 
 - Insert `ancestrySectionHtml(si)` (frozen) into `stringContentHtml()`'s return, between
   the "How Claude Rameau places it" section and the "Current values" section.
@@ -561,7 +561,7 @@ fails the gate. The tasks below are wiring.
   ratio for that gap — an empty string is a correct answer, not a bug to work around.
 - **Done when:** the section renders for all six strings in all five stocked tunings.
 
-### R4.3 — Headless door: `?pop=str<N>`
+### R4.3 — Headless door: `?pop=str<N>` — **BUILT** (`5780f50`)
 
 - The canvas and the popover are unreachable from node, exactly as at R3.2. Extend the
   existing `?pop=` hook (**line 7496**, beside the `coin<N>` branch) with `str<N>`,
@@ -569,7 +569,7 @@ fails the gate. The tasks below are wiring.
 - **Done when:** `?demo&pop=str3` pins the open-G popover open; `tests/headless.js`
   asserts on it and the gate stays red without it.
 
-### R4.4 — The denominator rule, expandable
+### R4.4 — The denominator rule, expandable — **BUILT** (`5780f50`)
 
 - Append `denominatorRuleHtml()` (frozen) to `stringContentHtml()`'s return. It is a
   native `<details class="pop-more"><summary>…` — no JS, no state, no persistence.

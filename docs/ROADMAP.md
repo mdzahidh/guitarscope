@@ -694,6 +694,18 @@ the refine pass passes **32**:
   `gridN` 512. That is the 122 ms row and the worst case in the table.
 - If `sgramWindowFor` returns 2048 **and** `gridN` would not change, skip the job
   entirely — there is nothing to gain and a redraw to pay for.
+- **The magnify overlay comes along for free, and must be kept that way.** `MAG_VIEWS.sga/sgb`
+  call the very same `sgramModelFor(i, sgramScale())`, `attachZoom(magWrap, …)` writes the
+  very same `ZOOMS[key]`, and `setZoom()` is `ZOOMS[key]=z; drawAll()` whose tail call is
+  `drawMag()` — so a refine that lives inside `sgramModelFor` reaches the overlay by
+  construction, and the background job's `drawAll()` redraws an open overlay when it lands.
+  Two things preserve that and both are already required above: the refine must be reached
+  from **inside the model builder** (not bolted onto `drawAll`'s pane loop), and its cache
+  must live **on the slot** (not on the pane canvas) — the overlay can be open while the
+  spectrogram card is folded, in which case the model is built only from the mag path.
+  The overlay is where the 1400-column budget actually pays off, so this is the view the
+  milestone most benefits. Note what stays fixed: the window follows the **time span**, not
+  the canvas width, so magnifying without zooming shows the same window, larger.
 - **Done when:** an unzoomed pane is pixel-identical to `master` (headless asserts this),
   a zoomed pane resolves detail the crop could not, and `drawAll()` is still synchronous.
 

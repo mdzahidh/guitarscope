@@ -514,8 +514,9 @@ open-string popover the Strings axis already opens), same discipline — measure
 never lecture. Source: `docs/THEORY.md` §3.4 (the denominator rule), §1 (the series),
 §3/§4 (just ratios), §5 (12-TET errors), §3.7 (the dynasty of fifths).
 
-Extends `stringContentHtml()` — **line 6012**, script block 4, immediately above the
-frozen ✦ copy. (This supersedes the "~5855" anchor this task originally carried.)
+Extends `stringContentHtml()` — **line 6077**, script block 4, immediately above the
+frozen ✦ copy. (This supersedes the "~5855" and "6012" anchors this task carried before
+the gate landed and moved the line.)
 
 **Reference note: the adjacent string, not the lowest string.** This task originally
 said "whether that harmonic is an overtone of the currently-lowest string". That is not
@@ -546,7 +547,7 @@ fails the gate. The tasks below are wiring.
 - The landing reuses `findCoincidences()` from R3.1 — the same ±6 ¢ window and the same
   detector as the mark on the plot, never a second one. Nothing to write; it is inside
   the frozen helper already.
-- One new CSS rule, beside the other `.pop-*` rules (~line 487):
+- One new CSS rule, beside the other `.pop-*` rules (~line 482):
   `.pop-sub{ font-size:11px; color:var(--dim); margin:-1px 0 2px 16px; }`
 - **Done when:** every shown harmonic row names its interval, the rows that land say so,
   and no other row layout changed.
@@ -563,7 +564,7 @@ fails the gate. The tasks below are wiring.
 ### R4.3 — Headless door: `?pop=str<N>`
 
 - The canvas and the popover are unreachable from node, exactly as at R3.2. Extend the
-  existing `?pop=` hook (**line 7282**, beside the `coin<N>` branch) with `str<N>`,
+  existing `?pop=` hook (**line 7496**, beside the `coin<N>` branch) with `str<N>`,
   N = 0–5 indexing `STRING_ORD` (0 = lowest), out of range = no popover.
 - **Done when:** `?demo&pop=str3` pins the open-G popover open; `tests/headless.js`
   asserts on it and the gate stays red without it.

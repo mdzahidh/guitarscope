@@ -506,7 +506,7 @@ string's fundamental. Build it in this order — the pure function first, drawn 
 
 ---
 
-# R4 — Harmonic ancestry in the per-string popover — **BUILT**, gate 4 pending review
+# R4 — Harmonic ancestry in the per-string popover  ✅ built, gate 4 passed
 
 The ✦ answers "these two strings are sounding the same note". R4 answers the question
 that follows: **where does this string sit in its neighbour's sound?** Same door (the

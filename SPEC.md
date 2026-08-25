@@ -1071,3 +1071,45 @@ Same order as R3: the gate first, then the handoff, then the builder. Two commit
   and a step that cannot run is red, never a stub — and refreshes the ROADMAP anchors the
   gate commit itself moved (`stringContentHtml` 6012 → 6077, the `?pop=` hook 7282 →
   7496, the `.pop-*` CSS 487 → 482).
+
+### Session 18 (2026-08-24) — R4 built by the delegated builder, gate 4 passed
+
+R4 (harmonic ancestry in the per-string popover) was built by Muse Spark from
+`docs/handoff/spark-r4.md` and merged to master as `9be2849` (builder commits
+`5780f50` + `471d5c6`). The diff is 13 lines of `index.html` — three call sites and
+two CSS rules — because the physics was pre-landed inert and SHA-frozen at the gate
+commit. That is the delegate-and-gate shape working as intended for the second time:
+**write the copy, freeze it, hand over only the plumbing.**
+
+What landed: `harmonicRowNoteHtml(si,hh)` after each harmonic row (its interval
+phrase, plus the ✦ landing line when a shown harmonic hits an open string);
+`ancestrySectionHtml(si)` between "How Claude Rameau places it" and "Current
+values"; `denominatorRuleHtml()` as a native `<details class="pop-more">` with no JS,
+no state key, nothing persisted; and the `?pop=str<N>` gate door beside `coin<N>`.
+`.pop-sub` and `.pop-more` are the only new CSS.
+
+**Verified here rather than taken on trust**, after gate 3's synthetic-PNG episode:
+`./tests/verify.sh` on master prints `gate passed` — dsp 171, r3 42, r4 60, headless
+27, `tests/` untouched, both frozen SHAs matching. Headless ran real unsandboxed
+Chrome; no `$CHROME` wrapper was involved this time (the builder's log names none,
+and the run reproduces here). Screenshots of `?pop=str3` in both themes read: open
+4th string 146.8 Hz · D3, open 3rd 196.0 Hz · G3, interval perfect fourth · 4/3, both
+harmonics of 48.9 Hz · G1, equal temperament +2.0 ¢ from just — which is THEORY §5's
++2 ¢ fourth, arrived at through the app's own numbers.
+
+One deviation, cosmetic: the builder squashed R4.1–R4.4 into a single commit instead
+of the three-commit shape the handoff asked for. Nothing else in the handoff was
+missed.
+
+**Found while reviewing, not fixed — a question for the user.** The string popover is
+now ≈1130 px of content against `.popover{max-height:min(70vh,560px)}`, so the
+per-harmonic toggle switches — the popover's only interactive controls — now sit
+below its scroll fold, behind the ancestry prose. The placement was **my** spec
+(ROADMAP R4.2 puts the section above "Current values", and `tests/r4.test.js` asserts
+that order), not a builder call, so fixing it is a reviewer edit to both the source
+and the contract. Three options, in the order I'd pick them: move the ancestry section
+*below* the Current-values rows; or fold it into a `<details>` the way R4.4's
+denominator rule already is; or leave it, on the argument that the prose is the
+feature and the toggles are a returning-user affordance. Deliberately left as-is
+pending the user's call — it sits with the R3.4 "popover runs past the fold at
+1440 px" taste question, and both are the same underlying problem.

@@ -798,14 +798,29 @@ explaining the coincidence through the ratio. Four pieces, in three places:
   the output of `stringAxisMarkers()`. It is shared code: R4.2 and R5 inherit it, which
   is why it was reviewer-authored and gated on its own.
 - **Block 3 — a fourth pass in `drawStringAxis`**, after the three label passes, drawing
-  one ✦ per coincidence at `xOfF(hit.f, w)` just inside `PLOT.mT` (dynamic — never
-  cached), in `cssColor("mut")` and **never a guitar accent**: the mark belongs to
-  neither string. Same `lastX` ≈12 px overlap guard as the label pass, so in E standard
+  one mark per coincidence at `xOfF(hit.f, w)` just inside `PLOT.mT` (dynamic — never
+  cached), in neutral ink and **never a guitar accent**: the mark belongs to
+  neither string. Same `lastX` overlap guard as the label pass (≈18 px), so in E standard
   the E2·h4 and A2·h3 landings on open E4 collapse into one mark — **two ✦ visible, not
   three**. Each pushes `{x,y,w,h, coincidence:hit}` into `hits`, carrying the hit object
   rather than an index into an array that is rebuilt every draw; `attachCrosshair` then
   gives the `help` cursor for free, and `attachHitClicks` routes to
-  `openCoincidencePopover`.
+  `openCoincidencePopover`. The pass **returns how many marks it drew**, which is how
+  `drawSpectrumScene` knows to push its legend down a row.
+- **The mark is a path, not the ✦ glyph, and it carries a key** (session 18, after the
+  user's first look: *"too small to see … not clear what that mark even means"*).
+  `starPath(ctx,x,y,R)` draws a four-pointed sparkle from four `quadraticCurveTo`
+  segments with control points at `R*0.30`; it is stroked 3.5 px in `--panel` as a halo
+  and filled `rgba(--ink-rgb, .78)` at `R = 7.5`. The glyph could not be rescued by a
+  bigger font — a glyph sits small inside its em box, the same trap the fold chevron hit
+  in session 15 — and `--mut` is the dimmest colour in the palette, on the busiest corner
+  of the plot. After the marks, the pass writes a one-line key (a smaller, `--mut` star
+  plus *"two strings, one pitch — click a mark"*, echoing the frozen popover's own
+  opening sentence, so the copy stays traceable to docs/THEORY.md). It is placed at
+  `lastX + 34`, which is always free: coincidences land on open-string fundamentals,
+  82–330 Hz, so on a 60 Hz–20 kHz log axis every mark sits in the left quarter — the same
+  structural fact that made them collide with the legend. The key is skipped, never
+  smeared, if it would reach the status chip.
 - **Block 4 — `openCoincidencePopover(hit, anchor)`**, built like `openStringPopover`
   but deliberately *not* setting `popover.dataset.stringSi`: that key drives the
   string-popover refresh path, and a coincidence popover has nothing to refresh.

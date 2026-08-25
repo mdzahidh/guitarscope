@@ -161,10 +161,24 @@ section("R3.3 — the ✦ pass in drawStringAxis");
   ok(!!fn, "drawStringAxis still exists in block 3");
   const s = fn ? fn[0] : "";
   ok(/findCoincidences\s*\(/.test(s), "…and calls findCoincidences");
-  ok(/✦/.test(s), "…drawing the ✦ mark itself");
+  // The mark is a drawn path, not the ✦ glyph: a glyph renders small inside its em
+  // box, so font size cannot make it legible (the session-15 chevron trap, and the
+  // user's "too small to see" report at gate 3). Assert the draw, not the character —
+  // the character also survives in comments, and a contract a comment can satisfy is
+  // not a contract.
+  // Scoped to the mark loop itself, up to the hit it pushes — the key below it also
+  // draws a star, and a whole-function grep would be satisfied by the key alone.
+  const loop = (s.match(/for\s*\(\s*const\s+hit\s+of\s+coins\s*\)[\s\S]*?coincidence\s*:/) || [""])[0];
+  ok(/starPath\s*\(/.test(loop) && /\.fill\s*\(/.test(loop),
+    "…drawing each mark as a filled path, not as text");
+  ok(!/fillText\s*\(\s*["'`]✦/.test(s),
+    "…and never back to fillText('✦'), which cannot be sized");
   ok(/coincidence\s*:/.test(s), "…pushing a hit carrying a `coincidence` index");
-  ok(/--mut/.test(s) && !/--slot-[ab]/.test(s),
-    "the ✦ is drawn in --mut, never a guitar accent — it belongs to neither string");
+  ok(/(ink-rgb|--ink\b|--mut)/.test(s) && !/--slot-[ab]/.test(s),
+    "the ✦ is neutral ink, never a guitar accent — it belongs to neither string");
+  // A mark nobody can read is a mystery, so the plot says what it means once.
+  ok(/two strings, one pitch/.test(s),
+    "…and the plot carries a one-line key naming what the mark shows");
   ok(/state\.strings/.test(s) || /\bstrings\b/.test(s),
     "…and only when the strings axis is on");
 }

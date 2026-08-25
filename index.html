@@ -2988,7 +2988,7 @@ function drawRegionShading(ctx, w, h){
 // When harmonics are on, low overtones (2×–4×) draw lighter, still clickable.
 // 6 distinct colors — fundamental and its harmonics share the same hue; harmonics are denser but lighter.
 function drawStringAxis(ctx, w, h, markers, hits, coincidences){
-  if(!markers||!markers.length) return;
+  if(!markers||!markers.length) return 0;
   const pH=h-PLOT.mT-PLOT.mB;
   ctx.save();
   // first pass: verticals — color-coded per string, denser dash, fundamentals more opaque
@@ -3030,30 +3030,47 @@ function drawStringAxis(ctx, w, h, markers, hits, coincidences){
       hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
     }
   }
-  // fourth pass: ✦ coincidences — quiet, --mut, never a guitar color; one per
-  // landing near the top of the plot area, with overlap guard like the label pass.
-  // Only when the strings axis is on; stringAxisMarkers() already returns [] when
-  // off, so this is also guarded by the markers check above, but keep the
-  // explicit state.strings reference so the contract is visible.
+  // fourth pass: ✦ coincidences — a drawn path, never the ✦ glyph (a glyph sits small
+  // inside its em box, so font size cannot make it read: session-15's chevron trap).
+  // Neutral ink with a panel-colored halo, never a guitar accent — the landing belongs
+  // to neither string. Overlap guard like the label pass. Returns how many were drawn
+  // so the caller can move its legend out of the way.
+  let nCoin=0;
   if(state.strings){
     const coins = coincidences || findCoincidences(markers);
-    ctx.textAlign="center"; ctx.textBaseline="middle";
-    ctx.font=FONT_XS;
-    ctx.fillStyle=cssColor("mut");
-    let lastCX=-100;
+    const R=7.5, cy=PLOT.mT+11;
+    let lastCX=-100, lastX=-100;
     for(const hit of coins){
       if(hit.f<XV.f0 || hit.f>XV.f1) continue;
       const x=xOfF(hit.f,w);
-      if(x-lastCX<12) continue;
-      ctx.fillText("✦", x, PLOT.mT+7);
-      if(hits){
-        const tw=ctx.measureText("✦").width;
-        hits.push({x:x-tw/2-4, y:PLOT.mT+1, w:tw+8, h:12, coincidence:hit});
+      if(x-lastCX<18) continue;
+      ctx.strokeStyle=cssColor("panel"); ctx.lineWidth=3.5; ctx.lineJoin="round";
+      starPath(ctx,x,cy,R); ctx.stroke();
+      ctx.fillStyle=cssRGBA("ink-rgb",0.78);
+      starPath(ctx,x,cy,R); ctx.fill();
+      if(hits) hits.push({x:x-R-4, y:cy-R-4, w:2*R+8, h:2*R+8, coincidence:hit});
+      lastCX=x; lastX=x; nCoin++;
+    }
+    // a key, so the mark is not a mystery on first sight. Coincidences land on open
+    // string fundamentals (82–330 Hz), which on a log axis is always the left edge —
+    // so the room to their right is free. Echoes the popover's own opening line.
+    if(nCoin){
+      ctx.font=FONT_S; ctx.textAlign="left"; ctx.textBaseline="middle";
+      const txt="two strings, one pitch — click a mark";
+      const kx=lastX+34, kw=13+ctx.measureText(txt).width;
+      if(kx+kw < w-PLOT.mR-150){
+        ctx.strokeStyle=cssColor("panel"); ctx.lineWidth=3; ctx.lineJoin="round";
+        starPath(ctx,kx,cy,5.5); ctx.stroke();
+        // the key's own star is smaller and dimmer than a real landing, so the
+        // legend cannot be misread as one more coincidence
+        ctx.fillStyle=cssColor("mut");
+        starPath(ctx,kx,cy,5.5); ctx.fill();
+        ctx.fillText(txt, kx+11, cy+0.5);
       }
-      lastCX=x;
     }
   }
   ctx.restore();
+  return nCoin;
 }
 
 // ---------- frequency vocabularies (lane, shading, Band Energy rows) ----------
@@ -3256,6 +3273,20 @@ function drawStatusChip(ctx, w, text){
   ctx.restore();
   return {x:x-8, y:y-3, w:tw+16, h:18};
 }
+// A four-pointed sparkle, as a path. Not the ✦ glyph: a glyph sits small inside its
+// em box, so raising the font size never raises the mark — the same trap the fold
+// chevron hit in session 15. This is the one mark on the plot whose whole job is to
+// be noticed, so it is drawn at a size we choose.
+function starPath(ctx,x,y,R){
+  const r=R*0.30;
+  ctx.beginPath();
+  for(let i=0;i<4;i++){
+    const a=-Math.PI/2+i*Math.PI/2, b=a+Math.PI/4, c=a+Math.PI/2;
+    if(!i) ctx.moveTo(x+Math.cos(a)*R, y+Math.sin(a)*R);
+    ctx.quadraticCurveTo(x+Math.cos(b)*r, y+Math.sin(b)*r, x+Math.cos(c)*R, y+Math.sin(c)*R);
+  }
+  ctx.closePath();
+}
 function roundRect(ctx,x,y,w,h,r){
   ctx.beginPath();
   ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
@@ -3263,11 +3294,13 @@ function roundRect(ctx,x,y,w,h,r){
 }
 
 // ---------- legend ----------
-function drawLegend(ctx, w, items){
+// yShift drops the row clear of the ✦ key: coincidences land on open-string
+// fundamentals, 82-330 Hz, which on a log axis is always the legend's own corner.
+function drawLegend(ctx, w, items, yShift){
   ctx.save();
   ctx.font=FONT_S; ctx.textBaseline="middle";
   let x=PLOT.mL+10;
-  const y=PLOT.mT+14;
+  const y=PLOT.mT+14+(yShift||0);
   for(const it of items){
     ctx.fillStyle=it.color;
     ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 2*Math.PI); ctx.fill();
@@ -3287,12 +3320,13 @@ function drawSpectrumScene(ctx, w, h, model, hits){
   if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
   drawRegionShading(ctx, w, h);
   drawAxes(ctx, w, h, model.yMin, model.yMax, model.yStep||10);
-  drawStringAxis(ctx, w, h, model.markers, hits, model.coincidences);
+  const nCoin=drawStringAxis(ctx, w, h, model.markers, hits, model.coincidences);
   drawEqLane(ctx, w, hits);
   for(const c of model.curves){
     drawCurve(ctx, w, h, model.grid, c.db, model.yMin, model.yMax, c.color, 0.10);
   }
-  drawLegend(ctx, w, model.curves.map(c=>({color:c.color, label:c.label})));
+  // the ✦ row owns the top-left corner when it is present, so the legend drops below it
+  drawLegend(ctx, w, model.curves.map(c=>({color:c.color, label:c.label})), nCoin?20:0);
   drawStatusChip(ctx, w, model.statusText);
   for(const c of model.curves){
     if(c.annotations && c.annotations.length)

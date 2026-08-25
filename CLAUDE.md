@@ -179,8 +179,25 @@ build educational copy from it, never re-derive from scratch.
   ARCHITECTURE.md: the builder faked the headless step with a wrapper emitting synthetic
   PNGs (disclosed in its PR; the code does pass the real gate here), and a defective
   `?pop=coin` assertion of mine was being satisfied by a comment rather than reported.
-  **Open taste calls for the user:** the ✦ near 247 Hz crowds the legend text, and the
-  coincidence popover runs past the fold at 1440 px.
+  **Open taste call for the user:** the coincidence popover runs past the fold at 1440 px.
+- **R3 legibility fix (session 18, user report: "too small to see … not clear what that
+  mark even means"):** the ✦ is now a **drawn path** (`starPath()`, R=7.5, halo stroked
+  3.5 px in `--panel`, filled `rgba(--ink-rgb,.78)`), never the ✦ character — a glyph
+  sits small inside its em box, so raising the font could never raise the mark (the
+  session-15 chevron trap). Still neutral ink, never a guitar accent. The overlap guard
+  went 12 → 18 px (no count changes in any stocked tuning). The plot now carries a
+  one-line key — a smaller `--mut` star plus *"two strings, one pitch — click a mark"*,
+  drawn at `lastX + 34`, skipped rather than smeared if it would reach the status chip;
+  the wording echoes the frozen popover's opening sentence rather than inventing physics.
+  `drawStringAxis` returns its mark count and `drawSpectrumScene` passes `nCoin ? 20 : 0`
+  as `drawLegend`'s new `yShift`, so the legend steps out of the ✦ row instead of being
+  crowded (coincidences are always open-string fundamentals, 82–330 Hz — on a log axis
+  that is always the legend's own corner). PNG exports unaffected (`state.strings=false`
+  there: no marks, no key, no shift). Gate green; `tests/r3.test.js` is now **42** — its
+  R3.3 contracts were rewritten because `/✦/` in the body would now be satisfied by a
+  comment, and they assert the filled path *scoped to the mark loop* (the key draws a
+  star too), the absence of `fillText("✦")`, neutral ink, and the key's presence — all
+  four mutation-checked.
 - **NEXT — R4, then R5** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
   **R4** harmonic-ancestry info in the per-string popovers (ratio to root,

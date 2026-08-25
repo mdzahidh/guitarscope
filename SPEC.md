@@ -969,3 +969,36 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
 - **Left open for the user:** the ✦ near 247 Hz sits close to the legend text, and the
   coincidence popover runs past the visible fold at 1440 px. Both are copy/layout taste
   calls, not wiring, and were deliberately not fixed inside the milestone.
+
+### Session 18 (2026-08-24) — the ✦ made legible, and given a key
+
+First user look at R3 in the app: *"the coincidence markers are too small to see, almost
+not even noticeable. Also it's not clear to the user what that mark even means."* Both
+complaints fixed in block 3 alone; no copy, no state, no new control.
+
+- **The mark is now a drawn path, not the ✦ character.** `starPath()` builds a
+  four-pointed sparkle at `R = 7.5`, stroked 3.5 px in `--panel` as a halo (so it holds
+  against curves and region shading) and filled `rgba(--ink-rgb, .78)`. Enlarging the
+  old `fillText("✦")` would not have worked: a glyph renders small inside its em box —
+  the trap already paid for by the fold chevron in session 15 — and `--mut` was the
+  dimmest ink available. Still never a guitar accent; the landing belongs to neither
+  string. The overlap guard went 12 → 18 px to suit the bigger mark, which changes no
+  count in any stocked tuning (the two E4 landings already collapsed).
+- **The plot says what the mark means, once:** a smaller `--mut` star plus *"two strings,
+  one pitch — click a mark"*, drawn after the last mark at `lastX + 34`. The wording
+  echoes the frozen popover's own opening sentence rather than inventing physics.
+  Coincidences are always open-string fundamentals (82–330 Hz), so on a log axis every
+  mark lands in the left quarter — that is why they crowded the legend, and why the space
+  immediately right of them is guaranteed free. The key is skipped rather than smeared if
+  it would reach the status chip.
+- **The legend moves instead of being crowded.** `drawStringAxis` returns its mark count;
+  `drawSpectrumScene` passes `nCoin ? 20 : 0` as `drawLegend`'s new `yShift`. This closes
+  the first of the two taste calls left open at gate 3.
+- **Gate re-run green** (dsp 171, r3 42, headless 20, both tamper guards). Two contracts
+  in `tests/r3.test.js` were rewritten by the reviewer, since `/✦/` in the function body
+  would now be satisfied by a comment — precisely the gate-3 failure. They assert the
+  filled path *inside the mark loop* (scoped, because the key also draws a star), the
+  absence of `fillText("✦")`, neutral ink and no `--slot-[ab]`, and the key's presence.
+  All four were mutation-checked against a deliberately broken `index.html`.
+- PNG exports are untouched: they force `state.strings=false`, so no marks, no key, and
+  no legend shift.

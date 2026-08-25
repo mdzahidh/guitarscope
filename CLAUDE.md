@@ -198,8 +198,10 @@ build educational copy from it, never re-derive from scratch.
   comment, and they assert the filled path *scoped to the mark loop* (the key draws a
   star too), the absence of `fillText("✦")`, neutral ink, and the key's presence — all
   four mutation-checked.
-- **R4 gate landed before the milestone (session 18, `fe6a5f5` + `e999b05`) — the build is
-  delegated and running.** Same order as R3: gate, then handoff, then builder. Block 0
+- **R4 harmonic ancestry BUILT — gate 4 passed, merged to master 2026-08-24 (`9be2849`;
+  builder commits `5780f50` + `471d5c6`).** Gate first, then handoff
+  (`docs/handoff/spark-r4.md`), then the delegated builder (Muse Spark), launched from
+  here — same order as R3, second time it worked. Block 0
   carries `JUST_INTERVALS`/`isPow2`/`stringAncestry()`; block 4 carries a **second frozen
   copy block** (`// ---------- harmonic ancestry copy (R4) ----------` → its end sentinel:
   `ANCESTRY_TEMPER`, `harmonicIntervalPhrase`, `landingFor`, `harmonicRowNoteHtml`,
@@ -209,24 +211,30 @@ build educational copy from it, never re-derive from scratch.
   string, not the lowest** — every adjacent gap in all five stocked tunings is 5/4/7/2
   semitones (4/3, 5/4, 3/2, 9/8, all fixed by THEORY §3 and §5), whereas E→D is a minor
   seventh THEORY leaves ambiguous (§3.5); flag the gap, don't improvise. `tests/verify.sh`
-  is now **five steps with two frozen SHAs**, and `tests/r4.test.js` (49/11) +
-  `tests/headless.js` (22/5) are deliberately red until R4.1–R4.4 land — both were
-  mutation-checked the day they were written (a scratch build of the ~30-line plumbing
-  takes them to 60/0 and 27/0). Handoff: `docs/handoff/spark-r4.md`. Note for anyone
-  editing the guards: **the awk programs in `verify.sh` must stay inline** — `awk -v` eats
+  is now **five steps with two frozen SHAs**; `tests/r4.test.js` (49/11) and
+  `tests/headless.js` (22/5) were written red and mutation-checked the same day, and the
+  shipped build takes them to **60/0 and 27/0** exactly as the scratch build predicted.
+  The shipped diff is **13 lines of `index.html`** — `harmonicRowNoteHtml(si,hh)` per
+  harmonic row, `ancestrySectionHtml(si)` above "Current values", `denominatorRuleHtml()`
+  as a native `<details class="pop-more">` (no JS, no state key, nothing persisted), the
+  `?pop=str<N>` door beside `coin<N>`, and the `.pop-sub`/`.pop-more` rules. Verified here
+  rather than trusted: real unsandboxed Chrome, no `$CHROME` wrapper, `?pop=str3`
+  screenshotted in both themes (D3 146.8 / G3 196.0 / perfect fourth · 4/3 / both
+  harmonics of 48.9 Hz · G1 / +2.0 ¢ from just). **Open taste call for the user:** the
+  string popover is now ≈1130 px against the 560 px `.popover` cap, so the per-harmonic
+  toggles sit below its scroll fold — placement was my spec (ROADMAP R4.2, asserted by
+  `tests/r4.test.js`), so moving or folding the section is a reviewer edit to source *and*
+  contract. Note for anyone editing the guards: **the awk programs in `verify.sh` must stay inline** — `awk -v` eats
   backslashes, so a pattern passed that way matches nothing and hashes the empty string.
-- **NEXT — R4, then R5** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
+- **NEXT — R5** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
-  **R4** harmonic-ancestry info in the per-string popovers (ratio to root,
-  overtone-family vs shares-an-ancestor, the denominator rule — it reuses the reviewed
-  `findCoincidences()` rather than a second detector, so it is one low-risk stack); then
   **R5** interval consonance explainers (joint period, comb alignment, Plomp–Levelt
   roughness) — R5.2/R5.3 blocked until the user resolves the two docs/THEORY.md §2.5
   numeric caveats. Educational tone: measure first, never lecture — curiosity clicks the
-  ✦. **Delegation shape, proven at gate 3: write the physics copy myself, freeze it by
-  sentinel + SHA, hand the builder only the plumbing.** Do not batch R4 with R5.
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 40, headless 20, plus both
-  tamper guards. `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
+  ✦. **Delegation shape, proven at gates 3 and 4: write the physics copy myself, freeze it
+  by sentinel + SHA, hand the builder only the plumbing.**
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, headless 27, plus
+  all three tamper guards (`tests/` untouched, both frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
@@ -246,11 +254,13 @@ build educational copy from it, never re-derive from scratch.
   + popovers, **3** canvas rendering, **4** app state/UI/synth/exports.
 - `tests/dsp.test.js` — extracts script block 0 from index.html, runs it under node.
   No framework; prints `N passed, M failed`, exit code 1 on failure.
-- `tests/verify.sh` — **the R3 gate**; the one command a delegated builder must get to
+- `tests/verify.sh` — **the Rameau gate** (R3, then R4); the one command a delegated builder must get to
   exit 0 before opening a PR. Runs the three node suites plus the untouched-`tests/`
   and frozen-copy guards; `BASE=<ref>` picks the comparison base (default `master`).
-- `tests/r3.test.js` — the R3 suite: `findCoincidences()` math (green) and the R3.2–R3.4
-  wiring contracts (red until built), all read out of `index.html`.
+- `tests/r3.test.js` — the R3 suite: `findCoincidences()` math and the R3.2–R3.4 wiring
+  contracts, all read out of `index.html`. `tests/r4.test.js` — the same shape for R4:
+  `stringAncestry()`/`isPow2` math plus the R4.1–R4.4 wiring contracts and the frozen
+  ancestry-copy SHA.
 - `tests/headless.js` — differential pixel + DOM checks through real Chrome. Note two
   traps recorded in ARCHITECTURE: `--user-data-dir` makes headless Chrome hang forever
   in first-run setup, and `index.html` carries its own source inline, so `--dump-dom`
@@ -287,15 +297,16 @@ build educational copy from it, never re-derive from scratch.
   overrides), `?open=all|key,key` (unfold collapsed panels: diff|bands|tone|eq|sgram|
   env — **full-page screenshots need `?open=all`** now that eq/sgram/env start
   folded), `?pop=<glosskey>` (pin a glossary/region popover open for capture; `?pop=coin<N>` pins
-  the Nth ✦ coincidence popover, N indexing the sorted `findCoincidences()` result),
+  the Nth ✦ coincidence popover, N indexing the sorted `findCoincidences()` result;
+  `?pop=str<N>` pins the open-string popover for string N = 0–5, low E first),
   `?tol=<0-50>` (coincidence tolerance in cents — **gate hook only**, unpersisted, no UI),
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
   "Load test files" button).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
-- `./tests/verify.sh` — the R3 gate (all suites + tamper guards). **Green as of gate 3**;
-  keep it that way, and reuse its shape (frozen copy + read-only `tests/`) for R4/R5.
+- `./tests/verify.sh` — the Rameau gate (all suites + tamper guards). **Green as of gate 4**;
+  keep it that way, and reuse its shape (frozen copy + read-only `tests/`) for R5.
   **It must not run inside a shell sandbox** — Chrome aborts at startup in
   `_RegisterApplication` (exit 134) when it cannot reach `launchservicesd`, and macOS
   pops a crash dialog per launch. `tests/headless.js` recognises that abort, prints the

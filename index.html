@@ -1502,6 +1502,71 @@ function findCoincidences(marks, tolCents){
   return out;
 }
 
+// ---------- harmonic ancestry between two strings (R4.1) ----------
+// Just ratios for the interval classes docs/THEORY.md actually fixes: §3 for the
+// major-side intervals, §4 for the minor-side ones. Classes 1 (minor second) and 6
+// (tritone) are deliberately ABSENT — THEORY names no ratio for them, and no stocked
+// tuning puts two strings that far apart, so the caller renders nothing rather than
+// inventing one. Likewise the minor seventh's 9/5 is THEORY's figure; the rival 16/9
+// and 7/4 readings are not ours to choose between (§3.5 raises the same ambiguity for
+// the sixth), which is why ancestry is measured between ADJACENT strings — every
+// adjacent gap in every stocked tuning is 2, 4, 5 or 7 semitones.
+const JUST_INTERVALS = {
+  0:  { n: 1,  d: 1, name: "unison" },
+  2:  { n: 9,  d: 8, name: "major second" },
+  3:  { n: 6,  d: 5, name: "minor third" },
+  4:  { n: 5,  d: 4, name: "major third" },
+  5:  { n: 4,  d: 3, name: "perfect fourth" },
+  7:  { n: 3,  d: 2, name: "perfect fifth" },
+  8:  { n: 8,  d: 5, name: "minor sixth" },
+  9:  { n: 5,  d: 3, name: "major sixth" },
+  10: { n: 9,  d: 5, name: "minor seventh" },
+  11: { n: 15, d: 8, name: "major seventh" },
+};
+
+function isPow2(n){ return Number.isInteger(n) && n > 0 && (n & (n - 1)) === 0; }
+
+// Where one string sits inside another's sound. Returns null when THEORY names no
+// ratio for the gap (see JUST_INTERVALS) — an empty answer is a correct answer.
+//
+// With the interval as p/q in lowest terms, note = root × p/q, so both are harmonics
+// of one common fundamental g = root/q = note/p: the root is its q-th, the note its
+// p-th. THEORY §3.4's denominator rule reads straight off q — a power of two means
+// the note lives *inside* the root's own series (dropped log2 q octaves); anything
+// else means the two only share an ancestor further down. The numerator carries the
+// mirror of it: p a power of two means the note IS that ancestor, transposed up.
+function stringAncestry(rootMidi, noteMidi, a4){
+  if(!Number.isFinite(rootMidi) || !Number.isFinite(noteMidi)) return null;
+  const semitones = Math.round(noteMidi - rootMidi);
+  const pc = ((semitones % 12) + 12) % 12;
+  const just = JUST_INTERVALS[pc];
+  if(!just) return null;
+  const octaves = Math.round((semitones - pc) / 12);
+  let n = just.n, d = just.d;
+  if(octaves >= 0) n *= Math.pow(2, octaves); else d *= Math.pow(2, -octaves);
+  const g = gcdInt(n, d) || 1;
+  n /= g; d /= g;
+  const rootHz = midiToFreq(rootMidi, a4);
+  return {
+    semitones, octaves, pc,
+    interval: just.name,
+    ratio: { n, d },
+    // the note is harmonic n of the common fundamental, the root is harmonic d of it
+    harmonic: n,
+    rootHarmonic: d,
+    ancestorHz: rootHz / d,
+    // denominator rule: a power of two ⇒ the note is in the root's series, dropped
+    // `drop` octaves. Otherwise the two are cousins, not parent and child.
+    family: isPow2(d) ? (pc === 0 ? "octave" : "overtone") : "common-ancestor",
+    drop: isPow2(d) ? Math.round(Math.log2(d)) : null,
+    // mirror: the note itself is the shared ancestor, `lift` octaves up
+    noteIsAncestor: isPow2(n),
+    lift: isPow2(n) ? Math.round(Math.log2(n)) : null,
+    // what equal temperament does to it: signed, tempered minus just
+    centsFromJust: 100 * semitones - 1200 * Math.log2(n / d),
+  };
+}
+
 // ---------- STFT band envelopes (for onsets & decay) ----------
 // win 2048, hop 512. Returns per-frame power in given bands plus
 // full-band magnitude spectra flux for onset detection.
@@ -6129,6 +6194,155 @@ function coincidenceContentHtml(hit){
     '<div class="pop-sec"><div class="pop-label">Current values</div><div class="pop-vals">'+vals+'</div></div>';
 }
 // ---------- end ✦ popover copy ----------
+// ---------- harmonic ancestry copy (R4) ----------
+// Copy discipline, as for the ✦ block above: every claim traces to docs/THEORY.md —
+// §1 (the series), §3 and §4 (the just ratios behind JUST_INTERVALS), §3.4 (the
+// denominator rule, and its numerator layer: p a power of two ⇒ the upper note IS
+// the shared ancestor, which is why a bare fourth leans), §3.7 (the dynasty of
+// fifths — tuning in fourths walks it toward the ancestors, so the string below is
+// one of the string above’s own harmonics), §5 (12-TET errors: octave exact, 5th
+// −2 ¢, 4th +2 ¢, major 3rd +14 ¢), §6 (fretboard nodes). The whole tone’s −4 ¢ is
+// arithmetic from THEORY’s 9/8 and the definition of the tempered semitone, not a
+// new physical claim. No section symbols or file names appear in the copy itself:
+// the app states the physics, it does not cite its homework. Tone: measure first,
+// never lecture — the reader arrived here by clicking a string, not by asking for
+// a lesson, so every paragraph answers "where does this note come from?" and stops.
+
+// Equal temperament's verdict on the intervals two adjacent strings can span,
+// keyed by semitone class (THEORY §5's table; the whole tone is arithmetic).
+const ANCESTRY_TEMPER={
+  2:"Equal temperament renders that whole tone about 4 ¢ narrow of a true 9/8 — far too small to disturb the relation above.",
+  4:"Equal temperament renders that major third about 14 ¢ sharp of a true 5/4 — the largest compromise the fret system makes, and an audible one. Inside the series, but not to the accuracy the fifth and the fourth manage.",
+  5:"Equal temperament renders that fourth about 2 ¢ wide of a true 4/3 — small enough that a harmonic and the open string it lands on read as a single pitch.",
+  7:"Equal temperament renders that fifth about 2 ¢ narrow of a true 3/2 — the compromise that lets all twelve keys behave alike, and small enough that the ear takes the two as one pitch.",
+};
+function _cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+// "an octave up" / "an octave and a perfect fifth up" — what harmonic h is as an
+// interval, once its octaves are folded away (THEORY §1's ratio table).
+function harmonicIntervalPhrase(h){
+  const fold=octaveFold(h|0);
+  const oct=OCT_WORD[fold.octaves]||(fold.octaves+" octaves");
+  const name=HARMONIC_INTERVALS[fold.n+"/"+fold.d];
+  if(fold.n===1&&fold.d===1) return oct+" up";
+  return oct+" and a "+(name||fold.n+"/"+fold.d)+" up";
+}
+// Does harmonic h of string si land on another open string? Same detector, same
+// tolerance, same answer as the ✦ on the plot — never a second implementation.
+function landingFor(si,h){
+  const midis=tuningMidi(state.tuning,state.customOffset);
+  if(!midis||midis[si]==null) return null;
+  const marks=[];
+  for(let i=0;i<midis.length;i++){
+    if(midis[i]==null) continue;
+    marks.push({si:i,midi:midis[i],f:midiToFreq(midis[i],state.a4),harm:1});
+  }
+  const f=midiToFreq(midis[si],state.a4);
+  marks.push({si:si,midi:midis[si],f:f*h,harm:h});
+  const hits=findCoincidences(marks,state.tolCents);
+  for(const c of hits) if(c.from.si===si&&c.harm===h) return c;
+  return null;
+}
+// The one-line note under a harmonic row: what it is as an interval, and where it
+// lands if it lands. A harmonic that is switched off still tells the truth about
+// itself — it just says how to see the mark.
+function harmonicRowNoteHtml(si,hh){
+  const h=hh|0;
+  if(h<2||h>5) return "";
+  const on=!!(state.stringHarmonics[si]&&state.stringHarmonics[si][h-2]);
+  const hit=landingFor(si,h);
+  let t=_cap(harmonicIntervalPhrase(h))+".";
+  if(hit) t+=" ✦ Lands on the open "+STRING_ORD[hit.onto.si]+" string"+
+    (on ? "" : " — switch it on to mark it")+".";
+  return '<div class="pop-sub">'+esc(t)+'</div>';
+}
+// Where this string sits, measured against the one next to it. Guitar tuning is a
+// chain of fourths, which is the dynasty of fifths walked toward the ancestors: the
+// lower string is one of the upper string's own harmonics, dropped octaves. So read
+// the pair in whichever direction puts one inside the other's series — a power of
+// two in the denominator — and lead with that; the other direction is the cousin
+// story, and it is worth telling too.
+function ancestrySectionHtml(si){
+  const midis=tuningMidi(state.tuning,state.customOffset);
+  if(!midis) return "";
+  const lo=(si>0)?si-1:0, hi=(si>0)?si:1;
+  if(midis[lo]==null||midis[hi]==null) return "";
+  const up=stringAncestry(midis[lo],midis[hi],state.a4);      // upper as a ratio to the lower
+  const down=stringAncestry(midis[hi],midis[lo],state.a4);    // and the other way round
+  // THEORY names no ratio for this gap, so Claude Rameau names none either.
+  if(!up||!down) return "";
+  const loF=midiToFreq(midis[lo],state.a4), hiF=midiToFreq(midis[hi],state.a4);
+  const loOrd=STRING_ORD[lo], hiOrd=STRING_ORD[hi];
+  const inside=(down.family==="overtone"||down.family==="octave") ? down : ((up.family==="overtone"||up.family==="octave") ? up : null);
+  const upward=(inside===up);
+  const ratio=up.ratio.n+"/"+up.ratio.d;
+
+  let lead;
+  if(inside){
+    const child=upward?hiOrd:loOrd, parent=upward?loOrd:hiOrd;
+    const drop=OCT_WORD[inside.drop]||(inside.drop+" octaves");
+    lead='The open '+child+' string is harmonic '+inside.harmonic+' of the open '+parent+' string'+
+      (inside.drop>0 ? ', dropped '+drop : '')+
+      '. Not near that string’s sound — inside it: every time the '+parent+
+      ' string rings, this note is already in the mix, quietly, as one of its partials.';
+  } else {
+    lead='The open '+hiOrd+' string sits a '+up.interval+' above the open '+loOrd+
+      ' string. Neither one lives inside the other’s series; they are relatives at a distance.';
+  }
+
+  // The denominator rule itself, read off the upward ratio (THEORY §3.4). Both
+  // branches are true statements about the same pair — the fourth is a cousin
+  // upward and a parent downward, which is exactly what makes it worth saying.
+  let rule;
+  if(isPow2(up.ratio.d)){
+    rule='As a ratio the '+hiOrd+' string is '+ratio+' of the '+loOrd+
+      ' string, and that denominator is a power of two. That is the whole test: a power of two means one note lives inside the other’s series rather than merely near it.';
+  } else {
+    rule='As a ratio the '+hiOrd+' string is '+ratio+' of the '+loOrd+
+      ' string, and that denominator hides an odd factor. Read upward, then, neither contains the other: they are cousins, both harmonics of one note further down — the '+
+      loOrd+' string is its harmonic '+up.ratio.d+', the '+hiOrd+' string its harmonic '+up.ratio.n+'.';
+    if(up.noteIsAncestor) rule+=' And the numerator is a power of two, which means that shared note is the '+
+      hiOrd+' string’s own, '+(OCT_WORD[up.lift]||up.lift+" octaves")+
+      ' below — the reason a bare fourth leans, wanting to resolve onto the chord built on it.';
+  }
+
+  const temper=ANCESTRY_TEMPER[up.pc]||
+    ('Equal temperament renders that interval '+fmtCents(up.centsFromJust)+' from the just ratio.');
+
+  const vals=
+    '<div class="pop-val"><span class="dot" style="background:'+_stringColor(lo,0.9)+'"></span>'+
+      '<span class="l">Open '+loOrd+' string</span>'+
+      '<span class="v">'+esc(fmtHzFine(loF)+"  ·  "+noteInfo(loF,state.a4).name)+'</span></div>'+
+    '<div class="pop-val"><span class="dot" style="background:'+_stringColor(hi,0.9)+'"></span>'+
+      '<span class="l">Open '+hiOrd+' string</span>'+
+      '<span class="v">'+esc(fmtHzFine(hiF)+"  ·  "+noteInfo(hiF,state.a4).name)+'</span></div>'+
+    '<div class="pop-val"><span class="dot" style="background:var(--dim)"></span>'+
+      '<span class="l">Interval</span><span class="v">'+esc(up.interval+"  ·  "+ratio)+'</span></div>'+
+    '<div class="pop-val"><span class="dot" style="background:var(--dim)"></span>'+
+      '<span class="l">Both are harmonics of</span>'+
+      '<span class="v">'+esc(fmtHzFine(up.ancestorHz)+"  ·  "+noteInfo(up.ancestorHz,state.a4).name)+'</span></div>'+
+    '<div class="pop-val"><span class="dot" style="background:var(--dim)"></span>'+
+      '<span class="l">Equal temperament</span><span class="v">'+esc(fmtCents(up.centsFromJust)+"  from just")+'</span></div>';
+
+  return '<div class="pop-sec"><div class="pop-label">Where this string sits</div>'+
+    '<p>'+esc(lead)+'</p><p>'+esc(rule)+'</p><p>'+esc(temper)+'</p>'+
+    '<div class="pop-vals">'+vals+'</div></div>';
+}
+// The rule stated once, in general, for the reader who wants it — folded away by
+// default because the sections above already answered the question they clicked on.
+function denominatorRuleHtml(){
+  return '<details class="pop-more"><summary>Why the denominator decides</summary>'+
+    '<p>Write the interval between two notes as a fraction p/q in lowest terms. If q is a power of two — 1, 2, 4, 8 — '+
+    'the upper note is harmonic p of the lower one, dropped as many octaves as it takes: it lives inside the lower note’s '+
+    '<button class="term" data-term="harmonic-series">series</button>. '+
+    'If q hides an odd factor — the 3 in 4/3, the 5 in 8/5 — it does not. The two are then harmonics of a common note further down, '+
+    'at the lower note’s frequency divided by q: the lower note is its harmonic q, the upper note its harmonic p.</p>'+
+    '<p>The test is a power of two, not merely an even number: 6 is even but hides a 3. '+
+    'Then read the numerator. If p is a power of two, the upper note <em>is</em> that common note, carried up by octaves — '+
+    'which is why a bare fourth leans, wanting to resolve onto the chord built on it. If p carries odd factors, the note is a member of that family, not its root.</p>'+
+    '<p>Every 3 in the fraction is a step of a fifth, every 5 a step of a major third, every 2 an octave. '+
+    'The denominator says whose family; the numerator says which member.</p></details>';
+}
+// ---------- end ancestry copy ----------
 function openCoincidencePopover(hit, anchor){
   if(!hit) return;
   stopPlayback();

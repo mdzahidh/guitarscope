@@ -217,6 +217,50 @@ section("?pop=coin0 opens the discovery popover");
   ok(!/30\s*[–-]\s*40\s*Hz/.test(page), "no unreviewed 30–40 Hz figure");
 }
 
+// ------------------------------------------------ the ancestry popover (R4) --
+// The open G, because it is the clearest case in standard tuning: D3 -> G3 is a
+// perfect fourth, 4/3, whose denominator hides an odd factor -- so the two are
+// cousins rather than parent and child, both harmonics of a G1 two octaves below
+// the 3rd string (146.83/3 = 48.94 Hz, and 48.94 x 4 = 195.8 ~ 196.00).
+section("?pop=str3 opens one string popover, carrying its ancestry");
+{
+  const page = dom(BASE + "&pop=str3");
+  const { cls, html } = popoverOf(page);
+  ok(cls != null && /\bopen\b/.test(cls), "a string popover is pinned open",
+    cls == null ? "no #popover in the dump" : 'class="' + cls + '"');
+  ok(/open 3rd string/.test(html), "…for the string the key named");
+
+  const FROZEN = [
+    "Where this string sits",
+    "harmonic 3 of the open 3rd string",
+    "4/3",
+    "48.9 Hz",
+    "2 ¢ wide of a true 4/3",
+    "Why the denominator decides",
+  ];
+  const missing = FROZEN.filter(s => !html.includes(s));
+  ok(missing.length === 0, "…with the reviewed ancestry copy", missing.join(" | "));
+
+  // R4.4 asks for a native <details>, not a scripted fold: nothing to persist,
+  // nothing to restore, and it prints open when the browser prints the page.
+  ok(/<details\b[^>]*class="[^"]*pop-more/.test(html),
+    "…and the general rule folded into a native <details>");
+
+  // R4.1 rides on the harmonic rows, which only exist while Strings is on. BASE
+  // turns harmonics 2-4 on for every string, so the low E's 4th harmonic (329.6
+  // Hz) is shown and lands on the open 1st string, E4 -- one of the two ✦ this
+  // tuning draws, reached here through the row rather than through the mark.
+  const page6 = dom(BASE + "&pop=str0");
+  const h4 = popoverOf(page6).html;
+  ok(/Lands on the open 1st string/.test(h4),
+    "a shown harmonic that lands on an open string says so, in its own row");
+
+  // Same two docs/THEORY.md §2.5 figures, same reason as above: still under
+  // review, so they must not reach the user through this surface either.
+  ok(!/critical bandwidth/i.test(page), "no unreviewed critical-bandwidth framing");
+  ok(!/30\s*[–-]\s*40\s*Hz/.test(page), "no unreviewed 30–40 Hz figure");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 console.log("artifacts: " + OUT);
 process.exit(failed ? 1 : 0);

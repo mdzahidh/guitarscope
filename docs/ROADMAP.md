@@ -508,15 +508,76 @@ string's fundamental. Build it in this order — the pure function first, drawn 
 
 # R4 — Harmonic ancestry in the per-string popover
 
-Extends `stringContentHtml()` (~5855). Source: `docs/THEORY.md` §3.4.
+The ✦ answers "these two strings are sounding the same note". R4 answers the question
+that follows: **where does this string sit in its neighbour's sound?** Same door (the
+open-string popover the Strings axis already opens), same discipline — measure first,
+never lecture. Source: `docs/THEORY.md` §3.4 (the denominator rule), §1 (the series),
+§3/§4 (just ratios), §5 (12-TET errors), §3.7 (the dynasty of fifths).
 
-- **R4.1** — For each harmonic row 2–5 already listed, add its ratio to the string's
-  fundamental and the note it lands on (both already computed; just surface the ratio).
-- **R4.2** — Add a short "family" line: whether that harmonic is an overtone of the
-  currently-lowest string, or shares an ancestor with it. Reuse `findCoincidences()`
-  from R3.1 rather than writing a second detector.
-- **R4.3** — One expandable sentence on the denominator rule, quoting THEORY.md §3.4.
-- Verify + commit per task.
+Extends `stringContentHtml()` — **line 6012**, script block 4, immediately above the
+frozen ✦ copy. (This supersedes the "~5855" anchor this task originally carried.)
+
+**Reference note: the adjacent string, not the lowest string.** This task originally
+said "whether that harmonic is an overtone of the currently-lowest string". That is not
+safely sourceable: in E/E♭/D standard the low string to the D string is 10 semitones,
+and `docs/THEORY.md` fixes the minor seventh only as 9/5 (§4) — a −17.6 ¢ tempered gap
+with unmentioned rivals 16/9 (+3.9 ¢) and 7/4 (+31.2 ¢), an ambiguity THEORY raises for
+the 6th (§3.5) and never resolves for the 7th. House rule: flag the gap, don't improvise
+physics. Every **adjacent** pair in every stocked tuning is 5, 4, 7 or 2 semitones —
+4/3, 5/4, 3/2, 9/8, all fixed by §3 and error-tabulated in §5 — and the adjacent pair
+tells the better story anyway (§3.7): tuning in fourths walks *down* the dynasty of
+fifths, so each string is the parent of the one below it, with the G→B major third the
+one overtone exception. `tests/r4.test.js` asserts the full coverage claim over all five
+stocked tunings rather than trusting it.
+
+**Pre-landed, frozen, currently inert** — the same shape that worked at gate 3. Block 0
+carries the math (`JUST_INTERVALS`, `isPow2`, `stringAncestry`); block 4 carries the
+prose between `// ---------- harmonic ancestry copy (R4) ----------` and
+`// ---------- end ancestry copy ----------`. **Do not rewrite either.** The copy block
+is SHA-256 frozen by `tests/verify.sh` and by `tests/r4.test.js`; changing one character
+fails the gate. The tasks below are wiring.
+
+### R4.1 — Interval + landing on each harmonic row
+
+- In `stringContentHtml()`'s `for(let hh=1;hh<=5;hh++)` loop, after each row, append
+  `harmonicRowNoteHtml(si,hh)` (frozen). It emits a `<div class="pop-sub">` carrying what
+  harmonic `hh` *is* as an interval ("an octave and a perfect fifth") and, when the
+  harmonic lands on another open string, "✦ lands on the open 2nd string".
+- The landing reuses `findCoincidences()` from R3.1 — the same ±6 ¢ window and the same
+  detector as the mark on the plot, never a second one. Nothing to write; it is inside
+  the frozen helper already.
+- One new CSS rule, beside the other `.pop-*` rules (~line 487):
+  `.pop-sub{ font-size:11px; color:var(--dim); margin:-1px 0 2px 16px; }`
+- **Done when:** every shown harmonic row names its interval, the rows that land say so,
+  and no other row layout changed.
+
+### R4.2 — "Where this string sits" section
+
+- Insert `ancestrySectionHtml(si)` (frozen) into `stringContentHtml()`'s return, between
+  the "How Claude Rameau places it" section and the "Current values" section.
+- It picks the adjacent pair itself (string `si-1`/`si`, or `0`/`1` for the lowest
+  string), reads `stringAncestry()` from block 0, and returns `""` when THEORY names no
+  ratio for that gap — an empty string is a correct answer, not a bug to work around.
+- **Done when:** the section renders for all six strings in all five stocked tunings.
+
+### R4.3 — Headless door: `?pop=str<N>`
+
+- The canvas and the popover are unreachable from node, exactly as at R3.2. Extend the
+  existing `?pop=` hook (**line 7282**, beside the `coin<N>` branch) with `str<N>`,
+  N = 0–5 indexing `STRING_ORD` (0 = lowest), out of range = no popover.
+- **Done when:** `?demo&pop=str3` pins the open-G popover open; `tests/headless.js`
+  asserts on it and the gate stays red without it.
+
+### R4.4 — The denominator rule, expandable
+
+- Append `denominatorRuleHtml()` (frozen) to `stringContentHtml()`'s return. It is a
+  native `<details class="pop-more"><summary>…` — no JS, no state, no persistence.
+- CSS beside the other `.pop-*` rules; the popover already has
+  `overscroll-behavior:contain`, so a long open `<details>` scrolls without stealing the
+  page (see the session-16 fix in `CLAUDE.md`).
+- **Done when:** it opens and closes, and the popover still scrolls to its own bottom.
+
+- Verify + commit per task, and run `./tests/verify.sh` to `gate passed` before the PR.
 
 ---
 

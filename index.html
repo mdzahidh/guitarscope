@@ -4183,7 +4183,9 @@ const state={ slots:[null,null], tuning:"estd", customOffset:0,
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
 // M2.7: gate hook — ?refine=0 disables the zoom refine (never persisted, no UI)
 const _refineEnabled = !/[?&]refine=0(?:&|$)/i.test(location.search);
-const _refineProbe = "?refine="; // gate hook probe — makes [?&]refine= visible to decommented source
+// A pan or a wheel writes ZOOMS and redraws on every event, so the refine waits
+// for the gesture to settle rather than starting an FFT pass per mousemove.
+const SG_REFINE_SETTLE_MS = 120;
 const cardUI=[{mode:"empty"},{mode:"empty"}];
 const loadSeq=[0,0]; // bump to cancel a stale in-flight analysis
 
@@ -4677,52 +4679,60 @@ function sgramModelFor(i,scale){
   const view=sgramView(i);
   const zKey=i===0?"sga":"sgb";
   const zw=sgramZoomWin(zKey,view.T0,view.T1);
-  // M2.7: resolution follows attention — refine on x-zoom
+  // M2.7: resolution follows attention — refine on x-zoom.
+  // The pane draws the base pass until a finer one for exactly this request is
+  // in hand; the job runs in the background and swaps in via drawAll().
   let sgToUse = tv.sg;
   let imageToUse = s._sgImage.canvas;
+  let want = null;
   if(_refineEnabled && s.samples && s.info && s.info.sampleRate && ZOOMS[zKey] && ZOOMS[zKey].x0!=null){
-    const spanSec = zw.T1 - zw.T0;
-    const win = sgramWindowFor(spanSec, s.info.sampleRate);
+    const win = sgramWindowFor(zw.T1-zw.T0, s.info.sampleRate);
     if(win !== 2048){
-      const fileT0 = Math.max(0, zw.T0 - view.d0);
+      const fileT0 = Math.max(0, zw.T0 - view.d0);          // the zoom, in this file's own time
       const fileT1 = Math.min(tv.sg.duration, zw.T1 - view.d0);
-      if(fileT1 > fileT0){
-        const refineKey = fileT0.toFixed(4)+"|"+fileT1.toFixed(4)+"|"+win+"|512|"+key;
-        const cached = s._sgRefined && s._sgRefined.key===refineKey ? s._sgRefined : null;
-        if(cached){
-          sgToUse = cached.sg;
-          imageToUse = cached.image;
-        } else if(!s._sgRefinePending || s._sgRefinePending.key!==refineKey){
-          s._sgRefinePending = {key: refineKey};
-          const rate = s.info.sampleRate;
-          const startSample = Math.max(0, Math.floor(fileT0*rate));
-          const endSample = Math.min(s.samples.length, Math.ceil(fileT1*rate));
-          const slice = s.samples.subarray(startSample, endSample);
-          spectrogramLog(slice, rate, {win, gridN: 512, minHopDiv: 32}).then(ns=>{
-            ns.t0 = fileT0;
-            let mx=0; for(let k=0;k<ns.frames.length;k++){ const p=ns.frames[k]; if(p>mx) mx=p; }
-            ns.maxDb=10*Math.log10(mx+1e-30);
-            if(!s._sgRefinePending || s._sgRefinePending.key!==refineKey) return;
-            if(state.slots[i]!==s) return;
-            const img = sgramImage(ns, scale.dbMax, scale.dbMin, off);
-            s._sgRefined = {key:refineKey, sg:ns, image:img};
-            s._sgRefinePending = null;
-            drawAll();
-          }).catch(e=>{ s._sgRefinePending=null; });
-        }
-      }
+      if(fileT1 > fileT0)
+        want = {key: fileT0.toFixed(4)+"|"+fileT1.toFixed(4)+"|"+win+"|512|"+key, fileT0, fileT1, win};
     }
-  } else {
-    // no x-zoom or refine disabled — discard stale refined state when zoom cleared
-    // keep cache for potential re-zoom; no action
   }
-  const winToPrint = sgToUse.win;
+  if(want && s._sgRefined && s._sgRefined.key===want.key){
+    sgToUse = s._sgRefined.sg;
+    imageToUse = s._sgRefined.image;
+  }
+  // Any job that is not for what the pane wants now is stale — the view moved
+  // on, or the zoom was cleared. Dropping the latch also makes a pass already
+  // in flight discard its own result when it lands.
+  if(s._sgRefinePending && (!want || s._sgRefinePending.key!==want.key)){
+    if(s._sgRefineTimer){ clearTimeout(s._sgRefineTimer); s._sgRefineTimer=null; }
+    s._sgRefinePending = null;
+  }
+  if(want && sgToUse===tv.sg && !s._sgRefinePending){
+    // Latch the request now, but launch only once the view has held still: a
+    // pan writes ZOOMS and redraws on every mousemove.
+    s._sgRefinePending = {key: want.key};
+    const rate = s.info.sampleRate;
+    const slice = s.samples.subarray(Math.max(0, Math.floor(want.fileT0*rate)),
+                                     Math.min(s.samples.length, Math.ceil(want.fileT1*rate)));
+    s._sgRefineTimer = setTimeout(()=>{
+      s._sgRefineTimer = null;
+      if(!s._sgRefinePending || s._sgRefinePending.key!==want.key) return;
+      spectrogramLog(slice, rate, {win: want.win, gridN: 512, minHopDiv: 32}).then(ns=>{
+        ns.t0 = want.fileT0;   // frame 0 sits here in file time; pane and readout both offset by it
+        if(!s._sgRefinePending || s._sgRefinePending.key!==want.key) return;
+        if(state.slots[i]!==s) return;
+        s._sgRefined = {key:want.key, sg:ns, image:sgramImage(ns, scale.dbMax, scale.dbMin, off)};
+        s._sgRefinePending = null;
+        drawAll();
+      }).catch(()=>{ s._sgRefinePending = null; });
+    }, SG_REFINE_SETTLE_MS);
+  }
+  // The crosshair must read the same analysis the pane drew, refined or not.
+  s._sgShown = sgToUse;
   return { sg:sgToUse, image:imageToUse,
     view:{T0:zw.T0,T1:zw.T1,d0:view.d0}, fWin:{F0:zw.F0,F1:zw.F1},
     zoomNote:zoomNoteFor(zKey),
     name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
     dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(),
-    statusText:winToPrint+"-pt Hann · max per log cell"
+    statusText:sgToUse.win+"-pt Hann · max per log cell"
       +(off?" · level-match "+fmtDb(off,1):"")
       +(state.sgAlign!=="off"&&bothSgLoaded()
         ?(state.sgAlign==="onset"?" · t = 0 at first onset":" · shared time axis"):"") };
@@ -4747,7 +4757,7 @@ function buildSgramDiffModel(){
   if(!d) return null;
   const t0=state.slots[0].tvis, t1=state.slots[1].tvis, off=sgLmDb();
   const zw=sgramZoomWin("sgd",d.dsg.t0,d.dsg.t0+d.dsg.duration);
-  return { dsg:d.dsg, image:d.image, S:d.S,
+  return { dsg:d.dsg, image:d.image, S:d.S, win:t0.sg.win,   // the difference never refines: both base passes
     view:{T0:zw.T0,T1:zw.T1}, fWin:{F0:zw.F0,F1:zw.F1},
     zoomNote:zoomNoteFor("sgd"),
     colorA:COLORS[0], colorB:COLORS[1], markers:tuningMarkers(),
@@ -4878,7 +4888,7 @@ function drawAll(){
     if(model){
       const c=setupCanvas(sgramCanvasD);
       drawSgramDiffScene(c.ctx,c.w,c.h,model);
-      sgramCanvasD.setAttribute("data-sgwin", "2048");
+      sgramCanvasD.setAttribute("data-sgwin", String(model.win));
     } else {
       sgramCanvasD.removeAttribute("data-sgwin");
     }
@@ -5000,7 +5010,7 @@ function attachSgramCrosshair(i){
   wrap.addEventListener("mousemove",e=>{
     const s=state.slots[i], tv=s&&s.tvis;
     if(!tv||!tv.sg){ hide(); return; }
-    const sg=tv.sg;
+    const sg=s._sgShown||tv.sg;   // what the pane actually drew: base or refined
     const rect=canvas.getBoundingClientRect();
     const x=e.clientX-rect.left, y=e.clientY-rect.top;
     const w=rect.width, h=rect.height;
@@ -5010,10 +5020,11 @@ function attachSgramCrosshair(i){
     const zw=sgramZoomWin(i===0?"sga":"sgb",view.T0,view.T1);
     const td=zw.T0+(x-SGPLOT.mL)/pW*(zw.T1-zw.T0);        // display time
     const t=td-view.d0;                                    // file time
-    const inFile=t>=-1e-9&&t<=sg.duration+1e-9;
+    const sgT0=sg.t0||0;                                   // a refined pass starts here, not at 0
+    const inFile=t>=sgT0-1e-9&&t<=sgT0+sg.duration+1e-9;
     const fr=Math.exp((1-(y-SGPLOT.mT)/pH)*Math.log(zw.F1/zw.F0))*zw.F0;
     const rate=s.info.sampleRate;
-    const f=Math.max(0,Math.min(sg.nFrames-1,Math.round((t*rate-sg.win/2)/sg.hop)));
+    const f=Math.max(0,Math.min(sg.nFrames-1,Math.round(((t-sgT0)*rate-sg.win/2)/sg.hop)));
     const gi=Math.max(0,Math.min(sg.gridN-1,
       Math.round(Math.log(fr/FMIN)/LOGSPAN*(sg.gridN-1))));
     const p=inFile?sg.frames[f*sg.gridN+gi]:NaN;

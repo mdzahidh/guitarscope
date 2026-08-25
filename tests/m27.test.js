@@ -192,8 +192,18 @@ section("M2.7.2 — opts.minHopDiv: the hop floor that made refining pointless")
     // between refine on and refine off can tell a recompute from a label, and
     // that compare needs two builds of the same page. Same shape as ?tol:
     // read at load, clamped, never persisted, no UI.
-    ok(/[?&]refine=/.test(w) || /\brefine=\(/.test(w),
-      "a ?refine=0 hook exists, so tests/headless.js can compare on against off");
+    // Assert on the HANDLER, never on text that says "?refine=": index.html
+    // carries its own source, and a hook written as a regex literal has "]"
+    // where a naive /[?&]refine=/ wants the separator, so that pattern can only
+    // ever be satisfied by a decoy string. (Same trap as the R3 ?pop=coin
+    // contract; see CLAUDE.md.) Each form below is a real parse of the URL.
+    const hookForms = [
+      /refine=[^\n]{0,80}\.test\(\s*location\.search/,   // regex literal tested against the query
+      /location\.search[^\n]{0,100}refine=/,               // or the query scanned for it
+      /URLSearchParams[\s\S]{0,300}get\(\s*["\x27]refine["\x27]/,
+    ];
+    ok(hookForms.some(re => re.test(w)),
+      "a ?refine=0 hook is really parsed out of the URL, so tests/headless.js can compare on against off");
     ok(!/gsRefine|saveSettings\(\)[^\n]*refine/i.test(w),
       "…and nothing persists it — it is a gate hook, not a setting");
   }
@@ -229,6 +239,40 @@ section("M2.7.2 — opts.minHopDiv: the hop floor that made refining pointless")
       "the pane publishes data-sgwin for the gate to read");
     ok(!/data-sgwin/.test(html.slice(0, html.indexOf("</style>"))),
       "it is never styled — it is a probe, not a surface");
+  }
+
+  // ------------------------------------------------- M2.7.4 (reviewer) ----
+  // Not in the delegated contract: found in review. The pane may now be drawn
+  // from a refined pass, so the hover readout has to read THAT pass — a dB
+  // number taken from the 2048-pt analysis under an 8192-pt picture is a
+  // visible number nothing on screen supports. The refined pass also starts at
+  // the zoom's left edge, so file time must be offset by its t0.
+  section("M2.7.4 — the hover readout reads the analysis the pane drew");
+  {
+    const w = decomment(b4);
+    const s = w.indexOf("function attachSgramCrosshair(");
+    ok(s > 0, "attachSgramCrosshair is in block 4");
+    const end = w.indexOf("\nfunction ", s + 10);
+    const body = w.slice(s, end > s ? end : s + 4000);
+
+    // It must not bind the base spectrogram as the thing it samples.
+    ok(!/const\s+sg\s*=\s*tv\.sg\s*;/.test(body),
+      "it no longer samples the BASE spectrogram unconditionally",
+      "still binds sg = tv.sg");
+    ok(/const\s+sg\s*=[^;]*\btv\.sg\b/.test(body),
+      "…but still falls back to it when the pane was not refined");
+
+    // Frame index and in-file test must both account for the slice origin.
+    // Forward-only window: the offset is applied inside the clamp, and looking
+    // backwards would find zw.T0 (the DISPLAY window) and pass vacuously.
+    const iF = body.indexOf("nFrames");
+    const frame = body.slice(iF, iF + 220);
+    ok(/t0\b/i.test(frame),
+      "the frame index offsets by the analysis start (sg.t0)",
+      "no t0 in the frame-index expression");
+    ok(!/inFile\s*=\s*t\s*>=\s*-1e-9/.test(body),
+      "and the in-file test is relative to the analysed slice, not to 0",
+      "in-file test still assumes the analysis starts at file time 0");
   }
 
   // --------------------------------------------------------------- docs ----

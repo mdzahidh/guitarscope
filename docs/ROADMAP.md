@@ -7,7 +7,10 @@ date: 2026-08-22
 
 Anchors below are **search strings first, line numbers second** (line numbers are as of
 commit `7999f1c` and shift as tasks land — always re-grep). Every task is sized to be
-finished, tested and committed on its own. Order matters: R1 → R2 → R3 → R4 → R5.
+finished, tested and committed on its own. Order matters: R1 → R2 → R3 → R4 →
+**M2.7** → R5 → R6. M2.7 is an instrument milestone, not a Rameau one; it sits in this
+file because it is next and because R5 draws on the spectrogram it sharpens. R5 and R6
+were renumbered when it was scheduled — the old R5 (consonance) is now **R6**.
 
 **Rules that bind every task** (from CLAUDE.md — they override any instinct):
 - `index.html` is the only shipped artifact. No build step, no server, no network.
@@ -582,16 +585,168 @@ fails the gate. The tasks below are wiring.
 
 ---
 
-# R5 — Interval consonance explainer
+# M2.7 — Resolution follows attention (hi-res spectrogram on zoom)
+
+Not a Rameau task and not education — an **instrument** improvement, filed here because
+it is next and because R5 (harmonic tracks) draws on the spectrogram this milestone
+sharpens. No `docs/THEORY.md` tracing, **no frozen copy block**: there is no educational
+prose in it. That makes it an unusually clean delegation — it is all plumbing.
+
+**The problem.** The spectrogram is computed once per file at 2048-pt (43 ms at 48 kHz)
+and zoom **crops the rendered bitmap**; it never recomputes. So a deep zoom blurs instead
+of resolving, and at 2048 the three lowest open-string pairs cannot be told apart at all.
+Measured here with the app's own `spectrogramLog`, two equal tones, "resolved" = two grid
+maxima with a >3 dB dip between them:
+
+| pair | Δf | 2048 (43 ms) | 4096 (85 ms) | 8192 (171 ms) |
+|---|---|---|---|---|
+| E2–A2 | 27.6 Hz | no | **yes** (7 dB) | yes (33 dB) |
+| A2–D3 | 36.8 Hz | no | **yes** (11 dB) | yes (41 dB) |
+| D3–G3 | 49.2 Hz | no | **yes** (25 dB) | yes (63 dB) |
+| G3–B3 | 50.9 Hz | yes (3 dB) | yes (36 dB) | yes (53 dB) |
+| B3–E4 | 82.7 Hz | yes (14 dB) | yes (46 dB) | yes (71 dB) |
+
+The grid is not the limit: 256 vs 512 log cells changes none of those verdicts. The
+**window** is. And compute is not the constraint either — recomputing only the visible
+span costs 8–122 ms per file (below), against a 2048 full-file pass at 43–62 ms.
+
+**The principle: resolution follows attention.** The unzoomed view stays exactly as it
+ships — same window, same grid, pixel-identical, which doubles as a free regression test.
+A zoom is a request to look closely, so a zoom recomputes.
+
+**Dropped from the original sketch: the multi-resolution low-band splice.** Rendering the
+low band at a long window and the rest at a short one onto one grid means two different
+hops, two different time alignments, a visible seam at the crossover, and two windows to
+print in one pane's status chip. The zoom ladder already puts 4096/8192 exactly where the
+user is looking, with **one true window per view** — which is the version that keeps
+"every visible number defensible".
+
+**What this reverses.** `docs/ARCHITECTURE.md` (~line 366) and `SPEC.md` (~line 325)
+currently record crop-not-recompute as the deliberate choice, on the grounds that
+recomputing "would change the analysis parameters mid-view and break 'every visible
+number defensible' (the footer states one FFT size)". The objection is answerable rather
+than wrong, and M2.7.3 is the answer: the pane already prints its own window in
+`statusText`, so a refined view states its own parameters. **Both documents must be
+updated by the same PR** — leaving them contradicting the code is a gate-level failure of
+the house rule, not a tidy-up.
+
+### M2.7.1 — `sgramWindowFor()` in block 0
+
+Pure, node-testable, no callers yet. Block 0, beside `spectrogramLog`.
+
+```js
+// The window for a refined (zoomed) spectrogram view.
+//   - 2048 is the shipped default and the floor: 43 ms at 48 kHz, two-tone
+//     limit ~47 Hz, which cannot separate E2 from A2 (27.6 Hz apart).
+//   - A zoom is a request to look closely, so refine to 4096 (two-tone ~23 Hz:
+//     every open-string pair in every stocked tuning separates).
+//   - Below a 2 s view, go to 8192 (~12 Hz) - the user is inside one event and
+//     time smear no longer costs them anything they were reading.
+//   - Never let the window exceed a quarter of the visible span: a window
+//     longer than the view measures mostly what is off-screen.
+function sgramWindowFor(spanSec, rate){
+  const cap = 1 << Math.floor(Math.log2(Math.max(1, spanSec*rate/4)));
+  let win = spanSec < 2 ? 8192 : 4096;
+  return Math.max(2048, Math.min(win, cap));
+}
+```
+
+**Why the ladder stops at 8192.** Separating arbitrary *semitones* down at 250 Hz would
+need a window past 32768 (0.68 s) — explicitly not a goal, and time smear that long
+destroys what a spectrogram is for. Pairs inside the ✦ tolerance (±6 ¢) are unresolvable
+at **any** practical window; the app teaches those through R3's mark, not through pixels.
+
+- **Done when:** `tests/m27.test.js` passes its math section — `(10,48000)→4096`,
+  `(1.5,48000)→8192`, `(0.3,48000)→2048` (cap 3600 floors to 2048), never above 8192,
+  never below 2048, and the cap tested on its own. The function is deliberately
+  **non-monotone** in span (0.3 s → 2048, 1.5 s → 8192, 10 s → 4096); that is the cap
+  doing its job, not a bug to smooth out.
+
+### M2.7.2 — Refine on zoom
+
+`spectrogramLog` today floors the hop at `win>>3`, which is right for a full-file pass and
+badly wrong for a refined one — a 2 s view at 8192 would yield **86 columns**. Add
+`opts.minHopDiv` (default **8**, so every existing caller is byte-for-byte unchanged);
+the refine pass passes **32**:
+
+| view | win | `win>>3` | `win>>5` | refine cost, one file |
+|---|---|---|---|---|
+| 30 s (freq-only zoom) | 4096 | 1399 | 1399 | 122 ms |
+| 10 s | 4096 | 930 | 1396 | 77 ms |
+| 5 s | 4096 | 461 | 1396 | 38 ms |
+| 2 s | 8192 | **86** | **344** | 16 ms |
+| 1 s | 8192 | **39** | **156** | 8 ms |
+
+- Where: `sgramModelFor()` (**~line 4652**). Note it is **synchronous**, called from
+  `drawAll()`, while `spectrogramLog` is `async`. Do **not** make the draw path async.
+  Run the refine as a **background job**: keep drawing today's cropped coarse image, and
+  when the refine resolves, store it on the slot and call `drawAll()` again to swap it in.
+- Recompute over **only the visible sample range** of `sgramZoomWin(key,…)`, with
+  `win = sgramWindowFor(span, rate)`, `gridN: 512`, `minHopDiv: 32`.
+- Cache per slot keyed by the whole request — zoom window, `win`, `gridN`, and the
+  existing `dbMax|dbMin|off` image key. A second job for the same key must not start;
+  a stale job that resolves after the zoom moved on must be discarded, not drawn.
+- A **frequency-only** zoom still refines: span is the full duration, so ≥2 s → 4096 and
+  `gridN` 512. That is the 122 ms row and the worst case in the table.
+- If `sgramWindowFor` returns 2048 **and** `gridN` would not change, skip the job
+  entirely — there is nothing to gain and a redraw to pay for.
+- **Done when:** an unzoomed pane is pixel-identical to `master` (headless asserts this),
+  a zoomed pane resolves detail the crop could not, and `drawAll()` is still synchronous.
+
+### M2.7.3 — Say what you did
+
+- `statusText` in `sgramModelFor` already prints `tv.sg.win+"-pt Hann · max per log cell"`.
+  When a **refined** image is in use it must print the refined window, not the base one —
+  this is a one-line change, not a new surface.
+- The footer analysis-params line states the base window; it must also state that zoom
+  refines it. One clause, no new control.
+- **Gate door (the one new hook this milestone owes).** The canvas is unreachable from
+  node, exactly as at R3.2 and R4.3. Set `data-sgwin` on `#sgramCanvasA`/`B`/`D` to the
+  window actually rendered in that pane, so `tests/headless.js` can read it out of
+  `--dump-dom`. An attribute, not UI; it never appears on screen or in an export.
+- **Done when:** `?demo&zoom=sga:1,3` reports 8192 on pane A and 2048 on the untouched
+  pane B, and the visible chip agrees with the attribute.
+
+- Verify + commit per task, and run `./tests/verify.sh` to `gate passed` before the PR.
+  The gate grows a **sixth step** (`tests/m27.test.js`); the two frozen-copy SHAs and the
+  read-only-`tests/` guard are unchanged, and this milestone adds no third frozen block.
+
+---
+
+# R5 — Harmonic tracks on the spectrogram
+
+**Direction agreed with the user; the task split is deliberately not written yet.** R3
+marks where two strings meet on the *frequency* plots and R4 explains the ancestry in
+words. R5 puts the same knowledge on the **time** axis: with Strings on, draw the shown
+harmonics as horizontal tracks across the spectrogram, so a user can watch which partials
+survive the decay and which die in the first half-second. It inherits R3's
+`findCoincidences()` and R4's `stringAncestry()` — one detector, one ratio table, never a
+second copy — and it wants M2.7's sharper picture underneath it, which is why M2.7 comes
+first.
+
+**Open questions the user has not answered. Do not start R5 until they are resolved —
+choosing for them would be improvising the product, which is the same failure as
+improvising the physics.**
+
+1. **One string at a time, or free-form overlay?** Six strings × four harmonics is 24
+   tracks; the per-string harmonic grid from M2.6g would put all of them on one pane.
+2. **Does "audition a single harmonic" jump the queue as R5.0?** It is small, it is
+   independent of the tracks, and it may be the more valuable half.
+
+---
+
+# R6 — Interval consonance explainer
+
+*(was R5 before M2.7 and harmonic tracks were scheduled; unchanged in content.)*
 
 Source: `docs/THEORY.md` §2.5 (roughness) and §2.6 (consonance definitions).
 
-- **R5.1** — Block-0 pure functions: joint period of two frequencies (lcm of periods via
+- **R6.1** — Block-0 pure functions: joint period of two frequencies (lcm of periods via
   the rational approximation), and the Sethares roughness `d(f₁,f₂,a₁,a₂)` exactly as
   parameterized in §2.5 (`b₁=3.5, b₂=5.75, d*=0.24, s₁=0.021, s₂=19`). Node tests assert
   `d=0` at `Δf=0`, the bracket peak at `s·Δf ≈ 0.221`, and decay past the critical band.
-- **R5.2** — Total roughness over all cross-pairs of two partial sets.
-- **R5.3** — UI: selecting two markers shows joint period, comb alignment, and a
+- **R6.2** — Total roughness over all cross-pairs of two partial sets.
+- **R6.3** — UI: selecting two markers shows joint period, comb alignment, and a
   **self-normalized** roughness curve. Per §2.5 the output is dimensionless — normalize
   to the curve's own maximum and **say so on the axis**; never print absolute units.
 - **Blocked on the user resolving the two §2.5 numeric caveats** (the "~30–40 Hz in the

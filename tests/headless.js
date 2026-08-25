@@ -45,11 +45,11 @@ function section(t) { console.log("\n" + t); }
 // setup and never exit — minutes per shot instead of three seconds. It costs
 // nothing here: ?demo writes no localStorage (settings save on explicit clicks
 // only), and the determinism check below would catch it if that ever changed.
-function chrome(args, query, extra) {
+function chrome(args, query, extra, size) {
   try {
     return execFileSync(CHROME, [
       "--headless=new", "--disable-gpu", "--hide-scrollbars",
-      "--window-size=1440,2600", "--virtual-time-budget=30000",
+      "--window-size=" + (size || "1440,2600"), "--virtual-time-budget=30000",
       ...args, APP + "?" + query,
     ], { maxBuffer: 1 << 28, timeout: 120000, stdio: ["ignore", "pipe", "ignore"], ...(extra || {}) });
   } catch (e) {
@@ -78,13 +78,14 @@ function sandboxDiagnosis() {
   process.exit(1);
 }
 const shotCache = new Map();
-function shot(query) {
-  if (shotCache.has(query)) return shotCache.get(query);
+function shot(query, size) {
+  const ck = (size || "") + "|" + query;
+  if (shotCache.has(ck)) return shotCache.get(ck);
   const file = path.join(OUT, "shot-" + shotCache.size + ".png");
-  chrome(["--screenshot=" + file], query);
+  chrome(["--screenshot=" + file], query, null, size);
   const img = decodePNG(fs.readFileSync(file));
   img.file = file; img.query = query;
-  shotCache.set(query, img);
+  shotCache.set(ck, img);
   return img;
 }
 function dom(query) { return chrome(["--dump-dom"], query).toString("utf8"); }
@@ -259,6 +260,103 @@ section("?pop=str3 opens one string popover, carrying its ancestry");
   // review, so they must not reach the user through this surface either.
   ok(!/critical bandwidth/i.test(page), "no unreviewed critical-bandwidth framing");
   ok(!/30\s*[–-]\s*40\s*Hz/.test(page), "no unreviewed 30–40 Hz figure");
+}
+
+// ------------------------------------------------- resolve on zoom (M2.7) ----
+// The panes that start folded have to be unfolded for any of this: a folded card
+// skips its model and its canvas, so it would report nothing and diff to zero.
+// Tall window because the spectrogram sits well down the page at 1440 wide.
+const SG = "demo&open=all";
+const TALL = "1440,4600";
+
+// Pull one attribute off one element. --dump-dom carries index.html's own source
+// inline, so a bare /data-sgwin="(\d+)"/ over the whole page would happily match
+// the string literal that writes it; anchor on the canvas id instead.
+function sgwin(page, id) {
+  const m = page.match(new RegExp('<canvas[^>]*id="' + id + '"[^>]*>'));
+  if (!m) return null;
+  const w = m[0].match(/data-sgwin="(\d+)"/);
+  return w ? Number(w[1]) : null;
+}
+
+// The demo pair loads through a real audio decode, and roughly one launch in six
+// exits before the app has drawn anything: --virtual-time-budget fast-forwards
+// timers, not decodes, so the budget runs out in real-time terms while the decode
+// is still pending. Measured identical at 30 s and 90 s of budget — the fix is a
+// retry, not a bigger number. Both helpers below check that the page really drew
+// and try again if it did not; after three tries they hand back what they have,
+// so the assertion fails loudly rather than passing against a blank page.
+function drew(page) { return /id="sgramCanvasA"[^>]*\bwidth=/.test(page); }
+function domDrawn(query) {
+  let page = dom(query);
+  for (let i = 0; i < 2 && !drew(page); i++) page = dom(query);
+  return page;
+}
+// A screenshot cannot be asked whether a canvas has a width, so ask it against the
+// app carrying no files at all: an undrawn ?demo page looks like that empty app,
+// a drawn one differs across the whole page. The retry varies a parameter the app
+// ignores, purely to miss the screenshot cache.
+const BLANK = shot("open=all", TALL);
+function shotDrawn(query, size) {
+  let img = shot(query, size);
+  for (let i = 0; i < 2 && diffPixels(img, BLANK, 8).length < 100000; i++)
+    img = shot(query + "&_r" + (i + 1), size);
+  return img;
+}
+
+section("an unzoomed spectrogram is exactly what it always was");
+{
+  const page = domDrawn(SG);
+  ok(sgwin(page, "sgramCanvasA") === 2048,
+    "pane A publishes the shipped 2048-pt window", String(sgwin(page, "sgramCanvasA")));
+  ok(sgwin(page, "sgramCanvasB") === 2048,
+    "…and so does pane B", String(sgwin(page, "sgramCanvasB")));
+
+  // The promise M2.7 has to keep to every existing screenshot and every reader of
+  // the footer: with no zoom, the refine path must not exist as far as pixels are
+  // concerned. Whole page, not just the pane -- a repaint that shifted anything
+  // else would show up here too.
+  const A = shotDrawn(SG, TALL), B = shotDrawn(SG + "&refine=0", TALL);
+  const d = diffPixels(A, B, 1);
+  ok(d.length === 0, "and renders pixel-identical with the refine disabled",
+    d.length + " px differ");
+}
+
+section("zooming in asks for a finer window, and only where it was asked");
+{
+  // The demo pair is 5.52 s long, so every span here sits inside real audio.
+  // 1-2.4 s is 1.4 s: inside one event, the ladder's 8192 rung, ~12 Hz two-tone
+  // resolution at 48 kHz. That is the case 2048 (~47 Hz) cannot do at all --
+  // D3-G3 are 49.2 Hz apart and E2-A2 only 27.6.
+  const page = domDrawn(SG + "&zoom=sga:1,2.4");
+  ok(sgwin(page, "sgramCanvasA") === 8192,
+    "a 1.4 s window on pane A resolves at 8192", String(sgwin(page, "sgramCanvasA")));
+
+  // The cache key has to carry the pane and the window it was computed for. If it
+  // carries neither, both panes report the same number and this catches it in the
+  // same page load -- which a separate load, with a fresh cache, never could.
+  // It is also the "resolution follows attention" rule stated in pixels: a pane
+  // nobody zoomed is exactly the picture it has always been.
+  ok(sgwin(page, "sgramCanvasB") === 2048,
+    "…while the pane nobody zoomed still reports 2048",
+    String(sgwin(page, "sgramCanvasB")));
+
+  // 0.5-4.5 s is a 4 s span: back down the ladder to 4096. A build that keys its
+  // cache on "is zoomed" rather than on the window bounds passes the assertion
+  // above and fails this one.
+  const wide = domDrawn(SG + "&zoom=sga:0.5,4.5");
+  ok(sgwin(wide, "sgramCanvasA") === 4096,
+    "a 4 s window resolves at 4096, not at whatever was computed last",
+    String(sgwin(wide, "sgramCanvasA")));
+
+  // And the attribute is not the feature. Only this compare separates a real
+  // recompute from a label: same zoom, refine on against refine off, and the
+  // pane must actually look different.
+  const on = shotDrawn(SG + "&zoom=sga:1,2.4", TALL);
+  const off = shotDrawn(SG + "&zoom=sga:1,2.4&refine=0", TALL);
+  const d = diffPixels(on, off, 8);
+  ok(d.length > 500, "and the zoomed pane really is redrawn from the finer STFT",
+    d.length + " px differ — an attribute without a redraw would be ~0");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

@@ -627,8 +627,12 @@ recomputing "would change the analysis parameters mid-view and break 'every visi
 number defensible' (the footer states one FFT size)". The objection is answerable rather
 than wrong, and M2.7.3 is the answer: the pane already prints its own window in
 `statusText`, so a refined view states its own parameters. **Both documents must be
-updated by the same PR** — leaving them contradicting the code is a gate-level failure of
-the house rule, not a tidy-up.
+brought into line by the same PR** — leaving them contradicting the code is a gate-level
+failure of the house rule, not a tidy-up. They are corrected differently:
+`docs/ARCHITECTURE.md` is a living description, so its "Spectrogram zoom (e) is a crop,
+not a recompute" bullet is **rewritten**; `SPEC.md` is an **append-only** changelog, so
+its `(e)` entry stays exactly as it is as the historical record and M2.7 **appends** a new
+entry that supersedes it and says so. `tests/m27.test.js` checks both.
 
 ### M2.7.1 — `sgramWindowFor()` in block 0
 

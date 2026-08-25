@@ -198,6 +198,23 @@ build educational copy from it, never re-derive from scratch.
   comment, and they assert the filled path *scoped to the mark loop* (the key draws a
   star too), the absence of `fillText("✦")`, neutral ink, and the key's presence — all
   four mutation-checked.
+- **R4 gate landed before the milestone (session 18, `fe6a5f5` + `e999b05`) — the build is
+  delegated and running.** Same order as R3: gate, then handoff, then builder. Block 0
+  carries `JUST_INTERVALS`/`isPow2`/`stringAncestry()`; block 4 carries a **second frozen
+  copy block** (`// ---------- harmonic ancestry copy (R4) ----------` → its end sentinel:
+  `ANCESTRY_TEMPER`, `harmonicIntervalPhrase`, `landingFor`, `harmonicRowNoteHtml`,
+  `ancestrySectionHtml`, `denominatorRuleHtml`) — all **inert until wired**, all traced to
+  docs/THEORY.md, all SHA-frozen. `landingFor()` calls R3's `findCoincidences()` with the
+  same `state.tolCents`: one detector, never two. **The pair read is the *adjacent*
+  string, not the lowest** — every adjacent gap in all five stocked tunings is 5/4/7/2
+  semitones (4/3, 5/4, 3/2, 9/8, all fixed by THEORY §3 and §5), whereas E→D is a minor
+  seventh THEORY leaves ambiguous (§3.5); flag the gap, don't improvise. `tests/verify.sh`
+  is now **five steps with two frozen SHAs**, and `tests/r4.test.js` (49/11) +
+  `tests/headless.js` (22/5) are deliberately red until R4.1–R4.4 land — both were
+  mutation-checked the day they were written (a scratch build of the ~30-line plumbing
+  takes them to 60/0 and 27/0). Handoff: `docs/handoff/spark-r4.md`. Note for anyone
+  editing the guards: **the awk programs in `verify.sh` must stay inline** — `awk -v` eats
+  backslashes, so a pattern passed that way matches nothing and hashes the empty string.
 - **NEXT — R4, then R5** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
   **R4** harmonic-ancestry info in the per-string popovers (ratio to root,

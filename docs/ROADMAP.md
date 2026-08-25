@@ -762,6 +762,15 @@ finer one arrives. Proven with a scratch copy of `index.html` publishing `_sgSho
 attribute. **Nothing asserts the overlay's window in the gate** — the race makes a naive
 assertion flaky, and a non-flaky one is still owed.
 
+### Settled by the user, 2026-08-25 — magnifying alone does not buy resolution
+
+Asked whether opening a pane in the magnify overlay should refine it even when nothing is
+zoomed, the user said **no: the span decides, not the pixels.** "Resolution follows
+attention" measures attention as the *time window you selected*, not the canvas it happens
+to be painted on. So the rule stands as built — an unzoomed pane reports `data-sgwin="2048"`
+and stays pixel-identical to v1.0.0 wherever it is drawn, and zooming **inside** the overlay
+refines exactly as it does in the card. Do not revisit this in R5.
+
 - Verify + commit per task, and run `./tests/verify.sh` to `gate passed` before the PR.
   The gate grows a **sixth step** (`tests/m27.test.js`); the two frozen-copy SHAs and the
   read-only-`tests/` guard are unchanged, and this milestone adds no third frozen block.

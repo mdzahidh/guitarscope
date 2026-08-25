@@ -363,14 +363,28 @@ true axes, k: user-selectable guitar colors). Rationale for the non-obvious part
   this session is never overridden (latch per toggle), snapshot restores pre-prime the
   latch (a snapshot's saved state is an explicit choice), and dropping back to one
   source re-arms it. Auto-on without the latch was rejected: it fights the user.
-- **Spectrogram zoom (e) is a crop, not a recompute.** `ZOOMS` gained `sga/sgb/sgd`
-  (x in *display-time* seconds, y in Hz); the pane blits the cached colormap bitmap
-  with a zoom-adjusted destination rect. Unzoomed renders are pixel-identical to the
-  previous build. Deep zooms therefore blur rather than resolve — an honest tradeoff:
-  recomputing the STFT per window would change the analysis parameters mid-view and
-  break "every visible number defensible" (the footer states one FFT size). The
-  gesture layer is the line-plot `attachZoom` with a log-y branch (Hz axis pans/zooms
-  geometrically, like the log-f line plots).
+- **Spectrogram zoom (e), and what M2.7 changed about it.** `ZOOMS` gained `sga/sgb/sgd`
+  (x in *display-time* seconds, y in Hz); the gesture layer is the line-plot
+  `attachZoom` with a log-y branch (Hz axis pans/zooms geometrically, like the log-f
+  line plots). As first built, a zoom was a **crop**: the pane blitted the cached
+  colormap bitmap through a zoom-adjusted destination rect, so a deep zoom interpolated
+  rather than resolved. The objection to recomputing was that it would change the
+  analysis parameters mid-view against "every visible number defensible", the footer
+  stating one FFT size.
+  **M2.7 answers that objection rather than accepting it — the principle is
+  "resolution follows attention".** An *unzoomed* pane is untouched: same 2048-pt
+  window, same 256-cell grid, pixel-identical to the pre-M2.7 build (the gate asserts
+  exactly that, which makes the promise a regression test). A zoom is a request to look
+  closely, so a zoomed pane recomputes over its visible sample range with
+  `sgramWindowFor(span, rate)` — 4096 above a 2 s view, 8192 below it, floored at 2048
+  and never longer than a quarter of the span — at `gridN: 512` and `minHopDiv: 32`
+  (the shipped `win>>3` hop floor would leave a 2 s view at 8192 with 86 columns).
+  The defensibility rule is satisfied by *stating* the parameter, not by freezing it:
+  the pane's own status chip prints the window actually rendered, the footer says a
+  zoom refines the base window, and `data-sgwin` on each pane canvas publishes the same
+  number for the gate. The recompute is a background job — `drawAll()` stays
+  synchronous, today's coarse crop keeps drawing, and the finer image swaps in on a
+  later frame; a stale job whose zoom has moved on is discarded, not drawn.
 - **String labels outside the plot (f).** `SGPLOT.mR` 64→98; the colorbar is pinned at
   `cbX = w−50` and the string-frequency labels sit in the new gap with leader ticks
   into the plot. Labels over the colormap were unreadable at exactly the frequencies

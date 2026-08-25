@@ -1113,3 +1113,51 @@ denominator rule already is; or leave it, on the argument that the prose is the
 feature and the toggles are a returning-user affordance. Deliberately left as-is
 pending the user's call — it sits with the R3.4 "popover runs past the fold at
 1440 px" taste question, and both are the same underlying problem.
+
+### Session 19 (2026-08-24) — M2.7 scheduled and gated: resolution follows attention
+
+**The decision, and what it supersedes.** The `(e)` entry above records spectrogram
+zoom as *"a crop of the already-rendered image, not an STFT recompute, so deep zooms
+interpolate rather than gain resolution (disclosed here; acceptable for navigation)"*,
+on the grounds that recomputing would change the analysis parameters mid-view and break
+"every visible number defensible". **M2.7 supersedes that entry.** The changelog is
+append-only, so `(e)` stays exactly as written as the historical record; from M2.7 the
+behaviour is: an unzoomed pane is unchanged and pixel-identical, and a zoomed pane
+recomputes its visible span at a finer window. The old objection is answered rather
+than accepted — defensibility asks that the parameter be **stated**, not that it be
+frozen, and the pane already prints its own window.
+
+**Measured, not assumed.** Two-tone separation at 48 kHz is ≈47 Hz at 2048, ≈23 Hz at
+4096, ≈12 Hz at 8192. The adjacent open strings sit 27.6 / 36.8 / 49.2 / 50.9 / 82.7 Hz
+apart, so 2048 cannot separate the three lowest pairs and 4096 separates every pair in
+every stocked tuning. The **grid** is not what limits this: 256 vs 512 log cells changes
+none of those verdicts. Cost is not the constraint either — recomputing only the visible
+span runs 8–122 ms per file against 43–62 ms for today's full-file 2048 pass.
+
+**Dropped from the original sketch: the multi-resolution low-band splice** (a long
+window under the low band, a short one above it, one image). It needs two hops, two time
+alignments, a visible seam at the crossover, and two windows printed in one status chip.
+The zoom ladder puts 4096/8192 exactly where the user is looking with **one true window
+per view**, which is the version that keeps the house rule.
+
+**Roadmap order changed** (`1e741e0`, `11546f2`): M2.7 runs before the remaining
+education work, the interval-consonance milestone is renumbered **R6**, and the new
+**R5** is harmonic tracks on the spectrogram — which wants M2.7's sharper picture
+underneath it, hence the order.
+
+**The gate was written first, as at R3 and R4** (`529a498`). `tests/verify.sh` is now
+six steps; `tests/m27.test.js` (46 assertions) covers the `sgramWindowFor` ladder
+including its deliberate non-monotonicity, the `minHopDiv` opt's byte-identical default,
+the block-4 wiring read out of decommented source, the status/footer/`data-sgwin`
+contracts, and these two documents. `tests/headless.js` gains the two checks node cannot
+make: an unzoomed pane renders pixel-identical with `?refine=0`, and a zoomed pane must
+*look different* from the same view with the refine off — an attribute without a redraw
+is not the feature. **No third frozen copy block:** M2.7 ships no educational prose.
+Red on master (m27 16/30, headless 28/6), green against a scratch implementation
+(46/0, 34/0), and all 11 targeted mutations of that implementation were caught.
+
+**One trap measured while proving it.** Roughly one headless launch in six exits before
+the app has drawn anything: `--virtual-time-budget` fast-forwards timers, not audio
+decodes, so the budget expires in real-time terms while `?demo` is still decoding.
+Identical at 30 s and 90 s of budget — the fix is a retry that checks the page really
+drew, not a bigger number. `drew()`/`domDrawn()`/`shotDrawn()` in `tests/headless.js`.

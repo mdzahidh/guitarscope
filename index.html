@@ -942,6 +942,17 @@ kbd{
         </div>
         <div class="controls">
           <div class="ctlgroup">
+            <span>Overlay</span>
+            <select id="sgNoteSel" aria-label="Spectrogram harmonic overlay string">
+              <option value="off" selected>Off</option>
+            </select>
+            <select id="sgHarmSel" aria-label="Spectrogram overlay harmonic count">
+              <option value="4">1–4</option>
+              <option value="6" selected>1–6</option>
+              <option value="8">1–8</option>
+            </select>
+          </div>
+          <div class="ctlgroup">
             <span>Time axis</span>
             <div class="seg" id="sgAlignSeg" role="group" aria-label="Spectrogram time alignment">
               <button data-al="off" class="on">Free</button>
@@ -4242,7 +4253,8 @@ const state={ slots:[null,null], tuning:"estd", customOffset:0,
               a4:440, smooth:6, lm:false, lmOffset:null, strings:false,
               tolCents: COINCIDENCE_CENTS,
               stringHarmonics:_defaultHarmonics(),
-              sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix" };
+              sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix",
+              sgFrets:[null,null,null,null,null,null], sgHarm:6 };
 // M2.7: gate hook — ?refine=0 disables the zoom refine (never persisted, no UI)
 const _refineEnabled = !/[?&]refine=0(?:&|$)/i.test(location.search);
 // A pan or a wheel writes ZOOMS and redraws on every event, so the refine waits
@@ -4292,6 +4304,7 @@ const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"), sgramSub=el("sgramSu
 const sgAlignSeg=el("sgAlignSeg"),
       sgramWrapD=el("sgramWrapD"), sgramCanvasD=el("sgramCanvasD"),
       sgramXlineD=el("sgramXlineD"), sgramReadoutD=el("sgramReadoutD");
+const sgNoteSel=el("sgNoteSel"), sgHarmSel=el("sgHarmSel");
 const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
 const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSel=el("eqDevSel"),
@@ -4789,15 +4802,27 @@ function sgramModelFor(i,scale){
   }
   // The crosshair must read the same analysis the pane drew, refined or not.
   s._sgShown = sgToUse;
+  // R5.1: harmonic overlay comb — one string's fret (if any) projected through
+  // notePartials() at state.sgHarm harmonics. null when no string is selected
+  // (state.sgFrets all null). Not part of the refine cache key: the overlay is
+  // display-only and never invalidates the STFT.
+  let comb=null, combNote=null;
+  const sgSi=state.sgFrets.findIndex(f=>f!=null);
+  if(sgSi>=0){
+    const midi=tuningMidi(state.tuning,state.customOffset)[sgSi]+state.sgFrets[sgSi];
+    comb=notePartials([midi],state.sgHarm,state.a4);
+    combNote=noteInfo(midiToFreq(midi,state.a4),state.a4).name;
+  }
   return { sg:sgToUse, image:imageToUse,
     view:{T0:zw.T0,T1:zw.T1,d0:view.d0}, fWin:{F0:zw.F0,F1:zw.F1},
     zoomNote:zoomNoteFor(zKey),
     name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
-    dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(),
+    dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(), comb,
     statusText:sgToUse.win+"-pt Hann · max per log cell"
       +(off?" · level-match "+fmtDb(off,1):"")
       +(state.sgAlign!=="off"&&bothSgLoaded()
-        ?(state.sgAlign==="onset"?" · t = 0 at first onset":" · shared time axis"):"") };
+        ?(state.sgAlign==="onset"?" · t = 0 at first onset":" · shared time axis"):"")
+      +(comb?" · "+combNote+" · harmonics 1–"+state.sgHarm:"") };
 }
 function sgramDiffData(){
   // cached A−B cell difference + its rendered image; key = the only input
@@ -4942,8 +4967,11 @@ function drawAll(){
     const c=setupCanvas(sgramCanvases[i]);
     drawSpectrogramScene(c.ctx,c.w,c.h,model);
     sgramCanvases[i].setAttribute("data-sgwin", String(model.sg.win));
+    // R5.1: pane reports its own overlay track count — the canvas is unreachable from node.
+    if(model.comb) sgramCanvases[i].setAttribute("data-sgcomb", String(model.comb.length));
+    else sgramCanvases[i].removeAttribute("data-sgcomb");
   } else {
-    for(let i=0;i<2;i++) sgramCanvases[i].removeAttribute("data-sgwin");
+    for(let i=0;i<2;i++){ sgramCanvases[i].removeAttribute("data-sgwin"); sgramCanvases[i].removeAttribute("data-sgcomb"); }
   }
   if(!collState.sgram&&sgDiffVisible()){
     const model=buildSgramDiffModel();
@@ -6217,6 +6245,22 @@ function _hexRgb(h){ return [1,3,5].map(k=>parseInt(h.slice(k,k+2),16)); }
 function _stringColor(si, alpha){
   const [r,g,b]=_hexRgb(STRING_COLORS[si%6]); return `rgba(${r},${g},${b},${alpha})`;
 }
+// R5.1: fills the spectrogram's Overlay string select from the current tuning —
+// six named choices (Off stays first), never hard-coded note names.
+function fillSgNoteSel(){
+  if(!sgNoteSel) return;
+  const prev=sgNoteSel.value;
+  const midis=tuningMidi(state.tuning,state.customOffset);
+  let html='<option value="off">Off</option>';
+  for(let si=0;si<6;si++){
+    const midi=midis[si];
+    if(midi==null) continue;
+    const name=noteInfo(midiToFreq(midi,state.a4),state.a4).name;
+    html+='<option value="'+si+'">'+esc(STRING_ORD[si]+" — "+name)+'</option>';
+  }
+  sgNoteSel.innerHTML=html;
+  sgNoteSel.value=[...sgNoteSel.options].some(o=>o.value===prev)?prev:"off";
+}
 function stringContentHtml(si){
   const midi=tuningMidi(state.tuning,state.customOffset)[si];
   if(midi==null) return "";
@@ -6703,6 +6747,9 @@ function _cardPng(name, draw){
 function exportDiffPNG(){ if(!bothLoaded()) return; try{ _cardPng("Difference A-B", (ctx,W,H)=>{ drawDiffScene(ctx,W,H,buildDiffModel()); }); }catch(e){ console.error(e); toast("PNG export failed: "+(e&&e.message?e.message:e)); } }
 function exportSgramPNG(){
   if(!anyLoaded()) return;
+  // R5.1: the overlay is a session gesture, not analysis — never in an export.
+  const _oldSgFrets=state.sgFrets; state.sgFrets=[null,null,null,null,null,null];
+  try{
   const hasDiff=sgDiffVisible();
   const W=1240,H=hasDiff?1320:900,SC=2; const cv=document.createElement("canvas");
   cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
@@ -6722,6 +6769,7 @@ function exportSgramPNG(){
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, sans-serif";
   ctx.textAlign="right"; ctx.fillText("made with "+APP_NAME,W-40,H-14); ctx.textAlign="left";
   _exportPngCanvas(cv, "rameau-sgram_"+exportBaseName()+".png");
+  } finally { state.sgFrets=_oldSgFrets; }
 }
 function exportEnvPNG(){
   if(!anyLoaded()) return;
@@ -6967,7 +7015,7 @@ function loadSettings(){
         eqDevSel.value=state.eqDevice; eqDirSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.dir===state.eqDir));
         setVocab(state.vocab); stringsToggle.checked=state.strings;
         try{ syncClearHarmonicsBtn(); }catch(_e){}
-        syncVocabTuning();
+        syncVocabTuning(); fillSgNoteSel();
         return true;
       }
     }
@@ -7003,7 +7051,7 @@ function resetSettings(){
   eqDevSel.value=state.eqDevice; eqDirSeg.querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.dir===state.eqDir));
   setVocab("mix"); stringsToggle.checked=false;
   try{ syncClearHarmonicsBtn(); }catch(_e){}
-  syncVocabTuning();
+  syncVocabTuning(); fillSgNoteSel();
   requestDraw(); renderAnalysis();
   toast("Saved settings reset to defaults.");
 }
@@ -7294,12 +7342,12 @@ function boot(){
   tuningSel.addEventListener("change",()=>{
     state.tuning=tuningSel.value;
     customOffsetWrap.style.display=state.tuning==="custom"?"":"none";
-    syncVocabTuning(); renderVerdict(); renderBandsTable();
+    syncVocabTuning(); fillSgNoteSel(); renderVerdict(); renderBandsTable();
     requestDraw(); saveSettings();
   });
   customOffsetEl.addEventListener("input",()=>{
     state.customOffset=parseInt(customOffsetEl.value,10)||0;
-    syncVocabTuning(); renderVerdict(); renderBandsTable();
+    syncVocabTuning(); fillSgNoteSel(); renderVerdict(); renderBandsTable();
     requestDraw(); saveSettings();
   });
   a4Input.addEventListener("change",()=>{
@@ -7307,8 +7355,19 @@ function boot(){
     if(!isFinite(v)) v=440;
     v=Math.max(415,Math.min(466,v));
     a4Input.value=v; state.a4=v;
-    syncVocabTuning();
+    syncVocabTuning(); fillSgNoteSel();
     requestDraw(); renderAnalysis(); saveSettings();
+  });
+  sgNoteSel.addEventListener("change",()=>{
+    const v=sgNoteSel.value;
+    const si=v==="off"?-1:parseInt(v,10);
+    state.sgFrets=[null,null,null,null,null,null];
+    if(si>=0&&si<6) state.sgFrets[si]=0; // open string only — R5.1 carries no fretting UI
+    requestDraw();
+  });
+  sgHarmSel.addEventListener("change",()=>{
+    state.sgHarm=parseInt(sgHarmSel.value,10)||6;
+    requestDraw();
   });
   lmToggle.addEventListener("change",()=>{
     state.lm=lmToggle.checked; compareTouched.lm=true;
@@ -7616,6 +7675,7 @@ function boot(){
   applyCollapse();
   renderCard(0); renderCard(1);
   buildGlossList("");
+  fillSgNoteSel();
   updateVisibility();
   renderFooter();
   requestDraw();
@@ -7676,6 +7736,14 @@ function boot(){
   }
   const tolM=location.search.match(/[?&]tol=([0-9]*\.?[0-9]+)(?:&|$)/i);                   // test hook
   if(tolM) state.tolCents=Math.max(0,Math.min(50,parseFloat(tolM[1])));
+  const sgn=location.search.match(/[?&]sgnote=([0-5])(?:&|$)/i);                   // test hook — out of [0-5] selects nothing
+  if(sgn){
+    const si=parseInt(sgn[1],10);
+    state.sgFrets=[null,null,null,null,null,null]; state.sgFrets[si]=0;
+    sgNoteSel.value=String(si); requestDraw();
+  }
+  const sgh=location.search.match(/[?&]sgharm=([0-9]+)(?:&|$)/i);                  // test hook
+  if(sgh){ state.sgHarm=Math.max(1,Math.min(16,parseInt(sgh[1],10)||6)); sgHarmSel.value=String(state.sgHarm); requestDraw(); }
   const dbg=location.search.match(/[?&]debug(?:=1)?(?:&|$)/i);                     // reveals the hidden "Load test files" button
   if(dbg&&debugLoadBtn) debugLoadBtn.style.display="";
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook

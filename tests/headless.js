@@ -305,10 +305,13 @@ function sgwin(page, id) {
 // sane retry budget helps, so the harness names the condition rather than hiding it:
 // see drawReport() below. Never answer a loaded machine by weakening a check.
 // Both helpers below check that the page really
-// drew and try again if it did not; after six tries they hand back what they have,
-// so the assertion fails loudly rather than passing against a blank page. Six because
-// 0.375^6 is ~0.3 %, where three tries left ~5 % per site and both `[null]` failure
-// modes below were seen for real.
+// drew and try again if it did not; after TRIES launches they hand back what they have,
+// so the assertion fails loudly rather than passing against a blank page. Ten because
+// the run has ~25 such sites and the miss rate is not a constant: at the ~1-in-6 of an
+// idle machine six tries already left under 0.01 % per site, but at the 1-in-2 measured
+// under load six tries leave 1.6 % per site — a third of all runs red on a build that is
+// fine. Ten takes that to 0.1 % per site, ~2 % per run, and costs nothing when the first
+// launch draws.
 //
 // Ask for the attribute the assertions actually read, not for the canvas width:
 // drawAll() writes width and data-sgwin in the same branch, so an undrawn page has
@@ -333,12 +336,25 @@ function drew(page) {
 // means for its own assertion. It cannot launder a broken build: a build that
 // never refines fails the predicate on every try, and the assertion then
 // runs against the last page and reports the wrong number, exactly as before.
+const TRIES = 10;
 function domDrawn(query, ready) {
   const done = ready || drew;
   let page = dom(query), tries = 1;
-  for (let i = 0; i < 5 && !done(page); i++) { page = dom(query); tries++; }
+  for (let i = 0; i < TRIES - 1 && !done(page); i++) { backoff(i); page = dom(query); tries++; }
   drawReport(query, tries, done(page));
   return page;
+}
+
+// Misses arrive in bursts, not independently. The same URL that missed twice in four
+// launches during one minute went 6 for 6 ten minutes later, on the same tree, at the
+// same load average — so six retries fired back to back can all land inside a single
+// burst of background CPU, and the site reports "never drew" while the build is fine.
+// Wait a little longer before each retry (0.4 s, 0.8 s, 1.2 s …) so the tries are spread
+// across the burst rather than stacked inside it. Costs nothing on the common path: a
+// site that draws first time never calls this. Not a fix for a loaded machine — there is
+// no such fix here — just a retry budget spent where it can do some good.
+function backoff(i) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400 * (i + 1));
 }
 
 // The retries used to be silent, which made a loaded machine look like a broken build:
@@ -350,7 +366,7 @@ function drawReport(query, tries, drewOk) {
   if (!drewOk) {
     console.log("  !!   " + query + " never drew in " + tries + " launches — heavy CPU load?");
     console.log("       (assertions below run against an undrawn page and will read null)");
-  } else if (tries > 1) console.log("  ..   " + query + " drew on launch " + tries + "/6");
+  } else if (tries > 1) console.log("  ..   " + query + " drew on launch " + tries + "/" + TRIES);
 }
 // A screenshot cannot be asked whether a canvas has a width, so ask it against the
 // app carrying no files at all: an undrawn ?demo page looks like that empty app,
@@ -363,8 +379,8 @@ function notBlank(img) { return diffPixels(img, BLANK, 8).length >= 100000; }
 // landed.
 function shotDrawn(query, size, ready) {
   let img = shot(query, size), tries = 1;
-  for (let i = 0; i < 5 && !(notBlank(img) && (!ready || ready(img))); i++) {
-    img = shot(query + "&_r" + (i + 1), size); tries++;
+  for (let i = 0; i < TRIES - 1 && !(notBlank(img) && (!ready || ready(img))); i++) {
+    backoff(i); img = shot(query + "&_r" + (i + 1), size); tries++;
   }
   drawReport(query, tries, notBlank(img) && (!ready || ready(img)));
   return img;

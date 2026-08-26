@@ -1057,6 +1057,60 @@ built *from* `SG_CHORDS`, and the hook's wiring — 102 → **128**; `tests/head
 `data-sgcomb` through real Chrome (E → 36, D at N=3 → 12, `Zz` → absent) and confirms a chord
 marks more pixels than one string does — 40 → **45**.
 
+### R5.6 — legibility: labels, a sheet, and hold-to-follow — **BUILT** (session 22, reviewer)
+
+Not a planned task either: the user tested R5.2 and returned three items in one message —
+label the harmonics ("something along the line of C2 × 2 = (C4)"), and two ideas for the
+congestion a chord's 36 tracks make, both "with some tunable parameter (in the UI for
+debugging)": (a) a translucent sheet between the spectrogram and the lines, (b) click-and-hold
+a line to light its comb and dim the rest. **Numbered before R5.3 and built first**, because
+R5.3's ✦ marks have to sit on top of whatever legibility scheme wins. *(The user's example
+arithmetic was off by an octave — `C2 ×2` is `C3`; corrected in the label and in the reply.)*
+
+- **R5.6b — the labels.** `partialLabel(p, a4)` in block 0: the fundamental is named alone
+  (`E2` — "E2 ×1 = E2" is arithmetic, not information); every harmonic reads
+  `E2 ×3 = B3` inside R3's locked tier (`COINCIDENCE_CENTS`) and `E2 ×5 ≈ G♯4` beyond it.
+  The `≈` is the whole point: the 5th harmonic sits 14 ¢ below the tempered note it is
+  named after (THEORY §1, §5), and an `=` there would teach the wrong lesson. Drawn
+  highest-frequency first with M2.6c's rule — a label within 12 px of the one above it is
+  **skipped, never smeared** — so a crowded pane thins its own labels. **This reverses
+  R5.1's "no labels" rule**, which held only while a single string could be overlaid.
+- **R5.6a — the sheet.** `state.sgScrim` (default 0.45, range 0–90 % in the card head, hook
+  `?sgscrim=`): a translucent black fill over the plot rect, drawn *after* the image and
+  *before* the tracks. **No comb, no sheet** — the measurement is never dimmed for its own
+  sake, which is also what makes "a scrim with nothing overlaid never touches the picture"
+  assertable.
+- **R5.6c — hold to follow.** `attachSgFocus(i)`: mousedown asks `_sgTrackAt()` which track
+  is under the cursor (the same `notePartials()` question the model asks, mapped through the
+  pane's zoom window, 8 px), sets `state.sgFocus` to that **string**, and the draw pass gives
+  every other comb `1 − state.sgDim` alpha (default 0.85, range 0–95 %, hook `?sgdim=`) and
+  drops its labels with it. A drag of more than 3 px hands off to the zoom box, so following
+  a comb never costs a gesture; mouseup/mouseleave clear. `?sgfocus=<0-5>` holds a comb
+  without a mouse.
+
+*As built.* The two ranges ship `disabled` and `syncSgHarmSel()` enables them at every door
+into `state.sgFrets` — the R5.1a affordance rule, applied to the new controls; it also clears
+a `state.sgFocus` whose string has stopped sounding. None of the three keys is persisted or
+exported (they are view state, like `sgFrets`), and none is part of the M2.7 refine cache key.
+The status chip gains `· hold a track to follow it` while nothing is held.
+
+*Done when* — met: the pane publishes `data-sglabels` (how many tracks it could name) and
+`data-sgfocus` (which comb it is holding), because the canvas is unreachable from node;
+`tests/r5.test.js` 128 → **180** (label arithmetic against independently computed note
+names, the `=`/`≈` boundary at `COINCIDENCE_CENTS`, the draw-pass ordering that puts the
+sheet under the tracks, the skip-don't-smear guard, the alpha that a held comb keeps and an
+unheld one loses, and the inverted contracts: no exporter and no settings writer may touch
+the three keys); `tests/headless.js` 45 → **56**, reading real pixels through Chrome — a
+scrim with no overlay is byte-identical to no scrim, `sgdim=0` vs `sgdim=95` differ by 741 px,
+and an out-of-range `?sgfocus=` leaves the picture exactly as it was. All 31 + 11 new
+assertions mutation-checked the day they were written.
+
+*Harness note.* Two long-standing M2.7 assertions went red during this build and were **not**
+an R5.6 regression: the decode/draw race missed 7 launches in 8 on an *unmodified* checkout
+while a runaway indexer held 99 % CPU, and 0 in 8 once it settled. `domDrawn`/`shotDrawn` now
+say which launch they succeeded on and shout when the whole retry budget went by undrawn, so
+the next loaded machine is diagnosable instead of looking like an unwired attribute.
+
 ### R5.3 — collisions marked and clickable
 
 One ✦ per `partialClusters()` cluster, not per pair; the two tiers drawn distinguishably

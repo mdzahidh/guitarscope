@@ -1027,6 +1027,59 @@ is why R5.3's ✦ clusters come after this and not before.
   cannot silently leave the previous chord on screen. Unpersisted, no `gsSettings` key, no UI
   — same standing as `?sgnote=` / `?sgharm=` / `?tol=` / `?refine=0`.
 
+## R5.6 (session 22): three answers to a congested pane
+
+A chord draws 36 tracks. The user tested R5.2 and sent three items in one message: name the
+harmonics, and two ideas for the congestion — a translucent sheet under the lines, and
+click-and-hold to follow one comb — both "with some tunable parameter (in the UI for
+debugging)". Built before R5.3 on purpose: the ✦ marks have to land on whatever legibility
+scheme wins, and marking a picture you cannot yet read would be marking the wrong thing.
+
+- **The draw order is the feature.** `drawSpectrogramScene()` is now: image → **scrim** →
+  chrome/axes → tracks → labels. The scrim sits between the measurement and the prediction,
+  which is exactly what makes the prediction readable without editing the measurement's own
+  pixels — the magma cells still carry their true colors under a known, printed alpha. It is
+  gated on `model.comb && model.comb.length`: **no comb, no sheet.** A dimmed spectrogram
+  with nothing overlaid would be a picture that lies about its own contrast, and the gate
+  asserts it is byte-identical to no scrim at all (`?sgscrim=90` with no overlay, a 160×24
+  bounding-box bound so the status chip's own text is the only permitted difference).
+- **`partialLabel()` lives in block 0, not block 3.** The label is arithmetic on the note
+  system (`noteInfo`, `midiToFreq`, `COINCIDENCE_CENTS`), so it is node-testable and the
+  gate checks the arithmetic against independently computed note names rather than against a
+  screenshot. The fundamental prints alone (`E2`); harmonics print `E2 ×3 = B3` when the
+  landing is inside R3's locked tier and `E2 ×5 ≈ G♯4` when it is not. **The `≈` is not
+  hedging** — the 5th harmonic is 14 ¢ below the tempered note that shares its name
+  (THEORY §1, §5), and the whole point of the overlay is that the ear hears the ratio while
+  the fretboard names the temperament. An `=` there would teach the wrong thing.
+  This **reverses R5.1's "no labels" decision**, which was correct only while a single string
+  could be overlaid: with six hues and one comb, left-to-right order said everything; with
+  six combs interleaved, hue alone cannot say which harmonic of which string a line is.
+- **Labels thin themselves, they never smear.** Drawn highest-frequency first, skipping any
+  label within 12 px of the last one drawn — M2.6c's region-label rule, reused rather than
+  reinvented. A pane with 36 tracks prints the ones it can print. `data-sglabels` publishes
+  how many it managed, because the canvas is unreachable from node.
+- **Hold-to-follow is a hit test, not a mode.** `_sgTrackAt(i,x,y,w,h)` asks `notePartials()`
+  the same question `sgramModelFor()` asks, maps each partial through the pane's own zoom
+  window, and takes the nearest within 8 px. mousedown sets `state.sgFocus` to that partial's
+  **string** (not the partial — you follow a comb, not a line); the comb pass gives every
+  other string `1 − state.sgDim` alpha and drops its labels with it; mouseup and mouseleave
+  clear. A drag past 3 px hands the gesture off to the existing zoom box, so following a comb
+  never costs a zoom. `?sgfocus=<0-5>` holds one without a mouse, `data-sgfocus` publishes it.
+- **Two ranges, both born disabled.** `sgScrimRange` (0–90 %, default 45) and `sgDimRange`
+  (0–95 %, default 85) sit in the sgram card head with live outputs, and `syncSgHarmSel()`
+  enables them from `state.sgFrets` at **every** door into that state — the R5.1a affordance
+  rule applied to two more controls. That same sync clears a focus whose string has stopped
+  sounding, which is the only way `state.sgFocus` can be stale. None of `sgScrim`/`sgDim`/
+  `sgFocus` is persisted, exported, or part of the M2.7 refine cache key: they are view state,
+  exactly like `sgFrets`. The gate carries that as an **inverted** contract — no exporter and
+  no settings writer may assign them.
+- **A headless lesson, not an app one.** Two M2.7 assertions went red mid-build and were not a
+  regression: the decode/draw race missed 7 launches in 8 on an **unmodified** checkout while
+  a runaway indexer held 99 % CPU at load 5.7, and 0 in 8 once the machine settled. The
+  answer was not a looser assertion — `domDrawn`/`shotDrawn` now report which launch
+  succeeded and shout when the entire retry budget passed undrawn, so the next loaded machine
+  reads as a loaded machine instead of an unwired attribute.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

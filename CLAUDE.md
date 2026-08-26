@@ -321,6 +321,32 @@ build educational copy from it, never re-derive from scratch.
   and survived a mutation that hard-coded the open notes; it now captures the tuning variable's
   own name from `const <v> = tuningMidi(state.tuning` and requires `<v>[si] + fr` inside the map
   body. All 31 new assertions mutation-checked the day they were written.
+- **R5.6 legibility BUILT (session 22, reviewer).** The user tested R5.2 and returned three
+  items: label the harmonics, and two ideas for the congestion 36 tracks make — both "with
+  some tunable parameter (in the UI for debugging)". Built **before R5.3** because the ✦
+  marks have to sit on whatever legibility scheme wins. **(b) Labels:** `partialLabel(p,a4)`
+  in block 0 — the fundamental prints alone (`E2`), harmonics print `E2 ×3 = B3` inside R3's
+  locked tier and `E2 ×5 ≈ G♯4` beyond it; the `≈` carries the lesson (the 5th harmonic is
+  14 ¢ under the tempered note, THEORY §1/§5). Drawn highest-first, **skipped rather than
+  smeared** within 12 px (M2.6c's rule). **This reverses R5.1's "no labels"**, which held
+  only while one string could be overlaid. **(a) Scrim:** `state.sgScrim` (default 0.45,
+  range 0–90 % in the card head, `?sgscrim=`) fills the plot rect between the image and the
+  tracks — **no comb, no sheet**, so the measurement is never dimmed for its own sake.
+  **(c) Hold-to-follow:** `attachSgFocus(i)` hit-tests with `_sgTrackAt()` (the same
+  `notePartials()` question the model asks, through the pane's zoom window, 8 px), sets
+  `state.sgFocus` to that **string**, and every other comb draws at `1 − state.sgDim`
+  (default 0.85, range 0–95 %, `?sgdim=`) with its labels gone; a drag past 3 px hands off to
+  the zoom box, mouseup/mouseleave clear, `?sgfocus=<0-5>` holds without a mouse. Both ranges
+  ship `disabled` and `syncSgHarmSel()` enables them at every door into `state.sgFrets` (it
+  also clears a focus whose string stopped sounding). None of the three keys is persisted,
+  exported, or in the refine cache key. Gate: `data-sglabels`/`data-sgfocus` beside
+  `data-sgcomb`, `tests/r5.test.js` 128 → **180**, `tests/headless.js` 45 → **56** (a scrim
+  with no overlay is pixel-identical to none; `sgdim=0` vs `sgdim=95` differ by 741 px); all
+  new assertions mutation-checked the day they were written. **Harness note:** two M2.7
+  assertions went red mid-build and were **environmental** — the decode/draw race missed 7
+  launches in 8 on an *unmodified* checkout under 99 % background CPU, 0 in 8 once idle;
+  `domDrawn`/`shotDrawn` now report the launch they succeeded on and shout when the whole
+  budget passed undrawn, and no assertion was weakened.
 - **NEXT — R5.3** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
   one ✦ per `partialClusters()` cluster, tiers drawn distinguishably, spread
@@ -332,7 +358,7 @@ build educational copy from it, never re-derive from scratch.
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 128, headless 45, plus
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 180, headless 56, plus
   all three tamper guards (`tests/` untouched, both frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -417,6 +443,12 @@ build educational copy from it, never re-derive from scratch.
   unpersisted; each sgram pane canvas carries `data-sgcomb="<count>"`, the number of partial
   tracks in that pane's overlay (sounding strings × the harmonic limit), absent when the
   overlay is off,
+  `?sgscrim=<0-90>` / `?sgdim=<0-95>` (R5.6's scrim opacity and unfocused-comb dimming, as
+  percentages — these *do* have UI ranges in the sgram card head; the hooks exist so the gate
+  can set them) and `?sgfocus=<0-5>` (hold one string's comb without a mouse; out of range
+  holds nothing) — unpersisted, never exported; panes also carry `data-sglabels="<count>"`
+  (harmonic labels actually drawn, after the 12 px overlap guard) and `data-sgfocus="<si>"`
+  (the comb being held), both absent when there is nothing to report,
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
@@ -539,7 +571,7 @@ build educational copy from it, never re-derive from scratch.
   `drawSpectrogramScene()` draws each partial full-width at `yOfF(f)`: a 5 px black halo at
   alpha 0.75, then 2.5 px of `_trackColor(key)` — `STRING_COLORS[key]` lifted to 0.62 L,
   because a track is read against its own halo rather than the magma — solid fundamental /
-  dashed `[6,4]` above, no labels. Panes are **372 px** tall (288 px narrow) so the log
+  dashed `[6,4]` above. Panes are **372 px** tall (288 px narrow) so the log
   frequency axis is readable at all. Hand `notePartials()` the
   **six-slot** note array, never the one selected note — `key` is the index it was given and
   `key` picks the hue. The tracks are a **data** palette: identical in both themes. The app
@@ -547,6 +579,19 @@ build educational copy from it, never re-derive from scratch.
   the measurement judges. The harmonic-limit select is **disabled until a note is overlaid**
   (`syncSgHarmSel()`, called from every door into `state.sgFrets`). **PNG exports render the
   view as it stands (R5.1a)** — tracks, strings axis, ✦ and all; CSV/JSON stay data-only.
+  **Chords + overlay legibility (R5.2/R5.6):** `SG_CHORDS` stocks eight open shapes as
+  **fret** arrays, so a shape moves with the tuning. Because six combs interleave, each
+  partial now carries a label — `partialLabel()` in block 0: `E2` for a fundamental,
+  `E2 ×3 = B3` inside R3's locked tier, `E2 ×5 ≈ G♯4` outside it (the 5th harmonic really
+  is 14 ¢ flat of the tempered note — the `≈` is the lesson, THEORY §1/§5). Labels draw
+  highest-first and are **skipped, never smeared**, within 12 px. The draw order is
+  image → **scrim** (`state.sgScrim`, default 0.45, 0–90 % range, `?sgscrim=`) → chrome →
+  tracks → labels: the sheet separates prediction from measurement and appears **only when
+  a comb does**. Holding the mouse on a track sets `state.sgFocus` to its **string** (comb,
+  not line) and dims every other comb to `1 − state.sgDim` (default 0.85, 0–95 %,
+  `?sgdim=`); a >3 px drag hands off to the zoom box. `sgScrim`/`sgDim`/`sgFocus` are view
+  state like `sgFrets` — unpersisted, unexported, not in the refine cache key — and their
+  ranges ship disabled until something is overlaid.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

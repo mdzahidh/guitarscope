@@ -1364,3 +1364,49 @@ loose enough that hard-coding the open notes still passed, so the test now captu
 tuning variable's own name from `const <v> = tuningMidi(state.tuning` and requires
 `<v>[si] + fr` inside the map body. Every new assertion was mutation-checked the day it was
 written.
+
+## R5.6 — the overlay says which harmonic, and lets you follow one comb (session 22)
+
+The user tested R5.2 and sent three items in one message: label the harmonics so the label
+itself says which harmonic it is, and — because 36 tracks look congested — two ideas, "both
+can be implemented with some tunable parameter (in the UI for debugging)": a translucent
+sheet over the spectrogram with the lines drawn on top of it, and click-and-hold on a line to
+highlight the comb it belongs to while the rest dim. Item 1 of that message (marking comb
+collisions) was already spec'd as R5.3; these three became **R5.6** and were built **first**,
+because R5.3's ✦ marks must land on whatever legibility scheme wins.
+
+**The label's `=` versus `≈` is a decision, not formatting.** `partialLabel()` prints
+`E2 ×3 = B3` when the partial lands inside R3's `COINCIDENCE_CENTS` tier and `E2 ×5 ≈ G♯4`
+when it does not. The 5th harmonic sits 14 ¢ below the tempered note that shares its name
+(docs/THEORY.md §1, §5); writing `=` there would assert something false about equal
+temperament in an app whose whole subject is the gap between the ratio and the fret. The
+fundamental prints alone — `E2 ×1 = E2` is arithmetic, not information. *(The user's own
+example, `C2 × 2 = (C4)`, was off by an octave — doubling is one octave, so `C2 ×2 = C3`. Said
+so and shipped the correct arithmetic.)*
+
+**This reverses R5.1's "no labels".** That rule was right while one string could be overlaid:
+six hues in left-to-right order said everything a label would. A chord interleaves six combs,
+and hue alone cannot then say *which harmonic of which string* a line is. The overlap guard
+is M2.6c's — highest-frequency first, skip anything within 12 px, never smear.
+
+**The scrim is gated on the comb.** With nothing overlaid there is no sheet, at any setting.
+A dimmed spectrogram with no prediction on it would be a picture lying about its own
+contrast; the gate asserts `?sgscrim=90` with no overlay is pixel-identical to no scrim.
+
+**Focus follows the comb, not the line.** The hit test finds a partial; the state records its
+**string**. Following one line of a harmonic series would answer a question nobody has —
+the series is the object. A drag past 3 px hands the gesture to the existing zoom box, so
+holding a comb never costs a zoom.
+
+`sgScrim` / `sgDim` / `sgFocus` join `sgFrets` / `sgHarm` as spectrogram **view** state:
+unpersisted, never exported, not part of M2.7's refine cache key. The gate carries that as an
+inverted contract — no exporter and no settings writer may assign them. `tests/r5.test.js`
+128 → 180, `tests/headless.js` 45 → 56; every new assertion mutation-checked the day it was
+written.
+
+**A gate-reliability finding, recorded because it will recur.** Two M2.7 assertions went red
+during this build. They were environmental: with a runaway indexer at 99 % CPU (load 5.7) the
+headless decode/draw race missed 7 launches in 8 on an **unmodified** checkout, and 0 in 8
+once the machine settled. The fix was diagnostic, never a weakened check — `domDrawn` and
+`shotDrawn` now report which launch succeeded and shout when the whole retry budget passed
+undrawn. A loaded machine must read as a loaded machine, not as an unwired attribute.

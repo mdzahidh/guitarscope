@@ -779,23 +779,226 @@ refines exactly as it does in the card. Do not revisit this in R5.
 
 # R5 — Harmonic tracks on the spectrogram
 
-**Direction agreed with the user; the task split is deliberately not written yet.** R3
-marks where two strings meet on the *frequency* plots and R4 explains the ancestry in
-words. R5 puts the same knowledge on the **time** axis: with Strings on, draw the shown
-harmonics as horizontal tracks across the spectrogram, so a user can watch which partials
-survive the decay and which die in the first half-second. It inherits R3's
-`findCoincidences()` and R4's `stringAncestry()` — one detector, one ratio table, never a
-second copy — and it wants M2.7's sharper picture underneath it, which is why M2.7 comes
-first.
+R3 marks where two strings meet on the *frequency* plots and R4 explains the ancestry in
+words. R5 puts the same knowledge on the **time** axis.
 
-**Open questions the user has not answered. Do not start R5 until they are resolved —
-choosing for them would be improvising the product, which is the same failure as
-improvising the physics.**
+**The user's framing, 2026-08-25 — the overlay is a generative model.** Theory says which
+partials a note *should* produce; the overlay draws that prediction across the measured
+spectrogram; the user sees for themselves whether the energy is really there. "Explaining
+the measurement through a generative model type concept." That is the same house rule the
+app already lives by, pointed at a new surface: *facts come from the data, intent comes
+from the user* — which notes were played is **intent**, so the user tells the app, and the
+app never guesses.
 
-1. **One string at a time, or free-form overlay?** Six strings × four harmonics is 24
-   tracks; the per-string harmonic grid from M2.6g would put all of them on one pane.
-2. **Does "audition a single harmonic" jump the queue as R5.0?** It is small, it is
-   independent of the tracks, and it may be the more valuable half.
+The core value, in the user's words: *"a user can intuitively understand which string and
+its harmonics are activated at what time."* Proper use assumes the recording has segments
+of a single chord, or one to a few notes. Expect the common case to be **one segment at a
+time — one note up to one chord.**
+
+## Decisions already made (do not re-litigate)
+
+- **The spectrogram overlay has its own state, separate from the frequency plots'**
+  (`state.stringHarmonics`, the M2.6g 6×4 grid). Explicit user instruction, first
+  sentence of the R5 brief. The two views answer different questions and must be
+  settable independently.
+- **The two questions the previous draft left open are answered.**
+  1. *One string at a time, or free-form overlay?* — **Neither, as posed.** The unit is a
+     **note set**: R5.1 ships single open strings, R5.2 ships the eight open chords. It is
+     one control, one state shape, and it grows without migration.
+  2. *Does "audition a single harmonic" jump the queue?* — **No.** It is independent of
+     the tracks and it does not serve the generative-model idea; leave it unscheduled.
+- **Visible control = a chord/note dropdown. Internal representation = `frets[6]`,**
+  `null` meaning "not sounding", integer meaning fret number (`0` = open). A fret grid, if
+  it is ever wanted, becomes a new view onto existing state rather than a migration.
+- **No chord auto-detection, ever.** Not a capability gap — a house rule.
+- **Harmonic count is one integer, "harmonics 1–N",** not N per-harmonic switches. The
+  frequency plot's switches are about individual partials; the spectrogram overlay is
+  about the comb *as one object*. Default 6, which is the count the user named.
+- **Tracks carry the note's hue, stroked over a black halo.** The magma image is dark at
+  the floor and bright at the ridges, so neither a light nor a dark stroke alone survives
+  both; a 3 px `rgba(0,0,0,0.55)` halo under a 1.5 px hue does. Black is legitimate here
+  and a theme color is not — the spectrogram is a data surface and **data colormaps never
+  theme** (CLAUDE.md). Hue also keeps the overlay consistent with `STRING_COLORS`, the
+  data palette the frequency plot's harmonics already use.
+- **Two tiers of coincidence, `COINCIDENCE_CENTS` (6 ¢) and `TEMPERED_CENTS` (20 ¢).** See
+  the measurement below; this **reverses** the shipped comment at `index.html` ≈1436 which
+  calls the 14 ¢ tempered third "a near-miss, not a landing". That reversal is deliberate,
+  is scoped to chord overlays, and must be appended to SPEC.md — R3's ✦ on the frequency
+  plots keeps the 6 ¢ rule and stays byte-identical.
+
+## Measured before specified (reviewer, 2026-08-25)
+
+Three scratch computations over the eight open chords in E standard, harmonics 1–6, using
+the app's own ET formula. They decided the spec; keep them in mind before changing it.
+
+**1. Chord collisions are trimodal, and ±6 ¢ misses every third.** Across all eight
+chords, every cross-note pair within 50 ¢ falls in one of three buckets, with **nothing at
+all between 16 ¢ and 50 ¢**:
+
+| offset | what it is | pairs in E major |
+|---|---|---|
+| 0.0 ¢ | octaves and unisons | 10 |
+| ±2.0 ¢ | fifths and fourths | 8 |
+| +13.7 ¢ / −15.6 ¢ | major / minor thirds | 4 |
+
+E major has 22 pairs inside 50 ¢ and 18 inside 6 ¢; the four it misses are exactly the G♯
+collisions — the note that makes the chord major. That is docs/THEORY.md §5's table
+appearing directly in the measurement. Because the population has a 17–50 ¢ dead zone, a
+second cutoff anywhere in 17–50 ¢ classifies identically, so **20 ¢ is as empirically inert
+a choice as 6 ¢ was** — which is why it is a constant and not a slider, exactly as R3's was.
+
+**2. The density objection was a miscount.** Counting *partials* suggested ~30 lines on a
+166 px plot; the right count is **distinct drawn tracks**, and the collisions collapse them
+— which is the lesson, not an obstacle:
+
+| chord | partials (h = 1–6) | distinct tracks ≥ 2 px apart | clusters | span used |
+|---|---|---|---|---|
+| E | 36 | 17 | 11 | 91 px of 166 |
+| C | 30 | 15 | 8 | 78 px |
+| D | 24 | 14 | 7 | 78 px |
+| G | 36 | 17 | 10 | 91 px |
+
+~5 px per track is tight but drawable, and 6–11 glyphs is manageable — especially spread
+along the **time** axis, as the user proposed, rather than fighting for frequency space.
+
+**3. Most chord collisions are invisible to today's detector.** `findCoincidences()` only
+reports a harmonic landing on an *open string's fundamental*. Clusters with no fundamental
+in them: **E 8 of 11, C 6 of 8, G 7 of 10, Am 4 of 6.** Examples it cannot see today:
+`C3×5 ≈ E3×4 ≈ E4×2` at 657.5 Hz (the 4:5 major third itself), `B2×4 ≈ B3×2 ≈ E3×3 ≈ E2×6`
+at 494.2 Hz (four partials, one line), `G3×5 ≈ B3×4` at 983.9 Hz. **That is the whole case
+for R5.0.**
+
+## Build order
+
+R5.0–R5.1 is the first visually testable deliverable and is what this session builds.
+R5.2 is where the user's case (b) — a chord, with collisions — becomes visible.
+
+### R5.0 — partial clustering in block 0 (node-testable, no UI)
+
+`findCoincidences()` answers a **directional** question ("does a harmonic of one string
+land on another's open fundamental") because R3's frozen popover copy is phrased that way.
+Chords need a **direction-free** one ("which partials of these notes share a frequency"),
+with no fundamental required on either side. That is a different question, not a second
+copy of the same one — the shared primitives (`centsBetween`, `octaveFold`,
+`HARMONIC_INTERVALS`, the tolerance constants) stay single, and a gate assertion binds the
+two so they can never disagree.
+
+**Leave `findCoincidences()` untouched.** R3's ✦ counts and R4's ancestry must come out
+byte-identical; the gate asserts it (r3 42, r4 60, unchanged).
+
+Add to script block 0, immediately after `findCoincidences()`:
+
+- `const TEMPERED_CENTS = 20;` beside `COINCIDENCE_CENTS`.
+- `notePartials(midis, nHarm, a4)` — `midis` is an array whose entries are MIDI numbers or
+  `null` (not sounding). Returns one flat array of
+  `{key, midi, harm, f}`, `key` = the index in `midis`, `harm` = 1…`nHarm`,
+  `f = midiToFreq(midi, a4) * harm`, in `midis` order then ascending `harm`. Skips `null`
+  entries. Fretting needs no new function: a fretted pitch is `openMidi + fret`.
+  **No frequency clipping here** — `FMIN`/`FMAX` live in script block 3, and block 0 must
+  stay free of them; the draw pass clips to the pane instead. (Inert in practice: with
+  N ≤ 8 the highest stocked partial is E4×8 ≈ 2637 Hz and the lowest fundamental is
+  D2 ≈ 73.4 Hz, both inside the plot.)
+- `partialClusters(parts, tolCents)` — sort by frequency ascending, then **walk upward**:
+  open a group at the lowest partial not yet in one and keep absorbing the next partial
+  while it stays within `tolCents` of the group's **first** member (so `tolCents` caps the
+  group's total spread, not a chained neighbour gap). `tolCents` defaults to
+  `TEMPERED_CENTS`. Return only groups holding partials from **two or more distinct
+  `key`s**, sorted ascending by `f`, each shaped
+  `{f, members:[…sorted by f], notes, spreadCents, tier}` — `f` the geometric mean of the
+  members, `notes` the count of distinct keys, `spreadCents` the cents from the lowest
+  member to the highest (0 exactly when they coincide, never `-0`), and `tier` `"locked"`
+  when `spreadCents <= COINCIDENCE_CENTS`, else `"tempered"`.
+
+**Done when** `tests/r5.test.js` passes its R5.0 block, including the consistency
+assertion that binds the two detectors: across **all five stocked tunings** with the six
+open strings and harmonics 1–N for N = 1…8, **every** landing `findCoincidences()` reports
+(96 of them) appears inside some `partialClusters()` group — the group must contain both
+the reported harmonic (`key === c.from.si`, `harm === c.harm`) and the open string it lands
+on (`key === c.onto.si`, `harm === 1`). Measured here before it was specified: 96 landings,
+0 missing. This is what stops the greedy walk from splitting a real landing across a group
+boundary without anyone noticing.
+
+### R5.1 — one note, drawn (the first thing the user can look at)
+
+**State** (block 4, beside the other spectrogram state):
+
+- `state.sgFrets = [null,null,null,null,null,null]` — the overlay's note set.
+- `state.sgHarm = 6` — harmonics 1–N.
+- Neither is persisted and neither enters `gsSettings` in R5.1; that is a v4 decision to
+  take once the shape has been used. Neither ever enters an export (they are UI state, and
+  exports are data-only).
+
+**Control** — a new `.ctlgroup` in `#sgramCard`'s `.cardhead`, before `Time axis`:
+`<span>Overlay</span>` and a `<select id="sgNoteSel">` whose options are `Off` (default)
+plus the six open strings named from the current tuning (low first), and a
+`<select id="sgHarmSel">` offering `1–4 / 1–6 / 1–8`, default `1–6`. Picking a string
+writes that one fret as `0` and the rest `null`. Both selects re-label on a tuning change
+(`syncVocabTuning()` is the existing precedent for tuning-reactive labels).
+
+**Model** — `sgramModelFor()` gains `comb`: the flat `notePartials(...)` array for
+`state.sgFrets` (one entry per partial, in the order block 0 returns them), or `null` when
+no string is selected. **No clipping in the model** — the draw pass clips to the pane, so
+`comb.length` is the count of partials the overlay asked for and is exactly what
+`data-sgcomb` publishes. Nothing about the STFT changes; this is chrome, and it must not
+perturb M2.7's refine key (the two cache keys mention neither `sgFrets` nor `sgHarm`).
+
+**Draw** — a new pass in `drawSpectrogramScene()` **after** `drawStringMarkers()` (line
+≈3660) and **before** the colorbar, clipped to the plot rect: per partial, a full-width
+horizontal at `yOfF(f)` — 3 px `rgba(0,0,0,0.55)` halo, then 1.5 px in
+`_stringColor(key)`, **solid** for `harm === 1` and `setLineDash([3,3])` above it. No
+labels: the existing right-edge string markers give the reference, and the plot has no
+room. The pane's status chip gains the overlay in words, e.g. `E2 · harmonics 1–6`.
+
+**Hooks** (the canvas is unreachable from node, same reasoning as `data-sgwin`):
+`?sgnote=<0-5>` and `?sgharm=<n>`, unpersisted, gate-only; and each sgram pane canvas
+carries `data-sgcomb="<count>"` — the number of partial tracks in that pane's overlay
+model — absent when the overlay is off.
+
+**Done when** `?demo&sgnote=0` draws six tracks on both panes, `data-sgcomb="6"`, the chip
+names the note, `?sgnote` absent leaves every pane pixel-identical to today, and PNG
+exports carry no tracks.
+
+**PNG note, corrected here after reading the source:** `exportSgramPNG()` does *not* run the
+`state.strings=false` dance — it never needed to, because the strings axis is a
+frequency-plot thing and the spectrogram draws its own always-on right-edge markers
+instead. So the overlay does not get stripped for free: `exportSgramPNG()` must save
+`state.sgFrets`, blank it to six `null`s, and restore it in a `finally`, exactly as
+`_cardPng()` does for `state.strings`. Stripping is the shipped precedent (no PNG carries
+the strings axis or the harmonics), and it is what the gate asserts. It is also a taste
+call the user may want to reverse — a picture of an overlay is arguably the point of
+exporting it — so raise it at the milestone boundary rather than deciding silently.
+
+### R5.2 — a chord, from a picker
+
+Eight open chords as a table of `{name, frets[6]}`, `null` = muted:
+`E [0,2,2,1,0,0]`, `Em [0,2,2,0,0,0]`, `A [null,0,2,2,2,0]`, `Am [null,0,2,2,1,0]`,
+`C [null,3,2,0,1,0]`, `D [null,null,0,2,3,2]`, `Dm [null,null,0,2,3,1]`,
+`G [3,2,0,0,0,3]`. They join `#sgNoteSel` under a second optgroup; pitches come from the
+existing ET formula, colors from `_stringColor(key)`. 17 tracks where there should be 36 —
+**the merge is visible before anything is marked**, which is the point.
+
+### R5.3 — collisions marked and clickable
+
+One ✦ per `partialClusters()` cluster, not per pair; the two tiers drawn distinguishably
+(the locked tier as R3 draws it, the tempered tier hollow); distributed along the **time**
+axis rather than stacked in frequency, per the user's suggestion — including the extreme
+left and right edges of the span when crowded. Click opens a frozen copy block explaining
+the cluster as a ratio in R4's ancestry vocabulary. Copy traces to docs/THEORY.md §1
+(4:5:6 is the major triad), §3.4 (the denominator rule), §4 (10:12:15 for the minor), §5
+(the tempered third is 14 ¢ sharp — which is *why* that tier exists and is drawn
+differently). **Reviewer writes that copy and freezes it by sentinel + SHA; the builder
+wires it.**
+
+### R5.4 — bound it in time
+
+Restrict the overlay to a selected time span rather than the full pane width, composing
+with M2.7's zoom refinement. Deliberately last: the user asked to ignore time-span until
+the rest works.
+
+### Deliberately not in R5
+
+Barre and movable chords; arbitrary note entry; auto-detection; per-track numeric decay
+readouts; auditioning a single harmonic.
 
 ---
 

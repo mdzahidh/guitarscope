@@ -359,6 +359,57 @@ section("zooming in asks for a finer window, and only where it was asked");
     d.length + " px differ — an attribute without a redraw would be ~0");
 }
 
+// ------------------------------------------- harmonic tracks (R5) ----------
+// Same anchoring rule as sgwin(): the page carries index.html's own source inline,
+// so the string literal that writes the attribute would satisfy a bare match.
+function sgcomb(page, id) {
+  const m = page.match(new RegExp('<canvas[^>]*id="' + id + '"[^>]*>'));
+  if (!m) return null;
+  const c = m[0].match(/data-sgcomb="(\d+)"/);
+  return c ? Number(c[1]) : null;
+}
+
+section("the overlay is off until asked for, and then says what it drew");
+{
+  const off = domDrawn(SG);
+  ok(sgcomb(off, "sgramCanvasA") === null,
+    "no overlay by default — the pane publishes no comb",
+    String(sgcomb(off, "sgramCanvasA")));
+
+  // One open string, the shipped default of six harmonics: six partials, and the
+  // comb is global to the comparison, so both panes carry the same one.
+  const one = domDrawn(SG + "&sgnote=0");
+  ok(sgcomb(one, "sgramCanvasA") === 6,
+    "one open string draws six partials on pane A", String(sgcomb(one, "sgramCanvasA")));
+  ok(sgcomb(one, "sgramCanvasB") === 6,
+    "…and the same comb on pane B", String(sgcomb(one, "sgramCanvasB")));
+
+  // The count has to follow the user's harmonic limit. A build that hard-codes six
+  // and only labels the rest passes the two assertions above and fails this one.
+  const three = domDrawn(SG + "&sgnote=0&sgharm=3");
+  ok(sgcomb(three, "sgramCanvasA") === 3,
+    "and the count follows the harmonic limit, not a constant",
+    String(sgcomb(three, "sgramCanvasA")));
+}
+
+section("and the tracks are pixels, not an attribute");
+{
+  // The attribute is not the feature — the same trap M2.7's refine compare closes.
+  const off = shotDrawn(SG, TALL);
+  const on = shotDrawn(SG + "&sgnote=0", TALL);
+  const d = diffPixels(on, off, 8);
+  ok(d.length > 500, "turning the overlay on really changes the spectrogram",
+    d.length + " px differ — an attribute without a draw would be ~0");
+
+  // Six tracks must mark more of the picture than two. This is the drawing loop
+  // reading the limit, stated in pixels rather than in an attribute.
+  const two = shotDrawn(SG + "&sgnote=0&sgharm=2", TALL);
+  const d2 = diffPixels(two, off, 8);
+  ok(d.length > d2.length,
+    "and six harmonics mark more of it than two",
+    d.length + " px vs " + d2.length + " px");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 console.log("artifacts: " + OUT);
 process.exit(failed ? 1 : 0);

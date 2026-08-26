@@ -1201,3 +1201,41 @@ design the pane draws the base pass until the finer one lands. Proven with a scr
 of `index.html` publishing `_sgShown` as a DOM attribute (canvas state is unreachable from
 `--dump-dom` otherwise). **Known gap, recorded rather than papered over:** nothing in the
 gate asserts the overlay's window, because the race makes a naive assertion flaky.
+
+---
+
+## 2026-08-25 — R5.0: a second tolerance tier, and an explicit reversal
+
+**The decision being reversed.** The comment shipped above `findCoincidences()`
+(`index.html` ≈1436) argues the fixed ±6 ¢ threshold this way: 12-TET's fifth is 2 ¢ off
+just and must be admitted, while "the tempered major third is 14 ¢ off — a near-miss, not
+a landing, and the ear reads it that way". That reasoning was sound for what R3 does, and
+**R3's ✦ on the frequency plots keeps it unchanged** — open strings are the only targets
+there, and the measured insensitivity recorded at gate 3 (6 ¢ → 50 ¢ admits nothing new in
+any stocked tuning) still holds.
+
+**Why it does not survive contact with chords.** Measured over the eight open chords in E
+standard, harmonics 1–6: every cross-note pair inside 50 ¢ lands in exactly three buckets —
+0 ¢ (octaves and unisons), ±2 ¢ (fifths and fourths), and +13.7 / −15.6 ¢ (major and minor
+thirds) — with **nothing between 16 ¢ and 50 ¢**. In E major, 18 of the 22 pairs are inside
+6 ¢ and the four excluded are precisely the G♯ collisions: the note that makes the chord
+major. A tool whose whole purpose is showing a user how the partials of a chord line up
+cannot be silent about the third. Discarding it would not be conservatism, it would be
+hiding the most interesting thing on the screen.
+
+**What ships instead.** A second constant, `TEMPERED_CENTS = 20`, used only by
+`partialClusters()` — the direction-free grouping chords need. Two tiers, `"locked"`
+(≤ 6 ¢) and `"tempered"` (≤ 20 ¢), reported by the function and drawn distinguishably from
+R5.3 on. The 14 ¢ third is therefore neither hidden nor equated with a unison; it is
+labelled as what docs/THEORY.md §5 says it is. And because the collision population has a
+17–50 ¢ dead zone, any cutoff in that range classifies identically — so `TEMPERED_CENTS` is
+as empirically inert a choice as `COINCIDENCE_CENTS` was, which is why it too is a constant
+and not a user control.
+
+**Scope of the reversal, stated so it cannot spread by accident.**
+`findCoincidences()` is not modified: R3's ✦ counts and R4's ancestry must come out
+byte-identical, and the gate asserts it (r3 42, r4 60, unchanged). `partialClusters()` is
+a new function answering a different question, sharing the same `centsBetween` /
+`octaveFold` / `HARMONIC_INTERVALS` primitives — one set of primitives, never a second
+copy — and `tests/r5.test.js` carries a consistency assertion binding the two: every
+landing `findCoincidences()` reports must appear inside some `partialClusters()` group.

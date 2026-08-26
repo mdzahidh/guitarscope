@@ -1027,6 +1027,30 @@ metrics) are carried as stored values and labeled as such.
   for sniffing (it detaches/neuters the buffer in some engines).
 - Chrome headless: `--virtual-time-budget` fast-forwards `setTimeout` chains (the Welch
   yields), making `?demo` screenshots deterministic and instant.
+- **…but it does not fast-forward real work, so anything asynchronous behind a decode or
+  an FFT is a race.** Virtual time runs ahead as fast as it can whenever no virtual timer
+  is pending, so the budget can expire — and `--dump-dom`/`--screenshot` fire — while an
+  `OfflineAudioContext` decode or M2.7's refinement STFT is still running in real time.
+  Two symptoms, one cause: a launch can draw nothing at all (the decode), and after M2.7 a
+  *zoomed* sgram load can be fully drawn but still showing the base 2048-pt image (the
+  refine, ~1 run in 4). Measured, not guessed: four consecutive `tests/headless.js` runs
+  failed a refine assertion twice, in two different places — `data-sgwin` reading 2048
+  where 4096 was due, and the refine-on/refine-off pixel compare showing 0 px differ; and
+  a direct probe of eight `--dump-dom` loads came back with three bare
+  `<canvas id="sgramCanvasA">` tags, no `width`, no `data-sgwin`, which is what a `[null]`
+  assertion failure looks like. **The decode rate is load-dependent** — ~1 in 6 idle, 3 in
+  8 with a second Chrome running alongside — so never launch two headless Chromes at once,
+  and size the retry for the loaded rate: six tries puts a site at ~0.3 %, where three left
+  ~5 %. A bigger budget does not fix any of it (identical at 30 s and 90 s); the fix is to
+  retry the *launch* until the page is ready, which is what `drew()` /
+  `domDrawn(query, ready)` / `shotDrawn(query, size, ready)` do. Two rules for the
+  predicate. It must read **what the assertion reads**: `drew()` asks for `data-sgwin`
+  rather than the canvas width, because `drawAll()` writes both in the same branch but the
+  overlay-off assertions check that `data-sgcomb` is *absent* — which an undrawn page
+  supplies for free. And it must be strictly **weaker** than the assertion — "the refine
+  landed at all" (`sgwin !== 2048`, "differs from the refine-off build at all"), never "the
+  refine landed on 4096" — so a build that never refines still fails every try and reports
+  the wrong number.
 - **Chrome headless does not exit when given `--user-data-dir`.** With a throwaway
   profile it renders and writes the PNG on time (~3 s), then sits there. Two runs left
   going overnight both finally returned **after 23 h 20 m**, and the last lines of each

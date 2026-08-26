@@ -279,17 +279,36 @@ function sgwin(page, id) {
   return w ? Number(w[1]) : null;
 }
 
-// The demo pair loads through a real audio decode, and roughly one launch in six
-// exits before the app has drawn anything: --virtual-time-budget fast-forwards
-// timers, not decodes, so the budget runs out in real-time terms while the decode
-// is still pending. Measured identical at 30 s and 90 s of budget — the fix is a
-// retry, not a bigger number. Both helpers below check that the page really drew
-// and try again if it did not; after three tries they hand back what they have,
-// so the assertion fails loudly rather than passing against a blank page.
-function drew(page) { return /id="sgramCanvasA"[^>]*\bwidth=/.test(page); }
-function domDrawn(query) {
+// The demo pair loads through a real audio decode, and a launch can exit before the
+// app has drawn anything: --virtual-time-budget fast-forwards timers, not decodes,
+// so the budget runs out in real-time terms while the decode is still pending.
+// Measured identical at 30 s and 90 s of budget — the fix is a retry, not a bigger
+// number. Rate is load-dependent: ~1 launch in 6 on an idle machine, 3 in 8 when a
+// second Chrome is running alongside. Both helpers below check that the page really
+// drew and try again if it did not; after six tries they hand back what they have,
+// so the assertion fails loudly rather than passing against a blank page. Six because
+// 0.375^6 is ~0.3 %, where three tries left ~5 % per site and both `[null]` failure
+// modes below were seen for real.
+//
+// Ask for the attribute the assertions actually read, not for the canvas width:
+// drawAll() writes width and data-sgwin in the same branch, so an undrawn page has
+// neither — but the overlay-off assertions check that data-sgcomb is *absent*, and a
+// blank page supplies that for free. Anchoring readiness on data-sgwin closes that
+// false pass.
+function drew(page) { return sgwin(page, "sgramCanvasA") !== null; }
+
+// A second race sits on top of that one, and it is M2.7's own: refinement is an
+// asynchronous pass — a settle timer, then an STFT that finishes whenever it
+// finishes — so a page can be completely drawn and still be showing the base
+// 2048-pt image at --dump-dom time. Measured at roughly 1 run in 4 across the two
+// zoomed loads below, in either of them. `ready` lets a caller say what "drawn"
+// means for its own assertion. It cannot launder a broken build: a build that
+// never refines fails the predicate on every try, and the assertion then
+// runs against the last page and reports the wrong number, exactly as before.
+function domDrawn(query, ready) {
+  const done = ready || drew;
   let page = dom(query);
-  for (let i = 0; i < 2 && !drew(page); i++) page = dom(query);
+  for (let i = 0; i < 5 && !done(page); i++) page = dom(query);
   return page;
 }
 // A screenshot cannot be asked whether a canvas has a width, so ask it against the
@@ -297,9 +316,13 @@ function domDrawn(query) {
 // a drawn one differs across the whole page. The retry varies a parameter the app
 // ignores, purely to miss the screenshot cache.
 const BLANK = shot("open=all", TALL);
-function shotDrawn(query, size) {
+function notBlank(img) { return diffPixels(img, BLANK, 8).length >= 100000; }
+// Same two races, same shape as domDrawn: `ready` is the caller's extra condition
+// on top of "the app drew at all", for pixels that only appear once the refine has
+// landed.
+function shotDrawn(query, size, ready) {
   let img = shot(query, size);
-  for (let i = 0; i < 2 && diffPixels(img, BLANK, 8).length < 100000; i++)
+  for (let i = 0; i < 5 && !(notBlank(img) && (!ready || ready(img))); i++)
     img = shot(query + "&_r" + (i + 1), size);
   return img;
 }
@@ -328,7 +351,10 @@ section("zooming in asks for a finer window, and only where it was asked");
   // 1-2.4 s is 1.4 s: inside one event, the ladder's 8192 rung, ~12 Hz two-tone
   // resolution at 48 kHz. That is the case 2048 (~47 Hz) cannot do at all --
   // D3-G3 are 49.2 Hz apart and E2-A2 only 27.6.
-  const page = domDrawn(SG + "&zoom=sga:1,2.4");
+  // Retry while pane A still reports the base window: that is the refine not having
+  // landed yet, not an answer. The value it must land on stays in the assertion.
+  const refined = p => drew(p) && sgwin(p, "sgramCanvasA") !== 2048;
+  const page = domDrawn(SG + "&zoom=sga:1,2.4", refined);
   ok(sgwin(page, "sgramCanvasA") === 8192,
     "a 1.4 s window on pane A resolves at 8192", String(sgwin(page, "sgramCanvasA")));
 
@@ -344,7 +370,7 @@ section("zooming in asks for a finer window, and only where it was asked");
   // 0.5-4.5 s is a 4 s span: back down the ladder to 4096. A build that keys its
   // cache on "is zoomed" rather than on the window bounds passes the assertion
   // above and fails this one.
-  const wide = domDrawn(SG + "&zoom=sga:0.5,4.5");
+  const wide = domDrawn(SG + "&zoom=sga:0.5,4.5", refined);
   ok(sgwin(wide, "sgramCanvasA") === 4096,
     "a 4 s window resolves at 4096, not at whatever was computed last",
     String(sgwin(wide, "sgramCanvasA")));
@@ -352,8 +378,13 @@ section("zooming in asks for a finer window, and only where it was asked");
   // And the attribute is not the feature. Only this compare separates a real
   // recompute from a label: same zoom, refine on against refine off, and the
   // pane must actually look different.
-  const on = shotDrawn(SG + "&zoom=sga:1,2.4", TALL);
+  // refine=0 first, because it is the deterministic one — it only ever crops — and
+  // it is what the refined shot is judged ready against. Readiness here is "the
+  // refine changed anything at all"; whether it changed enough to be a redraw
+  // rather than a label is the assertion, and stays the assertion.
   const off = shotDrawn(SG + "&zoom=sga:1,2.4&refine=0", TALL);
+  const on = shotDrawn(SG + "&zoom=sga:1,2.4", TALL,
+    img => diffPixels(img, off, 8).length > 0);
   const d = diffPixels(on, off, 8);
   ok(d.length > 500, "and the zoomed pane really is redrawn from the finer STFT",
     d.length + " px differ — an attribute without a redraw would be ~0");

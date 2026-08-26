@@ -63,7 +63,8 @@ fs.writeFileSync(tmp, blocks[0] +
   "partialLabel:(typeof partialLabel==='undefined'?null:partialLabel)," +
   "clusterRatio:(typeof clusterRatio==='undefined'?null:clusterRatio)," +
   "CMAP_NAMES:(typeof CMAP_NAMES==='undefined'?null:CMAP_NAMES)," +
-  "cmapTable:(typeof cmapTable==='undefined'?null:cmapTable)};\n");
+  "cmapTable:(typeof cmapTable==='undefined'?null:cmapTable),"+
+  "triadDegrees:(typeof triadDegrees==='undefined'?null:triadDegrees)};\n");
 const D = require(tmp);
 
 const TUNING_KEYS = ["estd", "eb", "dstd", "dropd", "dadgad"];
@@ -261,7 +262,7 @@ section("R5.1 — two controls on the spectrogram card, before the time axis");
   ok(iNote > 0 && iAxis > 0 && iNote < iAxis, "the overlay group comes before Time axis");
   ok(/>\s*Overlay\s*</.test(head), "the group is labelled Overlay");
   const noteSel = head.slice(iNote, head.indexOf("</select>", iNote));
-  ok(/>\s*Off\s*</i.test(noteSel), "…and its first choice is Off");
+  ok(/>\s*None\s*</i.test(noteSel), "…and its first choice is None: nothing is overlaid until asked (R5.7)");
   const harmSel = head.slice(iHarm, head.indexOf("</select>", iHarm));
   ok(/1–6[\s\S]{0,40}<\/option>/.test(harmSel) && /selected/.test(harmSel),
     "1–6 is the default harmonic count");
@@ -280,6 +281,8 @@ section("R5.1 — two controls on the spectrogram card, before the time axis");
   ok(filler.length > 0, "some function fills the overlay select with options");
   ok(filler.some(fn => /noteInfo\s*\(/.test(fn) && /tuningMidi\s*\(|midiToFreq\s*\(/.test(fn)),
     "its six string choices are named from the current tuning, not hard-coded");
+  ok(filler.some(fn => /value="all"[\s\S]{0,80}All open strings/i.test(fn)),
+    "…and all six open strings are one choice away, not six clicks (R5.7)");
 }
 
 section("R5.1 — the model carries the comb, and does not disturb M2.7's refine");
@@ -319,39 +322,33 @@ section("R5.1 — the model carries the comb, and does not disturb M2.7's refine
   ok(/harmonics 1–/.test(body), "the status chip names the overlay it drew");
 }
 
-section("R5.1 — the tracks are drawn, under the colorbar, with no text");
+section("R5.1/R5.7 — the tracks are drawn in the plot, their labels outside it");
 {
   const s = decomment(b3);
   const i = s.indexOf("function drawSpectrogramScene");
   const body = s.slice(i, s.indexOf("\nfunction ", i + 10));
-  const a = body.indexOf("drawStringMarkers(");
-  const b = body.indexOf("cbX", a);
+  ok(/SGPLOT\.mR\s*=\s*\(\s*model\.comb/.test(body),
+    "the right margin widens for the labels, and only when there is a comb to label");
+  const a = body.indexOf("if(model.comb && model.comb.length)");
+  const b = body.indexOf("model.clusters", a);
   const pass = a > 0 && b > a ? body.slice(a, b) : "";
-  ok(pass !== "", "there is a pass between the string markers and the colorbar");
-  ok(/model\.comb/.test(pass), "…and it reads model.comb");
+  ok(pass !== "", "there is a comb pass, before the collision marks");
   ok(/yOfF\s*\(/.test(pass), "each partial is placed by the pane's own frequency mapping");
-  ok(/rgba\(0,\s*0,\s*0,\s*"?\s*\+?\s*\(?0?\.75/.test(pass),
-    "a black halo carries the line when the hue sits inside the colormap's own gamut");
-  ok(/_trackColor\s*\(/.test(pass), "the hue is the string's own data color, lifted for this surface");
-  // 2026-08-26: the pattern is no longer written into the draw pass. It comes from
-  // model.dash, so the selector can offer more than one — and the halo comes with it,
-  // because a fixed color the colormap never produces needs no black under it.
-  ok(/model\.dash/.test(pass), "the dash pattern comes from the model, not from a literal here");
-  ok(/setLineDash\(\s*\[\s*\]\s*\)/.test(pass) && /harm\s*===\s*1/.test(pass),
-    "…and the fundamental is drawn solid whatever the pattern is");
-  // The first legibility complaint (user, 2026-08-25) was that the tracks vanished
-  // into the image: at DPR 2 a 3 px halo under a 1.5 px line leaves 0.75 CSS px of
-  // black per side. Both widths are asserted, and their order with them.
-  const widths = [...pass.matchAll(/lineWidth\s*=\s*([\d.]+)/g)].map(m => Number(m[1]));
-  ok(widths.length >= 2 && widths[0] > widths[1],
-    "the halo is stroked wider than the track it carries");
-  ok(widths.length >= 2 && widths[1] >= 2 && widths[0] - widths[1] >= 2,
-    "…and both survive a device-pixel-ratio 2 downscale");
-  ok(/harm\s*===\s*1/.test(pass), "the fundamental is told apart from the harmonics above it");
-  // R5.6b supersedes R5.1's "no labels": hue and order named the string but never the
-  // harmonic, which is the thing the overlay is for. The rule that replaced it lives in
-  // the R5.6b section below; what survives here is that the track itself is still a line.
-  ok(/fillText/.test(pass), "…and each track is named (R5.6b — this reverses R5.1's no-text rule)");
+  ok(/_trackPaint\s*\(/.test(pass), "its colour comes from _trackPaint(): one place decides every look");
+  ok(/model\.dash/.test(pass) && /setLineDash\(\s*\[\s*\]\s*\)/.test(pass) && /harm\s*===\s*1/.test(pass),
+    "the pattern comes from the model, and the fundamental is solid whatever it says");
+  // R5.7 inverted the halo rule. Every stocked base colour now sits outside the
+  // colormaps, so nothing needs black under it — except the String-hues modifier,
+  // which mixes a track back INTO the map's own gamut.
+  ok(/halo\s*=\s*!!\s*model\.hue/.test(pass) && /if\s*\(\s*halo\s*\)/.test(pass),
+    "a halo is stroked only under the String-hues modifier");
+  // A label ON the image hides the measurement it exists to be checked against, so
+  // R5.7 moved them into the right margin, on the frequency axis, in panel ink.
+  const lab = pass.slice(pass.indexOf("ctx.clip()"));
+  ok(/partialLabel\s*\(/.test(lab) && /SGPLOT\.mL\s*\+\s*pW/.test(lab),
+    "…and each label is drawn past the plot's right edge, not over the image");
+  ok(/cssRGBA\s*\(\s*"ink-rgb"/.test(lab),
+    "…in panel ink, legible in both themes whatever colour its track is");
 }
 
 section("R5.1 — the hooks the gate needs, and nothing persisted through them");
@@ -365,40 +362,65 @@ section("R5.1 — the hooks the gate needs, and nothing persisted through them")
   ok(/\[\?&\]sgharm=/.test(s), "?sgharm= is parsed too");
 }
 
-section("R5.1 — the track color is the data palette, lifted for the magma image");
+section("R5.7 — three base colours, and string hues as a modifier on top");
 {
   const s4 = decomment(b4);
-  const i = s4.indexOf("function _trackColor");
-  const body = i < 0 ? "" : s4.slice(i, s4.indexOf("\nfunction ", i + 10));
-  ok(body !== "", "_trackColor() exists in block 4, beside _stringColor()");
-  ok(/STRING_COLORS/.test(body), "…the hue still comes from the six data colors");
-  ok(/liftForDark\s*\(/.test(body), "…lifted by the app's own liftForDark(), the diverging-endpoint precedent");
-  ok(body !== "" && !/cssColor|cssRGBA/.test(body),
-    "…and never from a theme variable — a data color is identical in Bright and Dark");
-  // The lift target is a number in the source; check that whatever it says really
-  // clears the palette. Relative luminance, same weights the app uses. What a track
-  // is read against is its own black halo (measured: 94.8 % of track pixels have
-  // both vertical neighbours under 0.18 L), so the target has to beat the palette's
-  // own 0.36–0.56, not the image's.
-  const mT = /liftForDark\s*\([^,]*,\s*([\d.]+)\s*\)/.exec(body);
-  const target = mT ? Number(mT[1]) : NaN;
-  ok(target >= 0.6, "the target clears the palette itself (>= 0.60), not just the 0.55 the panes use");
-  const mP = /STRING_COLORS\s*=\s*\[([^\]]+)\]/.exec(html);
-  const pal = mP ? (mP[1].match(/#[0-9a-f]{6}/gi) || []) : [];
+  const tks = /const SG_TRACKS\s*=\s*\{[\s\S]*?\n\};/.exec(s4);
+  const tbl = tks ? tks[0] : "";
+  ok(/white\s*:/.test(tbl) && /black\s*:/.test(tbl) && /triad\s*:/.test(tbl),
+    "White, Black and Triad are the stocked track colours");
+  ok(tbl !== "" && !/cyan|magenta|\bstring\s*:/.test(tbl),
+    "…and cyan, magenta and the old String-hues entry are gone (R5.7)");
+  ok(/\[\s*0\s*,\s*0\s*,\s*0\s*\]/.test(tbl) && /\[\s*255\s*,\s*255\s*,\s*255\s*\]/.test(tbl),
+    "black and white are the exact extremes no perceptual colormap reaches");
+
+  const fn = name => {
+    const i = s4.indexOf("function " + name);
+    return i < 0 ? "" : s4.slice(i, s4.indexOf("\nfunction ", i + 10));
+  };
+  const paint = fn("_trackPaint");
+  ok(paint !== "", "_trackPaint() is the one place a track's colour is decided");
+  ok(/model\.hue/.test(paint) && /_trackHueRgb\s*\(/.test(paint),
+    "…and the string hue is mixed in only when the modifier is on: it is not a colour of its own");
+  ok(paint !== "" && !/cssColor|cssRGBA/.test(paint),
+    "…never from a theme variable: a data colour is identical in Bright and Dark");
+  ok(/STRING_COLORS/.test(fn("_trackHueRgb")) && /liftForDark\s*\(/.test(fn("_trackHueRgb")),
+    "the hue is still the six data colours, lifted by the app's own liftForDark()");
+  ok(/model\.triadIdx/.test(fn("_trackBaseRgb")),
+    "a Triad track is picked by the string's degree in the chord, so harmonics share their note's colour");
+
+  // The Triad defaults are measured, not asserted: three colours a user reads over
+  // parula (the case the user named) have to stand off every entry of that colormap
+  // and off each other. CIE Lab, same arithmetic as the Look section below.
   const rgb = h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
-  const lum = c => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
-  // Run the app's own liftForDark(), not a copy of it — a reimplementation here
-  // would keep passing after the shipped one changed.
-  const iL = s4.indexOf("function liftForDark");
-  const src = iL < 0 ? "" : s4.slice(iL, s4.indexOf("\nfunction ", iL + 10));
-  let lift = null;
-  try { lift = new Function(src + "\nreturn liftForDark;")(); } catch (e) {}
-  ok(typeof lift === "function", "…and liftForDark() itself is a pure function this suite can run");
-  const lifted = typeof lift === "function" ? pal.map(h => lift(rgb(h), target)) : [];
-  ok(pal.length === 6 && lifted.every(c => lum(c) >= target - 0.005),
-    "…so all six strings land at the target, not five of six below it");
-  ok(new Set(lifted.map(c => c.join(","))).size === 6,
-    "…and the six stay six — the lift must not collapse two strings onto one color");
+  const lab = c => {
+    const f = v => { const x = v / 255; return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
+    const [r, g, bl] = c.map(f);
+    const t = [(0.4124 * r + 0.3576 * g + 0.1805 * bl) / 0.95047,
+               0.2126 * r + 0.7152 * g + 0.0722 * bl,
+               (0.0193 * r + 0.1192 * g + 0.9505 * bl) / 1.08883]
+      .map(v => v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116);
+    return [116 * t[1] - 16, 500 * (t[0] - t[1]), 200 * (t[1] - t[2])];
+  };
+  const dE = (a, b) => { const x = lab(a), y = lab(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+  const mP = /const SG_TRIAD_DEFAULT\s*=\s*\[([^\]]*)\]/.exec(s4);
+  const cols = (mP ? (mP[1].match(/#[0-9a-f]{6}/gi) || []) : []).map(rgb);
+  ok(cols.length === 3, "the Triad palette ships three colours: root, third, fifth");
+  let minPair = Infinity;
+  for (let i = 0; i < cols.length; i++) for (let j = i + 1; j < cols.length; j++)
+    minPair = Math.min(minPair, dE(cols[i], cols[j]));
+  ok(minPair > 90, "…far enough apart to tell three voices of one chord apart", minPair.toFixed(1));
+  const par = D.cmapTable ? D.cmapTable("parula") : null;
+  let minBg = Infinity;
+  if (par) for (const c of cols) for (let i = 0; i < 256; i++)
+    minBg = Math.min(minBg, dE(c, [par[i * 3], par[i * 3 + 1], par[i * 3 + 2]]));
+  ok(par && minBg > 40, "…and off every colour parula can put behind them", String(minBg.toFixed(1)));
+
+  okf("triadDegrees() reads root/third/fifth off the notes themselves", () => {
+    const g = D.triadDegrees([40, 45, 52, null, null, null]);   // E2 A2 E3 — root, fourth, root
+    const e = D.triadDegrees([40, 47, 52, 56, 59, 64]);          // E major, open
+    return g[3] === null && e[0] === 0 && e[1] === 2 && e[2] === 0 && e[3] === 1 && e[4] === 2 && e[5] === 0;
+  });
 }
 
 section("R5.1 — the pane says what it drew, and the PNG shows it");
@@ -444,7 +466,7 @@ section("R5.1 — the pane is tall enough to read, and the controls say what the
   ok(/\bdisabled\b/.test(selSrc.slice(0, selSrc.indexOf(">"))),
     "…and ships disabled — the limit means nothing until a note is overlaid");
   const opts = selSrc.match(/<option\b[^>]*>([^<]*)<\/option>/g) || [];
-  ok(opts.length >= 2 && opts.every(o => /Harmonics\s*1[–-]\d/.test(o)),
+  ok(opts.length >= 2 && opts.every(o => /Harmonics\s*1[–-]\d|1st harmonic only/.test(o)),
     "…and every one of its options names what it counts, not a bare number");
   const noteSel = /<select id="sgNoteSel"[\s\S]{0,600}?<\/select>/.exec(html);
   for (const [nm, src] of [["string", noteSel ? noteSel[0] : ""], ["harmonic", selSrc]]) {
@@ -644,10 +666,10 @@ section("R5.6b — every track says which harmonic it is");
   ok(cp !== "", "the comb pass is one block — tracks and their labels together");
   ok(/partialLabel\s*\(/.test(cp),
     "…and the text comes from block 0's partialLabel(), not a second spelling of the same arithmetic");
-  ok(/fillText\s*\(/.test(cp) && /strokeText\s*\(/.test(cp),
-    "…drawn with a halo, like the tracks: the magma runs from black to white");
-  ok(/_trackColor\s*\(\s*p\.key/.test(cp),
-    "…in the string's own hue, so a label belongs to a comb at a glance");
+  ok(/fillText\s*\(/.test(cp) && /cssRGBA\s*\(\s*"ink-rgb"/.test(cp),
+    "…drawn in panel ink outside the plot (R5.7), where it hides no measurement and needs no halo");
+  ok(/_trackPaint\s*\(\s*model\s*,\s*p\.key/.test(cp),
+    "…tied to its line by a leader tick in the track's own colour");
   ok(/sort\s*\(/.test(cp),
     "…placed in a deterministic order, or the guard below would keep a different label each redraw");
   ok(/continue\s*;/.test(cp) && /Math\.abs\s*\([^)]*\)\s*<\s*\d/.test(cp),
@@ -666,7 +688,7 @@ section("R5.6c — press and hold to follow one comb");
   ok(/model\.dim/.test(cp), "…and model.dim — the fade is tunable, not baked in");
   ok(/p\.key\s*===?\s*(foc|model\.focus)/.test(cp),
     "…dimming by key, so the whole comb of the held track stays lit, not just that one partial");
-  ok(/_trackColor\s*\(\s*p\.key\s*,\s*[a-z]/i.test(cp),
+  ok(/_trackPaint\s*\(\s*model\s*,\s*p\.key\s*,\s*[a-z]/i.test(cp),
     "…and the fade goes through the track colour's alpha, not a second overlay");
 
   const s4 = decomment(b4);
@@ -1006,42 +1028,25 @@ section("Look — five perceptual colormaps, magma still the default");
     "magmaColor survives by name — tests/dsp.test.js and every old caller still read it");
 }
 
-section("Look — a fixed track color drops the halo; the default dash is finer");
+section("Look — the line style is a table, and it never reaches the FFT");
 {
   const s = decomment(b4);
-  const tks = /const SG_TRACKS\s*=\s*\{[\s\S]*?\n\};/.exec(s);
-  ok(tks && /string\s*:/.test(tks[0]), "String hues is stocked — the R5.1 look is still offered");
-  ok(tks && !/string\s*:\s*\{\s*label\s*:[^}]*rgb/.test(tks[0]),
-    "…and it alone carries no rgb: the six data colors are per string, not one color");
-  ok(tks && (tks[0].match(/rgb\s*:/g) || []).length >= 2,
-    "at least two fixed colors, so a colormap that swallows one has an alternative");
-  ok(tks && /black\s*:\s*\{[^}]*rgb\s*:\s*\[\s*0\s*,\s*0\s*,\s*0\s*\]/.test(tks[0]) &&
-     /white\s*:\s*\{[^}]*rgb\s*:\s*\[\s*255\s*,\s*255\s*,\s*255\s*\]/.test(tks[0]),
-    "black and white — the two hues no perceptual colormap produces at its own extremes");
-
   const dsh = /const SG_DASHES\s*=\s*\{[\s\S]*?\n\};/.exec(s);
-  ok(dsh, "the dash patterns are a table too");
+  ok(dsh, "the dash patterns are a table");
   const fine = dsh && /fine\s*:\s*\{[^}]*pat\s*:\s*\[\s*(\d+)\s*,\s*(\d+)\s*\]/.exec(dsh[0]);
-  ok(fine, "…with a 'fine' entry");
   ok(fine && Number(fine[1]) + Number(fine[2]) < 10,
-    "…whose period is finer than R5.1's [6,4] — the dash was reading as line weight");
-  ok(/sgDash\s*:\s*["']fine["']/.test(s), "and fine dots are what the app starts with");
+    "…including a pattern finer than the default, for a crowded chord");
+  // R5.7 put [6,4] back as the default: fine dots read as a solid line once six combs
+  // are on the pane, which is the case the overlay exists for.
+  ok(/sgDash\s*:\s*["']dash["']/.test(s), "and dashes are what the app starts with");
 
-  // The halo is the thing the user asked to be able to switch off. It must stay tied to
-  // the absence of an rgb, never become unconditional again.
-  const dss = decomment(b3);
-  const i = dss.indexOf("function drawSpectrogramScene");
-  const body = dss.slice(i, dss.indexOf("\nfunction ", i + 10));
-  ok(/\bhalo\s*=\s*!\s*\w+\.rgb/.test(body),
-    "the halo is exactly 'this color lives inside the colormap' — nothing else");
-  ok(/if\s*\(\s*halo\s*\)/.test(body), "…and the wide stroke is behind that test");
-
-  ok(!/gsSgCmap|gsSgTrack|gsSgDash/.test(s) && !/["'](sgCmap|sgTrack|sgDash)["']\s*:/.test(
+  ok(!/gsSgCmap|gsSgTrack|gsSgDash|gsSgHue|gsSgTriad/.test(s) &&
+     !/["'](sgCmap|sgTrack|sgDash|sgHue|sgTriad)["']\s*:/.test(
       (/function _cardStateFor[\s\S]*?\n\}/.exec(s) || [""])[0]),
-    "none of the three is persisted or exported — view state, like the rest of R5.6");
+    "none of the look state is persisted or exported — view state, like the rest of R5.6");
   const mf = /function sgramModelFor[\s\S]*?\n\}/.exec(s);
   const keyLines = mf ? mf[0].split("\n").filter(l => /key\s*=/.test(l)) : [];
-  ok(keyLines.length >= 2 && !/sgTrack|sgDash/.test(keyLines.join("\n")),
+  ok(keyLines.length >= 2 && !/sgTrack|sgDash|sgHue|sgTriad/.test(keyLines.join("\n")),
     "…and no line style reaches the refine cache key: restyling must not re-run an FFT");
 }
 

@@ -1545,3 +1545,80 @@ entries), and a colormap-name mutation was a no-op because `cmapTable()` falls b
 for an unknown name — replaced by real table corruption (parula's 256 triples reversed, then
 shuffled; both caught by the L\* assertions). No new headless launch: the user asked for a
 quick experiment, and each launch costs four to five minutes.
+
+## R5.7 — nothing on by default, and colors that mean the chord (session 24, user request)
+
+The user tested the look pass and returned six changes plus one about process, verbatim:
+"*lets not show the open strings labeling or track by default on the spectogram. Rather, we
+have an option in the overlay selector (default: None) to show "All open strings" and for the
+harmonic selector (default: upto 6 harmonics) we also have a option for only the 1st harmonic
+only … move the Harmonic labeling on the right side and outside of the plot itself but along
+the vertical axis … make the default line style to "Dashes" … also have an option Triad, which
+is a pallete of three colors corresponding to the 3 notes of a chord, while the harmonics of
+each note share the same color … pre-populate a default set of three that are the most distict
+perceptually and also with the highest contrasts with the Parula colormap as the background …
+the "String Hues" is not itself a color but a modifier on top of whatever color … lets add a
+checkbox option seperate for that (by default off). Also remove cyan and magenta … Also take
+this opportunity to heavily simplify your testing and verificiation strategies.*"
+
+**(a) The always-on pass is deleted, not switched off.** `drawStringMarkers()`, its sole call
+site and `markers: tuningMarkers()` are gone from `index.html`. Six dashed horizontals and six
+stacked labels drew on every pane from M2.5 onward whether or not the reader had asked about
+open strings, and R5.1's overlay answers the same question better: on request, per string, with
+its harmonics. A pane with nothing overlaid is now the measurement, the axes and the colorbar —
+which is the house position (*measure first, never lecture*) applied to pixels.
+
+**(b) `None` and `All open strings`.** The note select's off entry reads **None**; `fillSgNoteSel()`
+prepends a second entry, `all`, that fills all six slots from the current tuning — the deleted
+view, restored as a choice, and it moves with the tuning like `SG_CHORDS` does. The harmonic
+select keeps 6 as its default and gains **1st harmonic only**, the honest form of the question
+the deleted pass was answering badly. Hook: `?sgnote=all`.
+
+**(c) Labels outside the plot.** `SGPLOT.mR` is now dynamic — `SG_MR_BASE = 98`, or
+`SG_MR_LABELS = 150` whenever `model.comb` is non-empty — assigned before `pW` is computed, so
+the plot rect shrinks and the labels get their own column instead of sitting over the
+measurement. Each label draws at `SGPLOT.mL + pW`, preceded by a short leader tick in the
+track's own color, the text in `cssRGBA("ink-rgb", 0.82)`: the tick is data and never themes,
+the text is chrome and does. R5.6's 12 px vertical guard is unchanged — **skipped, never
+smeared**. The consequence for anyone writing a pixel test: overlay-on and overlay-off are two
+different layouts, so a diff between them can only prove *that* something changed. Compare comb
+against comb.
+
+**(d) Triad, measured rather than picked.** `SG_TRACKS` is now `{white, black, triad}`. Triad
+paints by **degree, not by string**: `triadDegrees(midis)` in block 0 reduces the sounding notes
+to pitch classes, finds the root whose stack the others sit on, and returns one slot per string —
+`null` where silent, else `0` root / `1` third / `2` fifth — so every harmonic inherits its
+note's color and a six-string chord reads as three voices rather than six. The user asked for
+"most distinct perceptually and highest contrast with parula", which is a measurable claim, so it
+is measured: `SG_TRIAD_DEFAULT = #ff4400 / #00ff00 / #cc00ff` has a minimum pairwise CIE-Lab ΔE
+of 145.7 (the gate demands > 90) and each color's minimum ΔE to any of parula's 256 entries is
+> 40. Three `<input type="color">` pickers ship `disabled` and are enabled only under Triad, by
+`syncSgHarmSel()`, like every other overlay control since R5.1a. Hook:
+`?sgtriad=RRGGBB,RRGGBB,RRGGBB`.
+
+**(e) String hues is a modifier.** It never was a color — it is "tint by origin", orthogonal to
+"which voice is this". `state.sgHue` (default **off**) is a checkbox; `_trackPaint(model, key,
+alpha)` resolves the base color and, when the modifier is on, mixes it toward `_trackHueRgb(si)`.
+**The halo followed it**: the look pass had `halo = !tk.rgb` ("this hue lives inside the
+colormap"), and the draw pass now reads `halo = !!model.hue` — a fixed or triad color is one
+1.4 px stroke, a string-tinted one keeps R5.1a's 5 px black. Cyan and Magenta are removed.
+Hook: `?sghue=0|1`; `?sgtrack=` validates against `white|black|triad`.
+
+**(f) Default dash back to `[6,4]`.** The look pass chose fine `[1,3]` against a plot that could
+hold thirty-six lines with labels on top of the image; with nothing on by default and the labels
+outside, the heavier dash reads better, and the user asked for it by name. `SG_DASH_NAMES` orders
+the select `dash / dot / fine / solid`. The fundamental is still always solid.
+
+**(g) The process change, made durable.** The user's last sentence is a standing instruction, so
+it is written into docs/ROADMAP.md's "Working discipline" as **Verification, in proportion**:
+exact counts get pinned in the node suites where a run is free, headless assertions are
+*relational* (B's pane equals A's; C's chord marks fewer than E's) because a Chrome launch costs
+four to five minutes; sections that can share a page load are merged; the full gate runs **once**,
+at sign-off, not after each edit; new assertions are mutation-checked one line each rather than
+swept; and a suite is allowed — expected — to shrink when the feature does.
+
+**Gate.** `tests/r5.test.js` 264 → **259** and `tests/headless.js` held at **64** while three of
+its assertions were rewritten from constants (`data-sgclusters` = 11 on A, 11 on B, 8 for C) to
+relations, with the exact numbers kept in the node suite; two overlay pixel sections merged into
+one layout-stable section, cutting six launches to four. Full run green: dsp 171, r3 42, r4 60,
+m27 51, r5 259, headless 64, four tamper guards.

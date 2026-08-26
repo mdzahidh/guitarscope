@@ -151,6 +151,14 @@ input[type=range]:disabled{ opacity:.4; cursor:default; }
 .rangelbl{ display:flex; align-items:center; gap:6px; font-size:11px; color:var(--dim); }
 .rangelbl input[type=range]{ width:74px; accent-color:var(--switch-on); }
 .rangelbl output{ width:30px; text-align:right; font-variant-numeric:tabular-nums; color:var(--mut); }
+/* R5.7: the Triad palette's three swatches and the String-hues modifier. Both
+   describe lines that exist only under an overlay, so both grey out with the
+   look selects — the greying is the affordance (M2.6d). */
+.tricolor{ width:22px; height:22px; padding:0; border:1px solid var(--line); border-radius:5px; background:none; cursor:pointer; }
+.tricolor:disabled{ opacity:.4; cursor:default; }
+.chklbl{ display:flex; align-items:center; gap:5px; font-size:11px; color:var(--dim); }
+.chklbl input{ accent-color:var(--switch-on); }
+.chklbl input:disabled{ opacity:.4; }
 input[type=number]{ width:64px; }
 input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .btn{
@@ -952,11 +960,12 @@ kbd{
           <div class="ctlgroup">
             <span>Overlay</span>
             <select id="sgNoteSel" aria-label="Spectrogram harmonic overlay string"
-                    title="Draw where one open string's harmonics should fall, over the measurement — then look for the energy.">
-              <option value="off" selected>Off</option>
+                    title="Draw where the harmonics of one string, an open chord, or every open string should fall, over the measurement — then look for the energy.">
+              <option value="off" selected>None</option>
             </select>
             <select id="sgHarmSel" aria-label="Spectrogram overlay harmonic count" disabled
                     title="How far up the harmonic series to draw. 1 is the fundamental; each one above it is a whole-number multiple of that pitch.">
+              <option value="1">1st harmonic only</option>
               <option value="4">Harmonics 1–4</option>
               <option value="6" selected>Harmonics 1–6</option>
               <option value="8">Harmonics 1–8</option>
@@ -968,11 +977,20 @@ kbd{
                     title="Which perceptual colormap paints the spectrogram. All five rise in lightness with level, so equal dB steps read as equal lightness steps — never a rainbow.">
             </select>
             <select id="sgTrackSel" aria-label="Overlay track color" disabled
-                    title="What color the predicted harmonic tracks are drawn in. String hues say which string a track belongs to but need a halo to clear the colormap; a fixed color sits outside every colormap, so it draws as one thin line.">
+                    title="What color the predicted harmonic tracks are drawn in. A fixed color sits outside every colormap, so it draws as one thin line; Triad gives the root, third and fifth a color each, and every harmonic takes its own note's color.">
             </select>
             <select id="sgDashSel" aria-label="Overlay track dash pattern" disabled
                     title="The dash pattern for harmonics above the fundamental. The fundamental is always solid.">
             </select>
+            <input type="color" class="tricolor" id="sgTri0" disabled aria-label="Triad root color"
+                   title="Root — the note the chord is named after.">
+            <input type="color" class="tricolor" id="sgTri1" disabled aria-label="Triad third color"
+                   title="Third — major or minor; the note that says which.">
+            <input type="color" class="tricolor" id="sgTri2" disabled aria-label="Triad fifth color"
+                   title="Fifth — the note the root is tuned against.">
+            <label class="chklbl" title="Tint every track toward its own string's hue, so a line says which string it came from as well as which voice of the chord.">
+              <input type="checkbox" id="sgHueChk" disabled aria-label="Tint tracks with string hues"> String hues
+            </label>
           </div>
           <div class="ctlgroup">
             <span>Legibility</span>
@@ -1589,6 +1607,39 @@ function partialLabel(p, a4){
 // group's total spread, never a chained neighbour gap. Only groups holding two or
 // more distinct keys are collisions; a note colliding with its own harmonics is not
 // one. tolCents defaults to TEMPERED_CENTS.
+// Which of a chord's three voices each sounding string is playing (R5.7).
+// The root is the lowest sounding pitch class; from there 0 = root, a minor or
+// major third = the third, a fifth = the fifth — the only three degrees a triad
+// has (docs/THEORY.md §1 for 4:5:6, §4 for 10:12:15). A selection that is not a
+// triad (one string, or all six open) still has to be painted, so any leftover
+// interval takes the third's or the fifth's color in ascending order: the root's
+// color stays reserved for the root, which is the distinction that carries.
+// Returns one slot per input, null where the string is silent.
+function triadDegrees(midis){
+  const out = midis.map(() => null);
+  const idx = midis.map((m, i) => i).filter(i => midis[i] != null);
+  if(!idx.length) return out;
+  let lo = idx[0];
+  for(const i of idx) if(midis[i] < midis[lo]) lo = i;
+  const rootPc = ((midis[lo] % 12) + 12) % 12;
+  const extra = [];
+  for(const i of idx){
+    const iv = ((midis[i] - rootPc) % 12 + 12) % 12;
+    if(iv === 0) out[i] = 0;
+    else if(iv === 3 || iv === 4) out[i] = 1;
+    else if(iv === 7) out[i] = 2;
+    else extra.push([iv, i]);
+  }
+  extra.sort((a, b) => a[0] - b[0]);
+  const seen = new Map();
+  let k = 0;
+  for(const [iv, i] of extra){
+    if(!seen.has(iv)) seen.set(iv, 1 + (k++ % 2));
+    out[i] = seen.get(iv);
+  }
+  return out;
+}
+
 function partialClusters(parts, tolCents){
   const tol = (tolCents == null) ? TEMPERED_CENTS : Math.abs(tolCents);
   const sorted = parts.slice().sort((a, b) => a.f - b.f);
@@ -3751,51 +3802,6 @@ function tTickLabel(t, step){
   return /^-0(\.0+)?$/.test(v) ? v.slice(1) : v;
 }
 
-// ---------- string-frequency markers (M2.5) ----------
-// Open-string fundamentals of the selected tuning, dashed across the
-// time–frequency image (dotted, like the line plots' Strings axis). Every string is named: the
-// labels sit OUTSIDE the plot in the right margin (over data they were
-// illegible), each tied to its line by a tick; low strings crowd together
-// on a log axis, so labels stack downward with a minimum spacing and the
-// tick bends into a leader when a label is displaced from its line.
-function drawStringMarkers(ctx, pW, pH, markers, yOfF){
-  if(!markers || !markers.length) return;
-  const items=markers.filter(m=>m.f>FMIN&&m.f<FMAX)
-    .sort((a,b)=>b.f-a.f)                              // top of plot first
-    .map(m=>({name:m.name, y:Math.round(yOfF(m.f))}))
-    .filter(it=>it.y>=SGPLOT.mT&&it.y<=SGPLOT.mT+pH);  // frequency zoom may push lines off-plot
-  if(!items.length) return;
-  const MIN=10, top=SGPLOT.mT+8, bot=SGPLOT.mT+pH-5;
-  const ly=items.map(it=>it.y);
-  for(let i=1;i<ly.length;i++) if(ly[i]-ly[i-1]<MIN) ly[i]=ly[i-1]+MIN;
-  const over=ly[ly.length-1]-bot;
-  if(over>0){
-    for(let i=0;i<ly.length;i++) ly[i]-=over;
-    ly[0]=Math.max(ly[0],top);
-    for(let i=1;i<ly.length;i++) if(ly[i]-ly[i-1]<MIN) ly[i]=ly[i-1]+MIN;
-  }
-  const xr=SGPLOT.mL+pW;
-  ctx.save();
-  ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
-  ctx.strokeStyle=cssRGBA("ink-rgb",0.28); ctx.lineWidth=1; ctx.setLineDash([1,3]);
-  for(const it of items){
-    ctx.beginPath(); ctx.moveTo(SGPLOT.mL,it.y+0.5); ctx.lineTo(xr,it.y+0.5); ctx.stroke();
-  }
-  ctx.restore();
-  ctx.save();
-  ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="middle";
-  for(let i=0;i<items.length;i++){
-    const y=items[i].y+0.5, Y=ly[i];
-    ctx.strokeStyle=cssRGBA("ink-rgb",0.40); ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(xr+1,y); ctx.lineTo(xr+4,y);
-    if(Math.abs(Y-y)>1) ctx.lineTo(xr+6,Y);            // leader to a displaced label
-    ctx.stroke();
-    ctx.fillStyle=cssRGBA("ink-rgb",0.66);
-    ctx.fillText(items[i].name, xr+8, Y);
-  }
-  ctx.restore();
-}
-
 // ---------- spectrogram image (M2) ----------
 // Renders a spectrogramLog result into an offscreen canvas, one pixel per
 // (frame, log-grid cell). Cached per slot: the live canvas just stretches this
@@ -3825,10 +3831,16 @@ function sgramImage(sg, dbMax, dbMin, dbOffset, cmap){
 }
 
 // ---------- spectrogram scene (M2) ----------
-const SGPLOT={mL:52, mR:98, mT:30, mB:34};   // right margin hosts string labels + colorbar
+// The right margin hosts the colorbar, and — when a comb is overlaid — the harmonic
+// labels, which stand OUTSIDE the plot along the frequency axis (R5.7). mR is therefore
+// dynamic, like PLOT.mT: set once per scene below, and read live by the crosshair and
+// _sgTrackAt() afterwards, so the hit-test always agrees with what was drawn.
+const SGPLOT={mL:52, mR:98, mT:30, mB:34};
+const SG_MR_BASE=98, SG_MR_LABELS=150;
 
 function drawSpectrogramScene(ctx, w, h, model, hits){
   const {sg, image, name, color, onsets, dbMax, dbMin}=model;
+  SGPLOT.mR=(model.comb&&model.comb.length)?SG_MR_LABELS:SG_MR_BASE;
   const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
   const dur=sg.duration;
   // view = display-time window [T0,T1]; the file occupies [d0, d0+dur].
@@ -3921,24 +3933,21 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
     ctx.fillText("above fs/2 = "+fLabel(Math.round(sg.nyquist))+"Hz — not measured", SGPLOT.mL+8, y-4);
   }
 
-  // open-string fundamentals for the selected tuning (M2.5)
-  drawStringMarkers(ctx, pW, pH, model.markers, yOfF);
-
-  // harmonic-track overlay (R5.1, restyled): the note set the user picked, projected
-  // as a generative model across the measured image — theory predicts, the user sees
-  // whether the energy is really there.
-  //   In "String hues" the six data colors carry which string a track belongs to, and
-  //   they sit inside the colormap's own gamut — so each needs the wider black halo
-  //   under it. That is what makes the line read thick: two strokes, 5 px and 2.5 px.
-  //   In a fixed color (black, white) the track is a hue the colormap never produces,
-  //   so it separates itself: no halo, one thin stroke. Which is the point of offering
-  //   it — black on parula's mid-blues, white on magma's near-black floor.
-  // The dash pattern is model.dash (a finer dotted default than R5.1's [6,4]); the
-  // fundamental is always solid, because that distinction is information.
+  // harmonic-track overlay (R5.1, restyled at R5.7): the note set the user picked,
+  // projected as a generative model across the measured image — theory predicts, the
+  // user sees whether the energy is really there.
+  //   The base color (White, Black, or one of the Triad's three) is deliberately a hue
+  //   no colormap produces, so the track separates itself: one thin stroke, no halo.
+  //   Which is the point of offering it — black on parula's mid-blues, white on magma's
+  //   near-black floor. The "String hues" checkbox is a MODIFIER (R5.7): it mixes each
+  //   track back toward its string's data color, which does live inside the colormap's
+  //   gamut, so that — and only that — brings the wider black halo back under the line.
+  // The dash pattern is model.dash; the fundamental is always solid, because that
+  // distinction is information.
   if(model.comb && model.comb.length){
     const foc=(model.focus==null?null:model.focus), dim=model.dim||0;
-    const tk=SG_TRACKS[model.track]||SG_TRACKS.string, halo=!tk.rgb;
-    const dashPat=model.dash||[1,3];
+    const halo=!!model.hue;
+    const dashPat=model.dash||SG_DASHES.dash.pat;
     ctx.save();
     ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
     for(const p of model.comb){
@@ -3953,29 +3962,36 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
       } else {
         ctx.lineWidth=1.4;
       }
-      ctx.strokeStyle=halo?_trackColor(p.key,a):_fixedTrackColor(tk,a);
+      ctx.strokeStyle=_trackPaint(model,p.key,a);
       ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
     }
     ctx.setLineDash([]);
-    // labels (R5.6b): a line that doesn't say which harmonic it is teaches nothing.
+    ctx.restore();
+
+    // labels (R5.6b, moved out of the plot at R5.7): a line that doesn't say which
+    // harmonic it is teaches nothing — but a label ON the image hides the measurement
+    // it is there to be checked against. They stand in the right margin instead, along
+    // the frequency axis, in ink on the panel (a white track would vanish on Bright),
+    // each tied to its line by a short leader tick in the track's own color.
     // Highest first for a stable order, then M2.6c's rule — a label that would touch
-    // the one above it is SKIPPED, never smeared. Under a held comb only that comb
-    // is named, which is most of what holding it buys.
-    ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="alphabetic";
-    const used=[];
+    // the one above it is SKIPPED, never smeared. Under a held comb only that comb is
+    // named, which is most of what holding it buys.
+    ctx.save();
+    ctx.font=FONT_S; ctx.textAlign="left"; ctx.textBaseline="middle";
+    const lx=SGPLOT.mL+pW, used=[];
     const rows=model.comb.filter(p=>p.f>=fw.F0&&p.f<=fw.F1&&(foc==null||p.key===foc))
       .slice().sort((a,b)=>b.f-a.f);
     for(const p of rows){
       const y=Math.round(yOfF(p.f))+0.5;
+      if(y<SGPLOT.mT+6||y>SGPLOT.mT+pH-4) continue;
       let clash=false;
       for(const u of used){ if(Math.abs(u-y)<12){ clash=true; break; } }
       if(clash) continue;
       used.push(y);
-      const txt=partialLabel(p, model.a4);
-      ctx.lineWidth=3; ctx.strokeStyle=halo?"rgba(0,0,0,0.85)":_trackHaloColor(tk);
-      ctx.strokeText(txt, SGPLOT.mL+6, y-4);
-      ctx.fillStyle=halo?_trackColor(p.key,1):_fixedTrackColor(tk,1);
-      ctx.fillText(txt, SGPLOT.mL+6, y-4);
+      ctx.strokeStyle=_trackPaint(model,p.key,1); ctx.lineWidth=1.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(lx+1,y); ctx.lineTo(lx+6,y); ctx.stroke();
+      ctx.fillStyle=cssRGBA("ink-rgb",0.82);
+      ctx.fillText(partialLabel(p, model.a4), lx+9, y);
       nLabels++;
     }
     ctx.restore();
@@ -4031,7 +4047,7 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
   }
 
   // colorbar: the exact colormap → dB mapping the image used (pinned at the
-  // card edge — the margin between plot and colorbar belongs to the string labels)
+  // card edge — the margin between plot and colorbar belongs to the harmonic labels)
   const cbX=w-50, cbW=10;
   for(let yy=0; yy<pH; yy++){
     const rgb=cmapColor(model.cmap||"magma", 1-yy/(pH-1));
@@ -4394,7 +4410,7 @@ const state={ slots:[null,null], tuning:"estd", customOffset:0,
               // The look of the picture and of the lines drawn on it. Same class as
               // the R5.6 keys above: view state, not analysis — unpersisted, never
               // exported, and not part of the refine cache key.
-              sgCmap:"magma", sgTrack:"string", sgDash:"fine" };
+              sgCmap:"magma", sgTrack:"white", sgDash:"dash", sgHue:false, sgTriad:null };
 // M2.7: gate hook — ?refine=0 disables the zoom refine (never persisted, no UI)
 const _refineEnabled = !/[?&]refine=0(?:&|$)/i.test(location.search);
 // A pan or a wheel writes ZOOMS and redraws on every event, so the refine waits
@@ -4446,6 +4462,7 @@ const sgNoteSel=el("sgNoteSel"), sgHarmSel=el("sgHarmSel");
 const sgScrimRange=el("sgScrimRange"), sgScrimOut=el("sgScrimOut"),
       sgDimRange=el("sgDimRange"), sgDimOut=el("sgDimOut");
 const sgCmapSel=el("sgCmapSel"), sgTrackSel=el("sgTrackSel"), sgDashSel=el("sgDashSel");
+const sgTriadInputs=[el("sgTri0"),el("sgTri1"),el("sgTri2")], sgHueChk=el("sgHueChk");
 const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
 const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSel=el("eqDevSel"),
@@ -4980,9 +4997,10 @@ function sgramModelFor(i,scale){
     view:{T0:zw.T0,T1:zw.T1,d0:view.d0}, fWin:{F0:zw.F0,F1:zw.F1},
     zoomNote:zoomNoteFor(zKey),
     name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
-    dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(), comb, clusters,
+    dbMax:scale.dbMax, dbMin:scale.dbMin, comb, clusters,
     a4:state.a4, scrim:state.sgScrim, focus:state.sgFocus, dim:state.sgDim,
-    cmap:cm, track:state.sgTrack, dash:(SG_DASHES[state.sgDash]||SG_DASHES.fine).pat,
+    cmap:cm, track:state.sgTrack, dash:(SG_DASHES[state.sgDash]||SG_DASHES.dash).pat,
+    hue:state.sgHue, triad:(state.sgTriad||SG_TRIAD_DEFAULT).slice(), triadIdx:triadDegrees(sgMidis),
     statusText:sgToUse.win+"-pt Hann · max per log cell"
       +(off?" · level-match "+fmtDb(off,1):"")
       +(state.sgAlign!=="off"&&bothSgLoaded()
@@ -5108,7 +5126,7 @@ function drawAll(){
     // The look this pane actually painted (colormap always; track style only when
     // there is a track). Same reason as data-sgwin: node cannot read the canvas.
     sgramCanvases[i].setAttribute("data-sgcmap", model.cmap||"magma");
-    if(model.comb) sgramCanvases[i].setAttribute("data-sgtrack", model.track||"string");
+    if(model.comb) sgramCanvases[i].setAttribute("data-sgtrack", model.track||"white");
     else sgramCanvases[i].removeAttribute("data-sgtrack");
     // R5.1: pane reports its own overlay track count — the canvas is unreachable from node.
     if(model.comb) sgramCanvases[i].setAttribute("data-sgcomb", String(model.comb.length));
@@ -6386,47 +6404,64 @@ function _hexRgb(h){ return [1,3,5].map(k=>parseInt(h.slice(k,k+2),16)); }
 function _stringColor(si, alpha){
   const [r,g,b]=_hexRgb(STRING_COLORS[si%6]); return `rgba(${r},${g},${b},${alpha})`;
 }
-// The same six data colors, lifted for the magma spectrogram. The draw pass lays a
-// black halo under every track, so what a track is read against is that halo, not
-// the picture: measured on a rendered pane, 94.8 % of track pixels have both
-// vertical neighbours below 0.18 relative luminance. The palette's own luminance
-// runs 0.36–0.56, so unlifted it clears its halo by a contrast ratio of only ~3.4;
-// at 0.62 that is ~4.8, and the six stay hue-distinct. This is the liftForDark()
-// precedent (the diverging endpoints), applied per surface — not a theme: the lift
-// is identical in Bright and Dark.
-function _trackColor(si, alpha){
-  const [r,g,b]=liftForDark(_hexRgb(STRING_COLORS[si%6]), 0.62);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-// Track look (user request, 2026-08-26). Two axes, both deliberately small tables:
-//   SG_TRACKS — what color a partial is drawn in. "String hues" is the R5.1 default:
-//     six data colors that say which string a track belongs to, at the cost of a black
-//     halo under each (they live inside the colormap's own gamut). A fixed color is a
-//     hue no perceptual colormap produces, so it needs no halo and no widening — one
-//     thin stroke. Black reads on parula/viridis, white on magma/inferno's dark floor.
-//     Fixed colors lose the string identity; that is the trade the selector offers.
+// Track look (user request, 2026-08-26; reworked at R5.7). Three axes, all deliberately
+// small tables:
+//   SG_TRACKS — the BASE color of a partial. Every entry is a hue no perceptual colormap
+//     produces, so it separates itself: one thin stroke, no halo, no widening. Black reads
+//     on parula/viridis, white on magma/inferno's dark floor. "Triad" paints by chord
+//     DEGREE — root / third / fifth — so every harmonic of a note shares its note's color
+//     and the ear's three voices stay three colors even when six strings sound.
+//   state.sgHue — the "String hues" MODIFIER (R5.7, default off). R5.1's six data colors
+//     say which string a track belongs to, but they live inside the colormap's own gamut,
+//     so mixing toward them is exactly what brings the black halo back. That is why it is
+//     a checkbox on top of a base color rather than a color of its own.
 //   SG_DASHES — the pattern for harmonics above the fundamental (which stays solid).
-//     Finer than R5.1's [6,4] by default: with six combs interleaved the dash length
-//     was reading as line weight rather than as pattern.
 const SG_TRACKS={
-  string:{label:"String hues"},
-  black:{label:"Black", rgb:[0,0,0], halo:"rgba(255,255,255,0.85)"},
-  white:{label:"White", rgb:[255,255,255], halo:"rgba(0,0,0,0.85)"},
-  cyan:{label:"Cyan", rgb:[0,255,255], halo:"rgba(0,0,0,0.85)"},
-  magenta:{label:"Magenta", rgb:[255,0,255], halo:"rgba(0,0,0,0.85)"}
+  white:{label:"White", rgb:[255,255,255]},
+  black:{label:"Black", rgb:[0,0,0]},
+  triad:{label:"Triad", triad:true}
 };
-const SG_TRACK_NAMES=["string","black","white","cyan","magenta"];
+const SG_TRACK_NAMES=["white","black","triad"];
+// Root / third / fifth. Measured, not chosen by eye: maximise the minimum pairwise CIE
+// ΔE subject to a floor on ΔE against every one of parula's 256 entries (the busiest
+// background a line here sits on) and L* ≥ 50. Result: min pairwise ΔE 145.7, each at
+// least 65 ΔE from all of parula. Pure primaries score higher pairwise but drop blue to
+// L* 32, which reads as a hole in the line rather than a color.
+const SG_TRIAD_DEFAULT=["#ff4400","#00ff00","#cc00ff"];
 const SG_DASHES={
   fine:{label:"Fine dots", pat:[1,3]},
   dot:{label:"Dots", pat:[2,4]},
   dash:{label:"Dashes", pat:[6,4]},
   solid:{label:"Solid", pat:[]}
 };
-const SG_DASH_NAMES=["fine","dot","dash","solid"];
-function _fixedTrackColor(tk, alpha){
-  const [r,g,b]=tk.rgb; return `rgba(${r},${g},${b},${alpha})`;
+const SG_DASH_NAMES=["dash","dot","fine","solid"];
+function _mixRgb(a, b, t){ return [0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*t)); }
+// The same six data colors, lifted for the spectrogram. When the String-hues modifier
+// is on, the draw pass lays a black halo under every track, so what a track is read
+// against is that halo, not the picture: measured on a rendered pane, 94.8 % of track
+// pixels have both vertical neighbours below 0.18 relative luminance. The palette's own
+// luminance runs 0.36–0.56, so unlifted it clears its halo by a contrast ratio of only
+// ~3.4; at 0.62 that is ~4.8, and the six stay hue-distinct. This is the liftForDark()
+// precedent (the diverging endpoints), applied per surface — not a theme: the lift is
+// identical in Bright and Dark.
+function _trackHueRgb(si){ return liftForDark(_hexRgb(STRING_COLORS[si%6]), 0.62); }
+// The paint for one partial: its base color (fixed, or the Triad slot its string's chord
+// degree maps to), optionally mixed toward that string's data hue by the String-hues
+// modifier. The model carries both, so the draw pass still reads nothing but its model.
+function _trackBaseRgb(model, key){
+  const tk=SG_TRACKS[model.track]||SG_TRACKS.white;
+  if(tk.triad){
+    const pal=(model.triad&&model.triad.length===3)?model.triad:SG_TRIAD_DEFAULT;
+    const di=(model.triadIdx&&model.triadIdx[key]!=null)?model.triadIdx[key]:0;
+    return _hexRgb(pal[di]||pal[0]);
+  }
+  return tk.rgb.slice();
 }
-function _trackHaloColor(tk){ return tk.halo||"rgba(0,0,0,0.85)"; }
+function _trackPaint(model, key, alpha){
+  let rgb=_trackBaseRgb(model, key);
+  if(model.hue) rgb=_mixRgb(rgb, _trackHueRgb(key), 0.62);
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+}
 // Eight open chords — the user's case (b) (ROADMAP R5.2). Frets are per-string
 // offsets from the current open tuning; null = muted. Order is the stocked table.
 const SG_CHORDS=[
@@ -6442,12 +6477,13 @@ function _sgChordName(frets){
 // R5.1: fills the spectrogram's Overlay string select from the current tuning —
 // six named choices (Off stays first), never hard-coded note names.
 // R5.2: plus eight open chords as a second optgroup — same pitch source (ET via
-// midiToFreq), same hue source (_trackColor via notePartials key).
+// midiToFreq), same paint source (_trackPaint via the notePartials key).
 function fillSgNoteSel(){
   if(!sgNoteSel) return;
   const prev=sgNoteSel.value;
   const midis=tuningMidi(state.tuning,state.customOffset);
-  let html='<option value="off">Off</option><optgroup label="Single string">';
+  let html='<option value="off">None</option><option value="all">All open strings</option>'
+    +'<optgroup label="Single string">';
   for(let si=0;si<6;si++){
     const midi=midis[si];
     if(midi==null) continue;
@@ -6475,6 +6511,11 @@ function syncSgHarmSel(){
   // under an overlay. The colormap select is never disabled — it paints the picture.
   if(sgTrackSel) sgTrackSel.disabled=!on;
   if(sgDashSel) sgDashSel.disabled=!on;
+  // R5.7: the three Triad swatches say what they are by being reachable only when
+  // Triad is the chosen color; String hues is a modifier on whichever color that is.
+  const tri=on&&state.sgTrack==="triad";
+  sgTriadInputs.forEach(inp=>{ if(inp) inp.disabled=!tri; });
+  if(sgHueChk) sgHueChk.disabled=!on;
 }
 function fillSgLookSels(){
   if(sgCmapSel) sgCmapSel.innerHTML=CMAP_NAMES
@@ -6483,6 +6524,11 @@ function fillSgLookSels(){
     .map(n=>'<option value="'+n+'"'+(n===state.sgTrack?" selected":"")+'>'+esc(SG_TRACKS[n].label)+'</option>').join("");
   if(sgDashSel) sgDashSel.innerHTML=SG_DASH_NAMES
     .map(n=>'<option value="'+n+'"'+(n===state.sgDash?" selected":"")+'>'+esc(SG_DASHES[n].label)+'</option>').join("");
+  // The Triad default is seeded here rather than in the state literal: SG_TRIAD_DEFAULT
+  // is a const declared later in this block, and the literal is evaluated at load.
+  if(!state.sgTriad) state.sgTriad=SG_TRIAD_DEFAULT.slice();
+  sgTriadInputs.forEach((inp,k)=>{ if(inp) inp.value=state.sgTriad[k]; });
+  if(sgHueChk) sgHueChk.checked=!!state.sgHue;
 }
 function stringContentHtml(si){
   const midi=tuningMidi(state.tuning,state.customOffset)[si];
@@ -7690,6 +7736,8 @@ function boot(){
     if(v.startsWith("chord:")){
       const ch=SG_CHORDS.find(c=>c.name===v.slice(6));
       if(ch) state.sgFrets=ch.frets.slice();
+    } else if(v==="all"){
+      state.sgFrets=[0,0,0,0,0,0];   // every open string — the tuning itself, drawn
     } else if(v!=="off"){
       const si=parseInt(v,10);
       if(si>=0&&si<6) state.sgFrets[si]=0; // single open string — R5.1 carries no fretting UI; R5.2 adds chords above
@@ -7721,12 +7769,22 @@ function boot(){
     updateSgramSub(); requestDraw();
   });
   if(sgTrackSel) sgTrackSel.addEventListener("change",()=>{
-    state.sgTrack=SG_TRACKS[sgTrackSel.value]?sgTrackSel.value:"string";
-    requestDraw();
+    state.sgTrack=SG_TRACKS[sgTrackSel.value]?sgTrackSel.value:"white";
+    syncSgHarmSel(); requestDraw();
   });
   if(sgDashSel) sgDashSel.addEventListener("change",()=>{
-    state.sgDash=SG_DASHES[sgDashSel.value]?sgDashSel.value:"fine";
+    state.sgDash=SG_DASHES[sgDashSel.value]?sgDashSel.value:"dash";
     requestDraw();
+  });
+  sgTriadInputs.forEach((inp,k)=>{
+    if(!inp) return;
+    inp.addEventListener("input",()=>{
+      if(!state.sgTriad) state.sgTriad=SG_TRIAD_DEFAULT.slice();
+      state.sgTriad[k]=inp.value; requestDraw();
+    });
+  });
+  if(sgHueChk) sgHueChk.addEventListener("change",()=>{
+    state.sgHue=sgHueChk.checked; requestDraw();
   });
   lmToggle.addEventListener("change",()=>{
     state.lm=lmToggle.checked; compareTouched.lm=true;
@@ -8106,11 +8164,13 @@ function boot(){
   }
   const tolM=location.search.match(/[?&]tol=([0-9]*\.?[0-9]+)(?:&|$)/i);                   // test hook
   if(tolM) state.tolCents=Math.max(0,Math.min(50,parseFloat(tolM[1])));
-  const sgn=location.search.match(/[?&]sgnote=([0-5])(?:&|$)/i);                   // test hook — out of [0-5] selects nothing
+  const sgn=location.search.match(/[?&]sgnote=(all|[0-5])(?:&|$)/i);               // test hook — out of range selects nothing
   if(sgn){
-    const si=parseInt(sgn[1],10);
-    state.sgFrets=[null,null,null,null,null,null]; state.sgFrets[si]=0;
-    sgNoteSel.value=String(si); syncSgHarmSel(); requestDraw();
+    const v=sgn[1].toLowerCase();
+    state.sgFrets=[null,null,null,null,null,null];
+    if(v==="all"){ state.sgFrets=[0,0,0,0,0,0]; sgNoteSel.value="all"; }
+    else { const si=parseInt(v,10); state.sgFrets[si]=0; sgNoteSel.value=String(si); }
+    syncSgHarmSel(); requestDraw();
   }
   const sgc=location.search.match(/[?&]sgchord=([A-Za-z0-9#]{1,4})(?:&|$)/);      // test hook — an unstocked name selects nothing
   if(sgc){
@@ -8134,10 +8194,15 @@ function boot(){
     if(sgCmapSel) sgCmapSel.value=state.sgCmap; updateSgramSub(); requestDraw(); }
   const sgtk=location.search.match(/[?&]sgtrack=([a-z]+)(?:&|$)/i);                // test hook
   if(sgtk&&SG_TRACKS[sgtk[1].toLowerCase()]){ state.sgTrack=sgtk[1].toLowerCase();
-    if(sgTrackSel) sgTrackSel.value=state.sgTrack; requestDraw(); }
+    if(sgTrackSel) sgTrackSel.value=state.sgTrack; syncSgHarmSel(); requestDraw(); }
   const sgds=location.search.match(/[?&]sgdash=([a-z]+)(?:&|$)/i);                 // test hook
   if(sgds&&SG_DASHES[sgds[1].toLowerCase()]){ state.sgDash=sgds[1].toLowerCase();
     if(sgDashSel) sgDashSel.value=state.sgDash; requestDraw(); }
+  const sghu=location.search.match(/[?&]sghue=([01])(?:&|$)/i);                    // test hook
+  if(sghu){ state.sgHue=sghu[1]==="1"; if(sgHueChk) sgHueChk.checked=state.sgHue; requestDraw(); }
+  const sgtr=location.search.match(/[?&]sgtriad=([0-9a-f]{6}),([0-9a-f]{6}),([0-9a-f]{6})(?:&|$)/i); // test hook
+  if(sgtr){ state.sgTriad=[1,2,3].map(k=>"#"+sgtr[k].toLowerCase());
+    sgTriadInputs.forEach((inp,k)=>{ if(inp) inp.value=state.sgTriad[k]; }); requestDraw(); }
   const dbg=location.search.match(/[?&]debug(?:=1)?(?:&|$)/i);                     // reveals the hidden "Load test files" button
   if(dbg&&debugLoadBtn) debugLoadBtn.style.display="";
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook

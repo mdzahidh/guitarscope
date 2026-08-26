@@ -386,9 +386,12 @@ build educational copy from it, never re-derive from scratch.
   a >55 rise with no step back worse than −2.5 (magma 0.1→97.9, inferno 0.1→98.0, viridis
   14.9→90.9, cividis 13.8→91.3, parula 24.2→95.6). **(b)** `SG_TRACKS` (String hues /
   Black / White / Cyan / Magenta) and `SG_DASHES` (**Fine dots `[1,3]` — the new default**
-  / Dots `[2,4]` / Dashes `[6,4]` — R5.1a's / Solid). **The halo is now a property of the
+  / Dots `[2,4]` / Dashes `[6,4]` — R5.1a's / Solid) — *both tables were rewritten at R5.7:
+  Cyan and Magenta gone, String hues demoted to a checkbox modifier, Triad added, `[6,4]`
+  back as the default.* **The halo is now a property of the
   color, not a global rule:** `halo = !tk.rgb` says exactly "this hue lives inside the
-  colormap"; a fixed color draws one 1.4 px stroke and no halo, String hues keep R5.1a's
+  colormap" (*R5.7: `halo = !!model.hue` — the modifier, not the entry*); a fixed color
+  draws one 1.4 px stroke and no halo, String hues keep R5.1a's
   5 px black + 2.5 px lifted hue. `tk.halo` outlines **labels only**, never the line.
   R5.1a's census ("a track is read against its own halo") was true but assumed track hues
   inside the map's gamut — black on parula dissolves the premise. **Recoloring never
@@ -400,16 +403,50 @@ build educational copy from it, never re-derive from scratch.
   exact `[0,0,0]`/`[255,255,255]`; a parula check was absorbed by `cmapTable`'s magma
   fallback, so the mutation now corrupts the table). No new headless assertion — a launch
   costs 4–5 min and the rot risk here is source-shaped.
-- **NEXT — R5.4** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
+- **R5.7 nothing on by default, and colors that mean the chord BUILT (session 24,
+  reviewer).** The user's whole request, in seven parts. **(a)** The always-on right-edge
+  open-string marker pass is **deleted, not switched off** (`drawStringMarkers`, its call
+  site, `markers:tuningMarkers(),`): it drew six lines nobody asked for, and R5.1's overlay
+  answers the same question on demand and per string. **(b)** The Overlay note selector
+  defaults to **`None`** and gains **"All open strings"** (`fillSgNoteSel()` prepends it and
+  it moves with the tuning, like `SG_CHORDS`); the harmonic selector keeps **6** and gains
+  **"1st harmonic only"**. **(c)** Harmonic labels moved **outside the plot**, into the right
+  margin along the frequency axis: `SGPLOT.mR` is now dynamic (`SG_MR_BASE 98` →
+  `SG_MR_LABELS 150` whenever `model.comb` is non-empty), each label drawn at
+  `SGPLOT.mL + pW` after a leader tick in the track color, text in `cssRGBA("ink-rgb",.82)`,
+  R5.6's 12 px skip-rather-than-smear guard unchanged. **Consequence for pixel tests: a
+  comb-on pane is laid out differently from a comb-off one — compare comb against comb.**
+  **(d)** New **Triad** track color — `triadDegrees(midis)` in block 0 reads root/third/fifth
+  out of the sounding notes and every harmonic inherits its note's color; three pickers,
+  `disabled` outside Triad by `syncSgHarmSel()`, default `#ff4400 / #00ff00 / #cc00ff`
+  **measured, not picked** (min pairwise CIE-Lab ΔE 145.7 > 90; min ΔE to any of parula's 256
+  entries > 40). **(e)** **String hues is a checkbox modifier now, default off** — it tints
+  whatever color is chosen; `halo = !!model.hue`, so a plain fixed color is one thin stroke.
+  Cyan and Magenta are gone. **(f)** Default dash back to **Dashes `[6,4]`**; fundamentals
+  stay solid. **(g)** The user's process instruction — "*heavily simplify your testing and
+  verification strategies*" — is written into docs/ROADMAP.md's Working discipline as
+  **"Verification, in proportion"**: relational headless assertions instead of pinned
+  constants, merge sections that share a page load, run the full gate once at the end, and
+  **shrink the suite when the feature shrinks** (`tests/r5.test.js` 264 → **259**, headless
+  held at 64 with six Chrome launches cut to four). Awaiting the user's visual test.
+- **NEXT — the a/b/c quality-of-life sub-milestone the user asked for 2026-08-26**: (a) every
+  card head reminds the user of the A/B color coding, and EQ Match's "Target" becomes
+  **"Reshape"** — the guitar being reshaped is the one the user plays, so the response plot
+  takes *that* guitar's accent; (b) in the spectrum and Difference plots, open strings draw
+  **solid** and their harmonics **dashed in the same hue**, the per-note color configurable
+  in the string popover **and persisted**, harmonics supported **up to the 8th** with the
+  docs expanded to match; (c) label those harmonics in the line plots, inside the plot but
+  **toward the bottom**, where there is usually room.
+- **THEN — R5.4** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
   bound the overlay in time, then **R5.5** near-floor disclosure on the LTAS
-  Difference. R5.1/R5.2/R5.6/R5.3 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
+  Difference. R5.1/R5.2/R5.6/R5.3/R5.7 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
   explainers (joint period, comb alignment, Plomp–Levelt roughness) — still blocked until
   the user resolves the two docs/THEORY.md §2.5 numeric caveats. Educational tone: measure
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 264, headless 64, plus
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 259, headless 64, plus
   all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -488,8 +525,8 @@ build educational copy from it, never re-derive from scratch.
   **gate hook only**, unpersisted, no UI; each sgram pane canvas also carries
   `data-sgwin="<window>"`, the window that pane actually rendered, for the same reason:
   the canvas is unreachable from node),
-  `?sgnote=<0-5>` (spectrogram harmonic overlay: pick one open string; out of range selects
-  nothing), `?sgchord=<name>` (one of the eight stocked open chords — `E|Em|A|Am|C|D|Dm|G`;
+  `?sgnote=<all|0-5>` (spectrogram harmonic overlay: pick one open string, or `all` for every
+  open string; out of range selects nothing — and **nothing is the default**, R5.7), `?sgchord=<name>` (one of the eight stocked open chords — `E|Em|A|Am|C|D|Dm|G`;
   an unstocked name overlays nothing, because the hook mutes all six strings before it
   resolves) and `?sgharm=<n>` (harmonics 1–N, clamped 1–16) — **gate hooks only**,
   unpersisted; each sgram pane canvas carries `data-sgcomb="<count>"`, the number of partial
@@ -503,10 +540,12 @@ build educational copy from it, never re-derive from scratch.
   (the comb being held) and `data-sgclusters="<count>"` (R5.3 collision marks actually
   **drawn**, after the x-stride thinner — not the number of clusters found), all absent
   when there is nothing to report,
-  `?sgcmap=<magma|inferno|viridis|cividis|parula>`, `?sgtrack=<string|black|white|cyan|
-  magenta>` and `?sgdash=<fine|dot|dash|solid>` (the session-23 look pass; each validated
+  `?sgcmap=<magma|inferno|viridis|cividis|parula>`, `?sgtrack=<white|black|triad>`,
+  `?sgdash=<dash|dot|fine|solid>` (default **dash** since R5.7), `?sghue=<0|1>` (R5.7's
+  String-hues modifier) and `?sgtriad=<RRGGBB,RRGGBB,RRGGBB>` (the three Triad colors, root
+  first; each validated
   against its own table, an unknown name falling back to the default — these *do* have UI
-  selects in the sgram card head, the hooks exist so the gate can set them); every drawn
+  controls in the sgram card head, the hooks exist so the gate can set them); every drawn
   pane carries `data-sgcmap` and, when a comb exists, `data-sgtrack`,
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
@@ -585,8 +624,8 @@ build educational copy from it, never re-derive from scratch.
   dotted verticals labeled on the **bottom** axis of both frequency line plots; labels
   click to a per-string docs popover (ET formula, harmonics, ±1/6-oct audition). No
   frequency text on plots — peak/annotation markers are dots-only click targets and
-  the glossary values print Hz + nearest note; the sgram's right-edge string markers
-  are a separate always-on axis. **Region-boundary Hz labels (M2.6c):** the lane
+  the glossary values print Hz + nearest note. (The sgram's right-edge string-marker
+  pass was **deleted at R5.7** — open strings appear there only when overlaid.) **Region-boundary Hz labels (M2.6c):** the lane
   prints each region's start/end frequency directly below its ticks (per lane row,
   compact axis format; full precision stays in the region's glossary popover);
   labels sort by x, shared edges print once, and any label that would touch its
@@ -662,10 +701,19 @@ build educational copy from it, never re-derive from scratch.
   labels' vertical guard. Clicking one opens `clusterRatio()`'s reading of the chord —
   fundamentals go as `1/h_i`, octave duplicates folded, named only where docs/THEORY.md
   fixes the ratio (`4:5:6`, `10:12:15`, five intervals) and left as a bare ratio otherwise.
-  **Track color and dash (look pass):** `SG_TRACKS` / `SG_DASHES`, default String hues +
-  **fine `[1,3]`** dots, fundamentals always solid. **A halo is drawn only for hues that
-  live inside the colormap** (`halo = !tk.rgb`) — a fixed Black/White/Cyan/Magenta track is
-  one 1.4 px stroke, which is the point of offering them. `sgCmap`/`sgTrack`/`sgDash` are
+  **Track color and dash (look pass, rewritten at R5.7):** `SG_TRACKS` is
+  **White / Black / Triad** (Cyan and Magenta removed) and `SG_DASHES` is
+  **Dashes `[6,4]` — the default** / Dots `[2,4]` / Fine `[1,3]` / Solid; fundamentals are
+  always solid. **String hues is a separate checkbox modifier** (`state.sgHue`, default
+  **off**) that tints whichever color is chosen — it was never a color of its own — and a
+  **halo is drawn only under that modifier** (`halo = !!model.hue`), so a plain White or
+  Black track is one 1.4 px stroke, which is the point of offering it. **Triad** paints
+  root/third/fifth of the sounding chord (`triadDegrees()` in block 0) with every harmonic
+  in its own note's color; its three pickers are `disabled` outside Triad and default to
+  colors **measured** for mutual distinctness and contrast against parula, not chosen by eye.
+  **Nothing is overlaid by default** — the note selector starts at `None` — and the harmonic
+  labels sit **outside the plot** in the right margin, which `SGPLOT.mR` widens (98 → 150)
+  whenever a comb exists. `sgCmap`/`sgTrack`/`sgDash`/`sgHue`/`sgTriad` are
   view state like `sgFrets`: unpersisted, unexported, and only the colormap is in the image
   cache key (`gkey` analysis + `cm`), never the line style.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when

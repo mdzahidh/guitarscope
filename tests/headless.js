@@ -485,19 +485,25 @@ section("the overlay is off until asked for, and then says what it drew");
 section("and the tracks are pixels, not an attribute");
 {
   // The attribute is not the feature — the same trap M2.7's refine compare closes.
+  // Every compare below holds the layout still: a pane with a comb reserves a wider
+  // right margin for the labels (R5.7), so "overlay vs no overlay" moves the whole
+  // image and can only say *that* something changed. What the limit and the chord
+  // actually draw is read between two panes that both carry a comb.
   const off = shotDrawn(SG, TALL);
-  const on = shotDrawn(SG + "&sgnote=0", TALL);
-  const d = diffPixels(on, off, 8);
-  ok(d.length > 500, "turning the overlay on really changes the spectrogram",
-    d.length + " px differ — an attribute without a draw would be ~0");
+  const one = shotDrawn(SG + "&sgnote=0", TALL);
+  ok(diffPixels(one, off, 8).length > 500,
+    "turning the overlay on really changes the spectrogram",
+    diffPixels(one, off, 8).length + " px differ — an attribute without a draw would be ~0");
 
-  // Six tracks must mark more of the picture than two. This is the drawing loop
-  // reading the limit, stated in pixels rather than in an attribute.
   const two = shotDrawn(SG + "&sgnote=0&sgharm=2", TALL);
-  const d2 = diffPixels(two, off, 8);
-  ok(d.length > d2.length,
-    "and six harmonics mark more of it than two",
-    d.length + " px vs " + d2.length + " px");
+  ok(diffPixels(one, two, 8).length > 500,
+    "and the harmonic limit reaches the drawing loop, not just the attribute",
+    diffPixels(one, two, 8).length + " px differ between six harmonics and two");
+
+  const chord = shotDrawn(SG + "&sgchord=E", TALL);
+  ok(diffPixels(chord, one, 8).length > 500,
+    "…as does a chord: six strings of tracks are not one string's",
+    diffPixels(chord, one, 8).length + " px differ");
 }
 
 // R5.2 — a chord is a set of strings, so the track count is (sounding strings ×
@@ -525,18 +531,6 @@ section("R5.2 — a chord overlays every string it sounds");
   ok(sgcomb(none, "sgramCanvasA") === null,
     "an unstocked name overlays nothing at all",
     String(sgcomb(none, "sgramCanvasA")));
-}
-
-section("…and a chord marks more of the picture than one string does");
-{
-  const off = shotDrawn(SG, TALL);
-  const one = shotDrawn(SG + "&sgnote=0", TALL);
-  const chord = shotDrawn(SG + "&sgchord=E", TALL);
-  const dOne = diffPixels(one, off, 8);
-  const dCh = diffPixels(chord, off, 8);
-  ok(dCh.length > dOne.length,
-    "six strings of tracks cover more than one string's six partials",
-    dCh.length + " px vs " + dOne.length + " px");
 }
 
 
@@ -687,20 +681,22 @@ section("R5.3 — the marks say where two strings meet");
     sgcomb(flat, "sgramCanvasA") + " partials, " +
     String(sgattr(flat, "sgramCanvasA", "data-sgclusters")) + " marks");
 
+  // The counts themselves are pinned in tests/r5.test.js, where they cost no launch.
+  // What is asserted here is that the number reaching the pane is the chord's own —
+  // a build marking a constant (every landing of the tuning, say, rather than of
+  // what is sounding) prints one number for both shapes. Relational, because the
+  // x-stride thinner reads the plot width, and the plot width moved at R5.7.
   const e = domDrawn(SG + "&sgchord=E", bothCombed);
-  ok(sgattr(e, "sgramCanvasA", "data-sgclusters") === 11,
-    "E major's 36 partials land on each other in 11 places",
-    String(sgattr(e, "sgramCanvasA", "data-sgclusters")));
-  ok(sgattr(e, "sgramCanvasB", "data-sgclusters") === 11, "…on both panes",
+  const nE = sgattr(e, "sgramCanvasA", "data-sgclusters");
+  ok(nE > 0, "E major's 36 partials land on each other, and the pane says how often",
+    String(nE));
+  ok(sgattr(e, "sgramCanvasB", "data-sgclusters") === nE, "…on both panes",
     String(sgattr(e, "sgramCanvasB", "data-sgclusters")));
 
-  // A different shape is a different set of coincidences. A build that marked a
-  // constant — every landing of the tuning, say, rather than of what is sounding —
-  // would print the same number here.
   const c = domDrawn(SG + "&sgchord=C", combed("sgramCanvasA"));
-  ok(sgattr(c, "sgramCanvasA", "data-sgclusters") === 8,
-    "C's shape meets in 8, not E's 11 — the count follows the chord",
-    String(sgattr(c, "sgramCanvasA", "data-sgclusters")));
+  const nC = sgattr(c, "sgramCanvasA", "data-sgclusters");
+  ok(nC > 0 && nC < nE, "C's shape meets less often than E's — the count follows the chord",
+    String(nC) + " vs " + String(nE));
 }
 
 section("…and the marks are pixels, not an attribute");
@@ -713,7 +709,7 @@ section("…and the marks are pixels, not an attribute");
   const drawn = markBlobs(img).length;
   const counted = sgattr(domDrawn(SG + "&sgchord=E", combed("sgramCanvasA")),
     "sgramCanvasA", "data-sgclusters");
-  ok(counted === 11 && drawn === 2 * counted,
+  ok(counted > 0 && drawn === 2 * counted,
     "every mark a pane counted is a mark on the picture, on both panes",
     drawn + " drawn vs 2 x " + String(counted) + " counted");
 

@@ -105,6 +105,26 @@ A handoff is not the builder's to edit.
   gap**. Never derive, estimate, or fill it in from general knowledge. This is the rule
   most easily broken in silence: improvised physics reads perfectly fluently.
 
+**Verification, in proportion** (2026-08-26, the user's instruction: "*heavily simplify your
+testing and verification strategies as you seem to take a very long time and effort*")
+
+- **Pin numbers where launches are free.** Exact counts belong in the node suites
+  (`tests/r5.test.js` and friends); a Chrome launch costs 4–5 minutes, so headless assertions
+  should be **relational** — *B's pane equals A's*, *C's chord marks fewer than E's* — not
+  equal to a constant. The mutation-catching power lives in the node suite either way.
+- **Shrink the suite when the feature shrinks.** Deleting a draw pass deletes its assertions.
+  A suite that only ever grows stops being read. R5.7 went 264 → 259 and that is the healthy
+  direction.
+- **Merge headless sections that share a page load.** Every distinct URL is a launch; four
+  assertions off four launches beat four assertions off six.
+- **Run the full gate once, at the end.** Not after each edit. Node suites are seconds — run
+  those freely while building; `./tests/verify.sh` is the sign-off.
+- **Mutation-check new assertions, but stop there.** Break the one line each new assertion
+  claims to require; don't sweep the whole file. And prefer an assertion whose subject is the
+  handler, not query-string text that also appears in prose and comments (the gate-3 lesson).
+- **Screenshots are for the reviewer's eye, not for the gate.** One both-themes pass at the
+  end of a milestone, not per task.
+
 **Per task, before you call it done**
 1. `./tests/verify.sh` — the gate: the DSP suite, the R3 contracts, the headless
    render checks, and the two tamper guards. It ends in `gate passed` / `gate failed`
@@ -1200,6 +1220,38 @@ five tables (perceptual is measured, not asserted) and the assertion that no lin
 reaches the refine cache. All new assertions mutation-checked; two initially missed and were
 strengthened. **No new headless assertion, deliberately** — the user asked for a quick pass, a
 launch costs 4–5 minutes, and the rot risk here is source-shaped rather than pixel-shaped.
+
+### R5.7 — nothing on by default, and colors that mean the chord ✅ BUILT (session 24, reviewer)
+
+Not a planned task either. After testing the look pass the user asked for six changes plus
+one about process: don't show open strings by default; a `None` default and an **All open
+strings** entry in the note select; a **1st harmonic only** entry beside the existing limits;
+harmonic labels **outside** the plot on the right, along the vertical axis; **Dashes** as the
+default line style; a **Triad** color option (root/third/fifth, harmonics sharing their note's
+color) with three pickers, pre-populated with the most perceptually distinct set against
+parula; **String hues** demoted from a color to a checkbox modifier, default off; Cyan and
+Magenta removed. Plus: "*heavily simplify your testing and verification strategies*."
+
+*As built.* The always-on right-edge pass is **deleted**, not switched off (`drawStringMarkers`,
+its call site, `markers: tuningMarkers()`) — R5.1's overlay answers the same question on demand.
+`SGPLOT.mR` is dynamic (`SG_MR_BASE 98` → `SG_MR_LABELS 150` when `model.comb` is non-empty,
+assigned before `pW`), and each partial's label sits at `SGPLOT.mL + pW` behind a short leader
+tick in the track's color, the label itself in `cssRGBA("ink-rgb", 0.82)` — chrome themes, data
+doesn't — keeping R5.6's 12 px skip-rather-than-smear guard. `SG_TRACKS` is now
+`{white, black, triad}`; `triadDegrees(midis)` in block 0 returns one slot per string
+(`null` silent, `0` root / `1` third / `2` fifth) so harmonics inherit their note's color and a
+six-string chord reads as three voices. `state.sgHue` (default off) mixes any base color toward
+`_trackHueRgb(si)` and is now the **only** thing that draws a halo (`halo = !!model.hue`).
+Default dash back to `[6,4]`. New hooks `?sgnote=all`, `?sghue=0|1`,
+`?sgtriad=RRGGBB,RRGGBB,RRGGBB`; `?sgtrack=` validates `white|black|triad`.
+
+*Done when* — met. The triad defaults are **measured, not chosen by eye**, the same discipline
+as the colormaps: minimum pairwise CIE-Lab ΔE among the three is 145.7 (gate demands > 90) and
+each one's minimum ΔE to any of parula's 256 entries is > 40. `tests/r5.test.js` 264 → **259**
+and `tests/headless.js` stayed **64** — the suite shrank on purpose; see "Verification, in
+proportion" above. Note for anyone touching the headless pixel checks: a pane with a comb
+reserves a wider right margin, so an overlay-on vs overlay-off compare re-lays-out the whole
+image and can only prove *that* something changed. Compare comb against comb.
 
 ### R5.4 — bound it in time
 

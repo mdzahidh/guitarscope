@@ -1278,3 +1278,37 @@ bug) so the gap that allowed it is closed.
 in a `finally`, so an exported spectrogram carries no tracks — consistent with every other
 export (no strings axis, no harmonics, data only). The counter-argument is real: a picture
 of an overlay is arguably the point of exporting it. Left to the user.
+
+## R5.1a — the user's legibility pass (session 20)
+
+The user visually tested R5.1 and returned four items. All four are built; the two that are
+*decisions* rather than repairs are recorded here.
+
+**Decision, reversing the taste call directly above: a PNG is a picture of what you are
+looking at.** The user's answer was *"i woiuld like any export of PNG to include the
+visualization"*, and it was taken in the broad reading rather than the narrow one:
+`exportPNG()`, `_cardPng()` and `exportSgramPNG()` no longer blank `state.strings`,
+`state.stringHarmonics` or `state.sgFrets`, so **every** PNG now carries the strings axis,
+the shown harmonics, the ✦ coincidence marks and the spectrogram overlay as drawn. CSV and
+JSON are untouched and stay data-only, and `_cardStateFor()` still narrows what settings a
+card records. The line is now: **PNG = the view, CSV/JSON = the data.** This retires the
+release-hardening rule "exports are data-only" for the PNG half only, and the gate asserts
+the inverse of what it did — none of the three exporters may assign to those state keys.
+
+**Decision: the track hues are lifted for the surface they are drawn on, not for a theme.**
+The first written rationale claimed the unlifted hues were lost in the magma ridges; a pixel
+census said otherwise, and the rationale was rewritten to match the measurement rather than
+the other way round. 94.8 % of track pixels have both vertical neighbours below 0.18
+relative luminance — a track is read against **its own black halo**, not against the image.
+The palette's luminance is 0.36–0.56, clearing that halo by a contrast ratio of only ≈3.4;
+`_trackColor()` runs each hue through `liftForDark(rgb, 0.62)` for ≈4.8, and the six stay
+hue-distinct. The lift is identical in Bright and Dark, so **data colormaps never theme**
+still holds — this is per-surface, not per-theme, the same distinction the diverging
+difference endpoints already make.
+
+The other two items were repairs with numbers behind them: the spectrogram panes went 230 →
+**372 px** (166 → 308 px of actual plot for 60 Hz–20 kHz on a log axis; 288 px under
+`max-width:900px`), and the harmonic-count select now names what it counts, carries a
+tooltip, and ships `disabled` until a note is overlaid — with `select:disabled{opacity:.4}`
+so that state is visible. Gate: `tests/r5.test.js` 76 → **102**, every new assertion
+mutation-checked the day it was written.

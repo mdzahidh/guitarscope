@@ -462,6 +462,8 @@ string's fundamental. Build it in this order — the pure function first, drawn 
   something the user can already see, never a hidden line.
 - **PNG exports force `state.strings=false`, so ✦ never appears in exports.** That is
   correct and needs no extra work; just don't undo it.
+  *(Reversed by the user at the R5.1a boundary — PNGs now render the view as it stands, so
+  a ✦ that is on screen is in the export. See R5.1a below.)*
 
 ### R3.4 — The popover — **BUILT** (wiring; copy pre-landed `48925b8`)
 
@@ -956,7 +958,8 @@ model — absent when the overlay is off.
 
 **Done when** `?demo&sgnote=0` draws six tracks on both panes, `data-sgcomb="6"`, the chip
 names the note, `?sgnote` absent leaves every pane pixel-identical to today, and PNG
-exports carry no tracks.
+exports carry no tracks. *(That last clause was reversed by the user at the R5.1a
+boundary; the gate now asserts the opposite. See R5.1a below.)*
 
 **PNG note, corrected here after reading the source:** `exportSgramPNG()` does *not* run the
 `state.strings=false` dance — it never needed to, because the strings axis is a
@@ -967,6 +970,9 @@ instead. So the overlay does not get stripped for free: `exportSgramPNG()` must 
 the strings axis or the harmonics), and it is what the gate asserts. It is also a taste
 call the user may want to reverse — a picture of an overlay is arguably the point of
 exporting it — so raise it at the milestone boundary rather than deciding silently.
+**Raised, and the user reversed it** — R5.1a takes the blanking back out of all three
+exporters and the gate asserts the inverse. The note is kept for the reasoning, not as
+current behaviour.
 
 **Verified here (reviewer), not taken from the builder's report** — five node suites green
 (dsp 171, r3 42, r4 60, m27 51, **r5 76**) and headless **40/0**. Beyond the gate:
@@ -994,7 +1000,38 @@ exporting it — so raise it at the milestone boundary rather than deciding sile
 **Taste call raised with the user at this boundary, as this task said to:** sgram PNG
 exports strip the overlay (`exportSgramPNG()` blanks `state.sgFrets` in a `finally`),
 following the shipped data-only precedent. Reversing it — exporting the picture *with* its
-prediction drawn on — is the user's call, not a silent one.
+prediction drawn on — is the user's call, not a silent one. **Answered:** *"i would like
+any export of PNG to include the visualization."* Taken broadly — all three PNG paths, not
+just the sgram — in R5.1a.
+
+### R5.1a — the user's legibility pass — **BUILT** (session 20, reviewer)
+
+Not a planned task: the user visually tested R5.1 and returned four items, which the
+reviewer fixed directly (no delegation — the whole change is ~40 lines of `index.html`, and
+three of the four are judgement calls about what a control communicates).
+
+- **(a) hard to see** → halo 3 → 5 px, track 1.5 → 2.5 px, halo alpha 0.55 → 0.75, dash
+  `[3,3]` → `[6,4]`, and `_stringColor` → new `_trackColor(si,alpha)` =
+  `liftForDark(STRING_COLORS[si], 0.62)`. Diagnosed by census: a track is read against its
+  own halo (94.8 % of its pixels), not the magma, so the lift target has to clear the
+  **palette**, not the image. Per surface, not per theme — identical in Bright and Dark.
+- **(b) pane too short** → `#sgramCanvasA/B/D` 230 → **372 px** (308 px of plot after
+  `SGPLOT.mT+mB`), **288 px** under `@media (max-width:900px)`.
+- **(c) selector not obvious** → options renamed `Harmonics 1–N`, `title=` on both selects,
+  `#sgHarmSel` ships `disabled` and `syncSgHarmSel()` enables it from `state.sgFrets` at
+  every door, plus `select:disabled{opacity:.4}` so the greying is visible.
+- **(d) PNG should include the visualization** → **the taste call R5.1 raised, answered by
+  the user and taken broadly.** All three PNG paths (`exportPNG`, `_cardPng`,
+  `exportSgramPNG`) stop blanking `state.strings` / `state.stringHarmonics` /
+  `state.sgFrets`. **PNG = the view; CSV/JSON = the data.** Anything in R5.2+ that adds a
+  view-only mark should assume it will appear in a PNG.
+
+**Gate**: `tests/r5.test.js` 76 → **102** — draw-pass widths (halo > track, track ≥ 2,
+halo − track ≥ 2, so the sub-pixel edge cannot come back), the lift target read out of the
+source and re-run through the shipped `liftForDark`, the pane-height rules, the `#sgHarmSel`
+affordances and their three call sites, and the **inverted** exporter contract (no exporter
+may assign to those state keys). Every one mutation-checked the day it was written; ten
+mutations, ten caught.
 
 ### R5.2 — a chord, from a picker
 

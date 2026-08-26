@@ -326,10 +326,19 @@ section("R5.1 — the tracks are drawn, under the colorbar, with no text");
   ok(pass !== "", "there is a pass between the string markers and the colorbar");
   ok(/model\.comb/.test(pass), "…and it reads model.comb");
   ok(/yOfF\s*\(/.test(pass), "each partial is placed by the pane's own frequency mapping");
-  ok(/rgba\(0,\s*0,\s*0,\s*0?\.55\)/.test(pass),
+  ok(/rgba\(0,\s*0,\s*0,\s*0?\.75\)/.test(pass),
     "a black halo carries the line over the magma — the colormap never themes");
-  ok(/_stringColor\s*\(/.test(pass), "the hue is the string's own data color");
-  ok(/setLineDash\(\s*\[\s*3\s*,\s*3\s*\]\s*\)/.test(pass), "harmonics are dashed");
+  ok(/_trackColor\s*\(/.test(pass), "the hue is the string's own data color, lifted for this surface");
+  ok(/setLineDash\(\s*\[\s*6\s*,\s*4\s*\]\s*\)/.test(pass),
+    "harmonics are dashed — long enough to read as a dash at the track's width");
+  // The first legibility complaint (user, 2026-08-25) was that the tracks vanished
+  // into the image: at DPR 2 a 3 px halo under a 1.5 px line leaves 0.75 CSS px of
+  // black per side. Both widths are asserted, and their order with them.
+  const widths = [...pass.matchAll(/lineWidth\s*=\s*([\d.]+)/g)].map(m => Number(m[1]));
+  ok(widths.length >= 2 && widths[0] > widths[1],
+    "the halo is stroked wider than the track it carries");
+  ok(widths.length >= 2 && widths[1] >= 2 && widths[0] - widths[1] >= 2,
+    "…and both survive a device-pixel-ratio 2 downscale");
   ok(/harm\s*===\s*1/.test(pass), "…and the fundamental is not");
   ok(!/fillText/.test(pass), "no labels on the tracks — hue and order say it (R3 precedent)");
 }
@@ -345,7 +354,43 @@ section("R5.1 — the hooks the gate needs, and nothing persisted through them")
   ok(/\[\?&\]sgharm=/.test(s), "?sgharm= is parsed too");
 }
 
-section("R5.1 — the pane says what it drew, and the PNG carries none of it");
+section("R5.1 — the track color is the data palette, lifted for the magma image");
+{
+  const s4 = decomment(b4);
+  const i = s4.indexOf("function _trackColor");
+  const body = i < 0 ? "" : s4.slice(i, s4.indexOf("\nfunction ", i + 10));
+  ok(body !== "", "_trackColor() exists in block 4, beside _stringColor()");
+  ok(/STRING_COLORS/.test(body), "…the hue still comes from the six data colors");
+  ok(/liftForDark\s*\(/.test(body), "…lifted by the app's own liftForDark(), the diverging-endpoint precedent");
+  ok(body !== "" && !/cssColor|cssRGBA/.test(body),
+    "…and never from a theme variable — a data color is identical in Bright and Dark");
+  // The lift target is a number in the source; check that whatever it says really
+  // clears the palette. Relative luminance, same weights the app uses. What a track
+  // is read against is its own black halo (measured: 94.8 % of track pixels have
+  // both vertical neighbours under 0.18 L), so the target has to beat the palette's
+  // own 0.36–0.56, not the image's.
+  const mT = /liftForDark\s*\([^,]*,\s*([\d.]+)\s*\)/.exec(body);
+  const target = mT ? Number(mT[1]) : NaN;
+  ok(target >= 0.6, "the target clears the palette itself (>= 0.60), not just the 0.55 the panes use");
+  const mP = /STRING_COLORS\s*=\s*\[([^\]]+)\]/.exec(html);
+  const pal = mP ? (mP[1].match(/#[0-9a-f]{6}/gi) || []) : [];
+  const rgb = h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
+  const lum = c => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+  // Run the app's own liftForDark(), not a copy of it — a reimplementation here
+  // would keep passing after the shipped one changed.
+  const iL = s4.indexOf("function liftForDark");
+  const src = iL < 0 ? "" : s4.slice(iL, s4.indexOf("\nfunction ", iL + 10));
+  let lift = null;
+  try { lift = new Function(src + "\nreturn liftForDark;")(); } catch (e) {}
+  ok(typeof lift === "function", "…and liftForDark() itself is a pure function this suite can run");
+  const lifted = typeof lift === "function" ? pal.map(h => lift(rgb(h), target)) : [];
+  ok(pal.length === 6 && lifted.every(c => lum(c) >= target - 0.005),
+    "…so all six strings land at the target, not five of six below it");
+  ok(new Set(lifted.map(c => c.join(","))).size === 6,
+    "…and the six stay six — the lift must not collapse two strings onto one color");
+}
+
+section("R5.1 — the pane says what it drew, and the PNG shows it");
 {
   const s = decomment(b4);
   ok(/setAttribute\(\s*"data-sgcomb"/.test(s),
@@ -355,13 +400,67 @@ section("R5.1 — the pane says what it drew, and the PNG carries none of it");
     "…and the same site drops it again when the overlay is off");
   ok((s.match(/removeAttribute\(\s*"data-sgcomb"/g) || []).length >= 2,
     "…and the no-source pass clears it too, as it already clears data-sgwin");
-  const i = s.indexOf("function exportSgramPNG");
-  const body = i < 0 ? "" : s.slice(i, s.indexOf("\nfunction ", i + 10));
-  ok(/sgFrets/.test(body), "exportSgramPNG() knows about the overlay");
-  ok(/state\.sgFrets\s*=\s*(\[\s*(null\s*,\s*){5}null\s*\]|(new\s+)?Array\(6\)\.fill\(null\))/.test(body),
-    "…blanks it for the render, as _cardPng() does for state.strings");
-  ok(/finally\s*\{[\s\S]{0,400}state\.sgFrets\s*=/.test(body),
-    "…and restores it in a finally, so a failed export cannot eat the user's selection");
+  // A PNG is a picture of what the user is looking at (user request, 2026-08-25).
+  // No exporter may blank the overlay, the strings axis or the shown harmonics
+  // behind the user's back; CSV/JSON stay data-only, asserted above.
+  for (const fn of ["exportSgramPNG", "_cardPng", "exportPNG"]) {
+    const i = s.indexOf("function " + fn);
+    const body = i < 0 ? "" : s.slice(i, s.indexOf("\nfunction ", i + 10));
+    ok(body !== "", fn + "() is in block 4");
+    ok(body !== "" && !/state\.(sgFrets|strings|stringHarmonics)\s*=/.test(body),
+      "…and " + fn + "() renders the view as it stands, blanking nothing");
+  }
+}
+
+// The user tested R5.1 and reported three things (2026-08-25): the tracks were hard
+// to see, the pane was too short to read frequency in at all, and the harmonic-count
+// select did not say what it was for. The colour half is asserted above; these are
+// the other two, pinned so a later change has to argue with them.
+section("R5.1 — the pane is tall enough to read, and the controls say what they do");
+{
+  const mH = /#sgramCanvasA,\s*#sgramCanvasB,\s*#sgramCanvasD\s*\{\s*height:\s*(\d+)px/.exec(html);
+  const h = mH ? Number(mH[1]) : NaN;
+  ok(h >= 340,
+    "a spectrogram pane is at least 340 px tall — 60 Hz to 20 kHz on a log axis was " +
+    "unreadable in the 230 px the panes shipped with");
+  const nar = /@media\s*\(max-width:\s*900px\)[\s\S]{0,4000}?#sgramCanvasA[^}]*height:\s*(\d+)px/.exec(html);
+  ok(!!nar && Number(nar[1]) >= 250 && Number(nar[1]) < h,
+    "…and the narrow viewport gets its own height, shorter than the wide one but not the old one");
+
+  const sel = /<select id="sgHarmSel"[\s\S]{0,600}?<\/select>/.exec(html);
+  const selSrc = sel ? sel[0] : "";
+  ok(selSrc !== "", "the overlay's harmonic select is in the markup");
+  ok(/\bdisabled\b/.test(selSrc.slice(0, selSrc.indexOf(">"))),
+    "…and ships disabled — the limit means nothing until a note is overlaid");
+  const opts = selSrc.match(/<option\b[^>]*>([^<]*)<\/option>/g) || [];
+  ok(opts.length >= 2 && opts.every(o => /Harmonics\s*1[–-]\d/.test(o)),
+    "…and every one of its options names what it counts, not a bare number");
+  const noteSel = /<select id="sgNoteSel"[\s\S]{0,600}?<\/select>/.exec(html);
+  for (const [nm, src] of [["string", noteSel ? noteSel[0] : ""], ["harmonic", selSrc]]) {
+    ok(/title="[^"]{20,}"/.test(src.slice(0, src.indexOf(">"))),
+      "the " + nm + " select carries a plain-language tooltip");
+  }
+
+  const s4 = decomment(b4);
+  const iS = s4.indexOf("function syncSgHarmSel");
+  const body = iS < 0 ? "" : s4.slice(iS, s4.indexOf("\n}", iS) + 2);
+  ok(body !== "", "syncSgHarmSel() is in block 4");
+  ok(/sgHarmSel\.disabled\s*=/.test(body) && /state\.sgFrets/.test(body),
+    "…and it drives the select's disabled state from whether any note is overlaid");
+  // Every door into state.sgFrets has to re-sync, or the greying goes stale. Count
+  // nothing — name the doors, and read each one's own body.
+  const handler = /sgNoteSel\.addEventListener\s*\(\s*["']change["'][\s\S]*?\n  \}\);/.exec(s4);
+  ok(!!handler && /syncSgHarmSel\s*\(\s*\)/.test(handler[0]),
+    "…and the note select's own change handler re-syncs it");
+  const hook = /sgnote=[\s\S]{0,400}?\n  \}/.exec(s4);
+  ok(!!hook && /syncSgHarmSel\s*\(\s*\)/.test(hook[0]),
+    "…and so does the ?sgnote= hook, which sets the note without a change event");
+  const fill = /function fillSgNoteSel[\s\S]*?\n\}/.exec(s4);
+  ok(!!fill && /syncSgHarmSel\s*\(\s*\)/.test(fill[0]),
+    "…and the fill that reruns on a tuning change");
+  // …and the disabled state has to be *visible*, or the affordance is a no-op.
+  ok(/select:disabled\s*\{[^}]*opacity:\s*\.?\d/.test(html),
+    "…and a select:disabled rule makes the greying show, the same idiom .seg button uses");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

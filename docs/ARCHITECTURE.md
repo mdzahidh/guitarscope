@@ -894,10 +894,12 @@ Four pieces, in three blocks:
   neither `sgFrets` nor `sgHarm`, so changing the overlay never re-runs an STFT.
 - **Block 3, the draw pass.** A fourth pass in `drawSpectrogramScene()`, after
   `drawStringMarkers()` and before the colorbar, clipped to the plot rect: per partial a
-  full-width horizontal at `yOfF(f)` — a 3 px `rgba(0,0,0,0.55)` halo first, then 1.5 px in
-  `_stringColor(key)`, solid for the fundamental and dashed above it. **Black is the only
-  halo that survives both the magma floor and its ridges**, and the track hues are
-  `STRING_COLORS`, a **data** palette: the overlay is pixel-identical in Bright and Dark.
+  full-width horizontal at `yOfF(f)` — a 5 px `rgba(0,0,0,0.75)` halo first, then 2.5 px in
+  `_trackColor(key)`, solid for the fundamental and dashed `[6,4]` above it (the widths and
+  the lift are the R5.1a legibility pass below; as first built it was 3 px / 1.5 px / 0.55
+  and `_stringColor`). **Black is the only halo that survives both the magma floor and its
+  ridges**, and the track hues are `STRING_COLORS`, a **data** palette: the overlay is
+  pixel-identical in Bright and Dark.
   No labels — the right-edge string markers are the reference and the plot has no room.
 - **Hooks, because the canvas is unreachable from node.** `?sgnote=<0-5>` and `?sgharm=<n>`
   (unpersisted, gate-only), and each pane canvas publishes `data-sgcomb="<count>"`, absent
@@ -913,12 +915,60 @@ assertion parses the first argument of every `notePartials(…, state.sgHarm` ca
 **top-level** commas inside the brackets — an earlier form using a character class was
 satisfied by `[sgMidis[sgSi]]` and failed its own mutation check.
 
-**PNG exports carry no tracks.** `exportSgramPNG()` does *not* inherit the
-`state.strings=false` dance the other card exports use — the strings axis is a
-frequency-plot thing, and the spectrogram draws its own always-on right-edge markers — so
-it saves `state.sgFrets`, blanks it, and restores in a `finally`. Stripping follows the
-shipped data-only precedent; whether a *picture of a prediction* should be the exception is
-a taste call raised with the user at the milestone boundary rather than settled silently.
+**PNG exports carried no tracks as built; the user reversed it (R5.1a).** As shipped,
+`exportSgramPNG()` saved `state.sgFrets`, blanked it and restored in a `finally`, following
+the data-only precedent. The taste call raised at the boundary came back the other way — *"i
+woiuld like any export of PNG to include the visualization"* — so the blanking is gone from
+all three PNG paths. See R5.1a for where the line now sits.
+
+## R5.1a (session 20): the legibility pass the user asked for
+
+The user tested R5.1 and returned four items. All four are fixed; each was diagnosed with a
+measurement rather than an opinion, because "hard to see" and "too small" are exactly the
+claims that dissolve into taste if nobody counts pixels.
+
+- **(a) "The colors are very hard to see because of the spectogram's colormap."** Two
+  independent deficits, not one. First, the strokes were sub-pixel on a Retina pane: a 3 px
+  halo behind a 1.5 px line leaves 0.75 CSS px of black per side, which at
+  `devicePixelRatio` 2 antialiases to nearly nothing. Widths went 3 → **5** and 1.5 → **2.5**
+  (halo − track ≥ 2 is now a gate contract, so a later tweak cannot re-create the same
+  sub-pixel edge), the halo alpha 0.55 → **0.75**, and the dash `[3,3]` → **`[6,4]`** so a
+  dashed partial still reads as a line at a glance. Second — and this is the part the first
+  written rationale got wrong — the hue is **not** read against the magma image. A pixel
+  census of a rendered pane says **94.8 % of track pixels have both vertical neighbours
+  below 0.18 relative luminance**: what a track sits against is its own halo. The palette's
+  own luminance runs 0.36–0.56, so unlifted it clears that halo by a contrast ratio of only
+  ≈3.4. `_trackColor(si, alpha)` (block 4, beside `_stringColor`) passes the same six data
+  colors through `liftForDark(rgb, 0.62)` — the existing diverging-endpoint precedent, which
+  gained an optional target — giving ≈4.8 while the six stay hue-distinct (measured
+  before → after: `#e74c3c` 0.423 → 0.619, `#e67e22` 0.555 → 0.620, `#27ae60` 0.548 → 0.620,
+  `#3498db` 0.532 → 0.619, `#8e44ad` 0.358 → 0.619, `#d64582` 0.409 → 0.619). The lift is
+  **per surface, not per theme** — identical in Bright and Dark — so "data colormaps never
+  theme" still holds.
+- **(b) "the default view of the graph with such small height makes the default view almost
+  useless."** `SGPLOT` spends `mT + mB = 64` px of any pane on chrome, so the 230 px canvas
+  left **166 px** for 60 Hz–20 kHz on a log axis — about 20 px per octave. The panes are now
+  **372 px** (308 px of plot, +85 %), and **288 px** under `@media (max-width:900px)`. The
+  gate reads the rule out of the stylesheet and requires ≥ 340 px, with the narrow rule
+  shorter than the wide one but still above the old height.
+- **(c) "The harmonic range selector isn't obivous what it is for."** Fixed with
+  affordances, not help text: the options name what they count (`Harmonics 1–4 / 1–6 / 1–8`,
+  not `4 / 6 / 8`), both selects carry plain-language `title=` tooltips, and `#sgHarmSel`
+  ships `disabled` — `syncSgHarmSel()` re-enables it only once a note is overlaid, called
+  from every door into `state.sgFrets` (the change handler, `fillSgNoteSel()`, the `?sgnote=`
+  hook). A greyed control is how the app says "this means nothing yet". That needed one CSS
+  rule to be *visible*: `select:disabled{ opacity:.4; cursor:default; }`, the same idiom
+  `.seg button:disabled` already used — without it the disabled state was nearly invisible
+  in Bright, which the first screenshot caught.
+- **(d) "i woiuld like any export of PNG to include the visualization."** Taken in the broad
+  reading, and the line moved: **a PNG is a picture of what you are looking at; CSV and JSON
+  stay data-only.** `exportPNG()`, `_cardPng()` and `exportSgramPNG()` no longer blank
+  `state.strings`, `state.stringHarmonics` or `state.sgFrets`, so a PNG carries the strings
+  axis, the per-string harmonics, the ✦ marks and the overlay exactly as drawn. The only
+  surviving `state.strings=false` is the settings **reset** path. The R3/R4/R5.1 note that
+  "✦ never reaches a PNG" and "sgram PNGs strip the overlay" is therefore obsolete. The gate
+  asserts the inverse of what it used to: none of the three exporters may assign to those
+  keys. `exportSgramPNG()` also gained the catch/toast the other exporters had.
 
 ## Hard-won correctness notes (dead ends — do not retry)
 

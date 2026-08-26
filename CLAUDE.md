@@ -92,9 +92,10 @@ build educational copy from it, never re-derive from scratch.
   raw blob → error toast), `_pngWithDpi` parses the real IHDR length and
   bounds-checks every offset, returning the original blob on any surprise; one
   footer on every PNG (`made with GuitarScope`); `exportSgramPNG` builds its own
-  stack so the envelope can't bleed in. **Exports are data-only:** `strings`,
-  `stringHarmonics`, `sgAlign` never appear in CSV/JSON, and PNG builders force
-  `state.strings=false` for the render (restored in `finally`); `_cardStateFor(name)`
+  stack so the envelope can't bleed in. **Exports were data-only:** `strings`,
+  `stringHarmonics`, `sgAlign` never appear in CSV/JSON, and PNG builders forced
+  `state.strings=false` for the render (restored in `finally`) — **the PNG half of that
+  was reversed at R5.1a on user request; see the R5.1a bullet**; `_cardStateFor(name)`
   narrows the recorded settings per card. The debug **“Load test files” button is
   hidden** in the shipped app and revealed by `?debug` (`loadDemo()` untouched).
 - **v1.0.0 release batch (session 13, user request):** (a) **“How to use this app”**
@@ -174,8 +175,9 @@ build educational copy from it, never re-derive from scratch.
   `state.tolCents` lives in block 4; `findCoincidences()` in block 0 (shared — R4.2 and R5
   inherit it); a fourth pass in `drawStringAxis` draws the mark in `cssColor("mut")`,
   never a guitar accent, with the same ≈12 px overlap guard as the labels (so E standard
-  shows **two** ✦, near 247 Hz and 330 Hz, not three). ✦ never reaches a PNG export
-  (`state.strings=false` there). Two reviewer findings are recorded in SPEC.md and
+  shows **two** ✦, near 247 Hz and 330 Hz, not three). ✦ never reached a PNG export
+  (`state.strings=false` there) **until R5.1a, which made PNGs render the view as it
+  stands**. Two reviewer findings are recorded in SPEC.md and
   ARCHITECTURE.md: the builder faked the headless step with a wrapper emitting synthetic
   PNGs (disclosed in its PR; the code does pass the real gate here), and a defective
   `?pop=coin` assertion of mine was being satisfied by a comment rather than reported.
@@ -192,8 +194,9 @@ build educational copy from it, never re-derive from scratch.
   `drawStringAxis` returns its mark count and `drawSpectrumScene` passes `nCoin ? 20 : 0`
   as `drawLegend`'s new `yShift`, so the legend steps out of the ✦ row instead of being
   crowded (coincidences are always open-string fundamentals, 82–330 Hz — on a log axis
-  that is always the legend's own corner). PNG exports unaffected (`state.strings=false`
-  there: no marks, no key, no shift). Gate green; `tests/r3.test.js` is now **42** — its
+  that is always the legend's own corner). PNG exports were unaffected (`state.strings=false`
+  there: no marks, no key, no shift) **until R5.1a — a PNG now carries whatever the plot
+  carries, key and legend shift included**. Gate green; `tests/r3.test.js` is now **42** — its
   R3.3 contracts were rewritten because `/✦/` in the body would now be satisfied by a
   comment, and they assert the filled path *scoped to the mark loop* (the key draws a
   star too), the absence of `fillText("✦")`, neutral ink, and the key's presence — all
@@ -268,8 +271,29 @@ build educational copy from it, never re-derive from scratch.
   r5 assertion (mutation-checked against two spellings) closes the gap. Proved in pixels,
   not by eye: a hue census per string, and — because the demo pair *is* the six open
   strings — the six predicted tracks sit on local luminance maxima of the overlay-off
-  image. sgram PNGs strip the overlay (`state.sgFrets` blanked in a `finally`); **that is
-  an open taste call for the user.**
+  image. sgram PNGs stripped the overlay as built; **the user reversed that at R5.1a.**
+- **R5.1a legibility pass BUILT (session 20, reviewer, from the user's visual test).** Four
+  items, all reviewer-built (≈40 lines — three of them are judgement calls about what a
+  control says, not plumbing). **(a) tracks hard to see against the magma:** halo 3 → 5 px
+  at alpha 0.55 → 0.75, track 1.5 → 2.5 px, dash `[3,3]` → `[6,4]`, and `_stringColor` →
+  **`_trackColor(si,alpha)`** = `liftForDark(STRING_COLORS[si], 0.62)`. Diagnosed by census,
+  not by eye: **94.8 % of a track's pixels have both vertical neighbours below 0.18 L**, so
+  a track is read against **its own halo**, not the spectrogram — the lift target has to
+  clear the palette (contrast 3.38 → 4.78). Lifted **per surface, not per theme**: identical
+  in Bright and Dark, like every other data color. **(b) panes too short to read frequency
+  in:** `#sgramCanvasA/B/D` 230 → **372 px** (`SGPLOT.mT+mB` eats 64, so 166 → 308 px of
+  plot for 60 Hz–20 kHz on a log axis), **288 px** under `@media (max-width:900px)`.
+  **(c) the harmonic selector didn't say what it was for:** options read `Harmonics 1–N`,
+  both Overlay selects carry `title=`, and `#sgHarmSel` ships **disabled** —
+  `syncSgHarmSel()` enables it from `state.sgFrets` and is called from **every** door into
+  that state (the note select's change handler, the `?sgnote=` hook, `fillSgNoteSel()`),
+  with `select:disabled{opacity:.4}` so the greying is visible. Affordance, not help text.
+  **(d) "any export of PNG should include the visualization"** — taken **broadly**:
+  `exportPNG`, `_cardPng` and `exportSgramPNG` all stop blanking `state.strings` /
+  `stringHarmonics` / `sgFrets`. **PNG = the view, CSV/JSON = the data.** This retires the
+  sgram-PNG taste call and the older "✦ never reaches a PNG" rule. Gate: `tests/r5.test.js`
+  76 → **102**, including the **inverted** exporter contract (no exporter may assign those
+  keys); all 11 new assertions mutation-checked the day they were written.
 - **NEXT — R5.2** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
   eight open chords from a picker (the user's case (b) — where collisions become visible),
@@ -281,7 +305,7 @@ build educational copy from it, never re-derive from scratch.
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing.**
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 76, headless 40, plus
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 102, headless 40, plus
   all three tamper guards (`tests/` untouched, both frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -480,13 +504,17 @@ build educational copy from it, never re-derive from scratch.
   note state, deliberately separate from the frequency plots' Strings/harmonics, unpersisted,
   never exported, and **not part of the refine cache key**. `sgramModelFor()` publishes the
   flat `notePartials()` array as `comb` (unclipped — the draw pass clips); a fourth pass in
-  `drawSpectrogramScene()` draws each partial full-width at `yOfF(f)`: black halo, then
-  `_stringColor(key)`, solid fundamental / dashed above, no labels. Hand `notePartials()` the
+  `drawSpectrogramScene()` draws each partial full-width at `yOfF(f)`: a 5 px black halo at
+  alpha 0.75, then 2.5 px of `_trackColor(key)` — `STRING_COLORS[key]` lifted to 0.62 L,
+  because a track is read against its own halo rather than the magma — solid fundamental /
+  dashed `[6,4]` above, no labels. Panes are **372 px** tall (288 px narrow) so the log
+  frequency axis is readable at all. Hand `notePartials()` the
   **six-slot** note array, never the one selected note — `key` is the index it was given and
   `key` picks the hue. The tracks are a **data** palette: identical in both themes. The app
   never detects which notes were played; the user names them (intent), the overlay predicts,
-  the measurement judges. sgram PNGs strip the overlay (`state.sgFrets` blanked in a
-  `finally`) — an open taste call.
+  the measurement judges. The harmonic-limit select is **disabled until a note is overlaid**
+  (`syncSgHarmSel()`, called from every door into `state.sgFrets`). **PNG exports render the
+  view as it stands (R5.1a)** — tracks, strings axis, ✦ and all; CSV/JSON stay data-only.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

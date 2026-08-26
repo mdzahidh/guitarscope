@@ -32,6 +32,48 @@ Verification command (see CLAUDE.md for the full list of `?` hooks):
 
 ---
 
+## Milestones at a glance
+
+Every milestone this app has, in build order, with where its detail lives. **Detail** is a
+search string, per this file's anchor convention — grep it, don't trust a line number. Sections
+marked *(CLAUDE.md)* have no task breakdown here: they predate this file and are recorded in the
+CLAUDE.md status list and the SPEC.md changelog.
+
+| # | What it is | State | Detail |
+|---|---|---|---|
+| **M1** | The instrument itself: drop two recordings, get Welch LTAS, band energies and a tone-character panel where every number is defensible. | ✅ done | *(CLAUDE.md status, SPEC.md)* |
+| **M1.5** | Acoustic support, the glossary, and the first round of "say what you measured". | ✅ done | *(CLAUDE.md status)* |
+| **M2** | Spectrogram, envelope overlay, onset ticks. | ✅ done | *(CLAUDE.md status)* |
+| **M2.5** | Difference views, level-match, EQ-region lane, EQ match with device faces. | ✅ done | *(CLAUDE.md status)* |
+| **M2.6a–i** | The UX pass: one global level-match, the strings axis, per-string harmonics, per-card exports, remembered settings. | ✅ done | *(CLAUDE.md status)* |
+| **v1.0.0** | Release hardening — total PNG export, "How to use this app", instrument selector removed. | ✅ shipped (tag `v1.0.0`) | *(CLAUDE.md status, SPEC.md)* |
+| **R1** | Rename GuitarScope → **Claude Rameau** in every user-visible string, snapshots still load. | ✅ done, gate 1 | `# R1 — Rename` |
+| **R2** | The About modal — the app's own origin story, two doors into it. | ✅ done, gate 1 | `# R2 — About modal` |
+| **R3** | ✦ **discovery moments**: mark where a shown harmonic lands on another open string, and explain it through its ratio. | ✅ done, gate 3 | `# R3 — ✦ discovery moments` |
+| **R4** | **Harmonic ancestry** in the per-string popover — which interval each harmonic is, and where the string sits against its neighbour. | ✅ done, gate 4 | `# R4 — Harmonic ancestry` |
+| **M2.7** | **Resolution follows attention** — zooming a spectrogram pane re-runs the STFT for that window instead of cropping. | ✅ done, gate 6 | `# M2.7 — Resolution follows attention` |
+| **R5.0–R5.1a** | The **generative overlay**: the user names a note, the app draws the partials theory predicts across the measured image. | ✅ done, gate 7 | `### R5.0`, `### R5.1`, `### R5.1a` |
+| **R5.2** | Open-chord picker — eight stocked shapes as fret arrays, so a shape moves with the tuning. | ✅ done | `### R5.2 — a chord, from a picker` |
+| **R5.6** | Overlay legibility — partial labels, the scrim, hold-to-follow. | ✅ done | `### R5.6 — legibility` |
+| **R5.3** | **Collision marks**: where the combs meet, marked and clickable, read back as a ratio. | ✅ done | `### R5.3 — collisions marked and clickable` |
+| **Look pass** | Five perceptual colormaps, and track colors the colormap cannot make. | ✅ done | `### Look pass` |
+| **R5.7** | Nothing overlaid by default; labels outside the plot; Triad colors that mean the chord. | ✅ done | `### R5.7 — nothing on by default` |
+| **Q1** | Quality of life: A/B color keys, EQ "Reshape", solid-vs-dashed harmonics on the line plots with user-set hues. | ✅ done | `### Q1 — quality-of-life batch a/b/c` |
+| **Q2** | Small changes: the shelf glyph that lied, defaults from real material, a key for the two stars. | ✅ done | `### Q2 — small changes a/b/c` |
+| **R5.5** | **Near-floor disclosure on the LTAS Difference** — say where a large Δ is two views of the floor rather than a real difference. | 🔨 next | `### R5.5 — near-floor disclosure` |
+| **R6** | **Interval consonance explainer** — joint period, comb alignment, Plomp–Levelt/Sethares roughness. Now also carries **R6.4**, the overlay's time bound (was R5.4). | ⏸ blocked: two `docs/THEORY.md` §2.5 numeric caveats are unresolved (R6.4 is not blocked) | `# R6 — Interval consonance explainer` |
+| **Warped sgram difference** | Replace the removed pixel-wise spectrogram difference with an onset-warped / DTW one. | ⏸ deferred until after R6 | `### Deferred — warped spectrogram difference` |
+| **M3** | Live input; still owes the task-based entry points deferred from M2. | 🚫 gated on explicit user go-ahead | `# Gated` |
+| **M4** | Chain measure. | 🚫 gated on explicit user go-ahead | `# Gated` |
+| **Tension landscape** | From `docs/STORY.md`; unscheduled. | 🚫 gated, unscheduled | `# Gated` |
+
+**Partially done, precisely:** nothing in the table is half-built. R5 as a *milestone* is
+"done except R5.5", because R5.4 left it for R6 on the user's instruction (2026-08-26) and
+everything else in it is merged. R6 is the only entry with built material blocked behind a
+question the user has to answer.
+
+---
+
 ## Working discipline — how to build these tasks
 
 This codebase is finished software being extended, not a project being explored. The
@@ -1287,11 +1329,35 @@ assertion reads that function's first return. R3 and R4's frozen copy blocks wer
 their author** (`HARM_NODES` gained 6–8 from THEORY §6.1; `harmonicRowNoteHtml`'s gate went h>5 →
 h>8), each new SHA commented in `tests/verify.sh`.
 
-### R5.4 — bound it in time
+### Q2 — small changes a/b/c ✅ BUILT (session 26, reviewer)
 
-Restrict the overlay to a selected time span rather than the full pane width, composing
-with M2.7's zoom refinement. Deliberately last: the user asked to ignore time-span until
-the rest works.
+Three more items from the user's own testing. (a) In the EQ-match device faces, **LO SHELF and
+HI SHELF drew the same mark** — the user asked whether "high shelf" meant *cutting* the highs.
+It does not: low/high names **which side of the corner frequency** the shelf acts on, and the
+**sign of the fitted gain** sets boost or cut. The glyph was floating both curves on the cell's
+vertical centre, which makes a low-shelf cut and a high-shelf boost geometrically identical, so
+`drawEqShapeGlyph` now strokes a faint 0-dB reference (`cssRGBA("ink-rgb",.16)`) and anchors each
+shelf's flat half on it, the other half stepping `dy = up ? -5 : 5`. (b) Defaults from real
+material: `CMAP_NAMES` reordered to **parula, viridis, cividis, magma, inferno** with parula the
+default; scrim 0.45 → **0.10**; hold-fade 0.85 → **0.80**; **Bright yellow** and **Bright red**
+added to `SG_TRACKS`; the Triad default is the user's stated **white / bright yellow / bright
+red**; and String hues **tints** at a 0.30 mix rather than replacing at 0.62. (c) The two
+collision marks now carry a **key above the plot**.
+
+*Two things to know before touching this.* The key's top margin is dynamic
+(`SG_MT_BASE 30 → SG_MT_KEY 52`, set at the head of `drawSpectrogramScene` **before** `pH` is
+derived) and is keyed off `model.clusters` — a **pane-invariant** field. `SGPLOT` is a
+module-level singleton that `attachSgramCrosshair` and `_sgTrackAt` read live, so a margin keyed
+off anything per-pane (`fWin`, a zoom window) would measure one pane's geometry against another
+pane's pixels. And the Triad palette is now a **stated** choice, not R5.7's measured one: min
+pairwise ΔE is still 97.0, but parula *ends* in bright yellow (`#f9fb0e`), so the third's track
+measures ΔE 2.8 against the hottest cells of the default colormap. R5.7's `minBg > 40` floor was
+replaced by a contract pinning the stated palette, with the cost written into the test's comment
+rather than quietly dropped.
+
+*Done when* — met. `tests/r5.test.js` 259 → **267**; no new suite, no new `verify.sh` step, no new
+headless launch, no frozen copy block moved (the key is drawn on canvas, outside the R5.3
+sentinels). All new assertions mutation-checked.
 
 ### R5.5 — near-floor disclosure on the LTAS Difference (small, after R5.2)
 
@@ -1344,6 +1410,12 @@ Source: `docs/THEORY.md` §2.5 (roughness) and §2.6 (consonance definitions).
 - **R6.3** — UI: selecting two markers shows joint period, comb alignment, and a
   **self-normalized** roughness curve. Per §2.5 the output is dimensionless — normalize
   to the curve's own maximum and **say so on the axis**; never print absolute units.
+- **R6.4 — bound the overlay in time** *(was R5.4; moved here by the user, 2026-08-26)*.
+  Restrict the harmonic overlay to a selected time span rather than the full pane width,
+  composing with M2.7's zoom refinement. It was always "deliberately last" — the user asked to
+  ignore time-span until the rest worked — and R5.5 is what gates a public release, so R5 closes
+  without it. Not blocked on the §2.5 caveats: this one is plumbing, not physics, and can be
+  built ahead of R6.1–R6.3 if the caveats stay open.
 - **Blocked on the user resolving the two §2.5 numeric caveats** (the "~30–40 Hz in the
   guitar's mid-register" figure and the ERB-vs-Bark critical-band inconsistency) before
   any of those numbers appear in copy.

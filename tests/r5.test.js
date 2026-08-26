@@ -367,8 +367,9 @@ section("R5.7 — three base colours, and string hues as a modifier on top");
   const s4 = decomment(b4);
   const tks = /const SG_TRACKS\s*=\s*\{[\s\S]*?\n\};/.exec(s4);
   const tbl = tks ? tks[0] : "";
-  ok(/white\s*:/.test(tbl) && /black\s*:/.test(tbl) && /triad\s*:/.test(tbl),
-    "White, Black and Triad are the stocked track colours");
+  ok(/white\s*:/.test(tbl) && /black\s*:/.test(tbl) && /triad\s*:/.test(tbl) &&
+     /yellow\s*:/.test(tbl) && /red\s*:/.test(tbl),
+    "White, Black, Bright yellow, Bright red and Triad are the stocked track colours");
   ok(tbl !== "" && !/cyan|magenta|\bstring\s*:/.test(tbl),
     "…and cyan, magenta and the old String-hues entry are gone (R5.7)");
   ok(/\[\s*0\s*,\s*0\s*,\s*0\s*\]/.test(tbl) && /\[\s*255\s*,\s*255\s*,\s*255\s*\]/.test(tbl),
@@ -404,17 +405,21 @@ section("R5.7 — three base colours, and string hues as a modifier on top");
   };
   const dE = (a, b) => { const x = lab(a), y = lab(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
   const mP = /const SG_TRIAD_DEFAULT\s*=\s*\[([^\]]*)\]/.exec(s4);
-  const cols = (mP ? (mP[1].match(/#[0-9a-f]{6}/gi) || []) : []).map(rgb);
+  const hex = (mP ? (mP[1].match(/#[0-9a-f]{6}/gi) || []) : []).map(h => h.toLowerCase());
+  const cols = hex.map(rgb);
   ok(cols.length === 3, "the Triad palette ships three colours: root, third, fifth");
   let minPair = Infinity;
   for (let i = 0; i < cols.length; i++) for (let j = i + 1; j < cols.length; j++)
     minPair = Math.min(minPair, dE(cols[i], cols[j]));
   ok(minPair > 90, "…far enough apart to tell three voices of one chord apart", minPair.toFixed(1));
-  const par = D.cmapTable ? D.cmapTable("parula") : null;
-  let minBg = Infinity;
-  if (par) for (const c of cols) for (let i = 0; i < 256; i++)
-    minBg = Math.min(minBg, dE(c, [par[i * 3], par[i * 3 + 1], par[i * 3 + 2]]));
-  ok(par && minBg > 40, "…and off every colour parula can put behind them", String(minBg.toFixed(1)));
+  // Until 2026-08-26 this line was a second measured floor: every Triad colour had to
+  // stand ΔE > 40 off every entry of parula. The user then named the palette outright —
+  // white, bright yellow, bright red — and parula *ends* in bright yellow (#f9fb0e), so
+  // the third's track measures ΔE 2.8 from the hottest cells and will vanish inside them.
+  // A stated choice outranks a measured one, so the gate pins the choice; the cost is
+  // written down here rather than hidden behind a floor the palette no longer meets.
+  ok(hex.join(",") === "#ffffff,#ffff00,#ff0000",
+    "…and they are the three the user named, in order: root, third, fifth");
 
   okf("triadDegrees() reads root/third/fifth off the notes themselves", () => {
     const g = D.triadDegrees([40, 45, 52, null, null, null]);   // E2 A2 E3 — root, fourth, root
@@ -713,8 +718,11 @@ section("R5.6c — press and hold to follow one comb");
 section("R5.6 — the two tunables, and what they must not touch");
 {
   const s = decomment(b4);
-  ok(/sgScrim\s*:\s*0\.45/.test(s), "state.sgScrim defaults to 0.45");
-  ok(/sgDim\s*:\s*0\.85/.test(s), "state.sgDim defaults to 0.85");
+  // Both re-set by the user on 2026-08-26 after looking at the thing on real material:
+  // a lighter sheet (the measurement stays readable under it) and a shallower fade (an
+  // unheld comb is still legible). Pinned because they are a stated choice, not a guess.
+  ok(/sgScrim\s*:\s*0\.10/.test(s), "state.sgScrim defaults to 0.10");
+  ok(/sgDim\s*:\s*0\.80/.test(s), "state.sgDim defaults to 0.80");
   ok(/sgFocus\s*:\s*null/.test(s), "state.sgFocus starts empty — nothing is held");
   ok(/id="sgScrimRange"[^>]*type="range"|type="range"[^>]*id="sgScrimRange"/.test(html),
     "the sheet has a slider in the Overlay controls");
@@ -945,20 +953,45 @@ section("R5.3 — the marks: the model finds them, one draw pass places them");
   const pass = /if\s*\(\s*model\.clusters[\s\S]*?\n  \}/.exec(body);
   const p = pass ? pass[0] : "";
   ok(p !== "", "there is a pass over model.clusters");
-  ok(/starPath\s*\(/.test(p) && !/fillText\s*\(\s*["']✦/.test(body),
+  // The pass places the marks, then draws the key that says what they mean. The two
+  // answer to different rules — a mark is data (fixed cream, never themed), the key's
+  // label is chrome (themed ink on the panel margin) — so read them apart.
+  const kAt = p.indexOf("const ky");
+  const pm = kAt < 0 ? p : p.slice(0, kAt), pk = kAt < 0 ? "" : p.slice(kAt);
+  ok(/starPath\s*\(/.test(pm) && !/fillText\s*\(\s*["']✦/.test(body),
     "the mark is a drawn path, never the ✦ glyph — R3's lesson, kept");
-  ok(!/_trackColor|_stringColor|cssColor|cssRGBA/.test(p),
+  ok(!/_trackColor|_stringColor|cssColor|cssRGBA/.test(pm),
     "the landing belongs to neither string, so it takes no guitar accent and no themed ink");
-  ok(/tier\s*===\s*["']locked["']/.test(p) && /\.fill\(\)/.test(p) && /\.stroke\(\)/.test(p),
+  ok(/tier\s*===\s*["']locked["']/.test(pm) && /\.fill\(\)/.test(pm) && /\.stroke\(\)/.test(pm),
     "locked is filled, tempered is hollow — the tier is visible before the click");
-  ok(/hits\.push\s*\(\s*\{[^}]*cluster/.test(p),
+  ok(/hits\.push\s*\(\s*\{[^}]*cluster/.test(pm),
     "each mark registers a click target carrying its own cluster");
-  ok(/model\.focus/.test(p) && /model\.dim/.test(p),
+  ok(/model\.focus/.test(pm) && /model\.dim/.test(pm),
     "…and a held comb dims the marks that are not in it, like the tracks");
-  ok(/f\s*<\s*fw\.F0\s*\|\|[\s\S]{0,20}fw\.F1/.test(p),
+  ok(/f\s*<\s*fw\.F0\s*\|\|[\s\S]{0,20}fw\.F1/.test(pm),
     "a landing outside the pane's frequency window is not drawn");
-  ok(/stride/.test(p) && !/18/.test(p),
+  ok(/stride/.test(pm) && !/18/.test(pm),
     "the thinning is by x spacing, the axis the marks actually spread along");
+
+  // The key (user request, 2026-08-26). A star alone cannot say what filled and hollow
+  // mean, so the pane says it — above the plot, in a row the top margin grows to make.
+  ok(pk !== "", "the marks come with a key");
+  ok(/starPath\s*\(/.test(pk) && /\.fill\(\)/.test(pk) && /\.stroke\(\)/.test(pk),
+    "…which shows both marks as the pane draws them, filled and hollow, not described in words");
+  ok(/COINCIDENCE_CENTS/.test(pk),
+    "…and prints the tolerance from the tier constant, never a number typed into a caption");
+  ok(/cmapColor\s*\(/.test(pk),
+    "…each on a chip of the colormap's own floor: a cream star on a cream panel is nothing");
+  ok(/SG_MT_BASE/.test(pk) && /SG_MT_KEY/.test(s), "…in a row of its own, never over the image");
+  const mt = /SGPLOT\.mT\s*=[^\n]*/.exec(body);
+  ok(mt && /model\.clusters/.test(mt[0]) && /SG_MT_KEY/.test(mt[0]),
+    "the top margin grows for the key and shrinks again when there is no mark");
+  ok(mt && !/fWin|zoom/.test(mt[0]),
+    "…off the whole cluster set, not this pane's window: SGPLOT is shared, and the crosshair reads it live");
+  ok(mt && body.indexOf(mt[0]) < body.search(/pH\s*=\s*h\s*-/),
+    "…and it is set before pH is derived from it, like the label margin above");
+  ok(/SG_MT_BASE\s*=\s*30\b/.test(s),
+    "a pane with no marks keeps the margin it always had — nothing moves until something is found");
 }
 
 section("R5.3 — the door, and what a node gate can count");
@@ -998,15 +1031,17 @@ section("R5.3 — the door, and what a node gate can count");
 // them — which is what lets the halo go away. Kept deliberately light: this was asked
 // for as an experiment, so the gate holds the contracts that would silently rot
 // (a colormap that isn't perceptual, a halo that comes back, a dash that isn't finer).
-section("Look — five perceptual colormaps, magma still the default");
+section("Look — five perceptual colormaps, parula the default");
 {
   const s = decomment(blocks[0]);
   const names = /const CMAP_NAMES\s*=\s*\[([^\]]*)\]/.exec(s);
   ok(names, "the colormaps are a named list, so the selector cannot drift from the tables");
   const list = names ? names[1].split(",").map(x => x.trim().replace(/["']/g, "")) : [];
-  ok(list[0] === "magma", "magma is first — the R5.1a look is still the default");
-  ok(list.length >= 4 && list.includes("parula") && list.includes("viridis"),
-    "…and parula and viridis are stocked beside it");
+  // The list is the selector's order and its head is the default; both were set by the
+  // user on 2026-08-26 after seeing all five on real material. magma stays stocked (and
+  // stays byte-identical to MAGMA, asserted below) — it is no longer what you open on.
+  ok(list.join(",") === "parula,viridis,cividis,magma,inferno",
+    "parula first, then viridis, cividis, magma, inferno — the order the user asked for");
   for (const n of list) {
     const tab = D.cmapTable(n);
     ok(tab.length === 768, n + ": 256 entries, packed flat");

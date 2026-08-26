@@ -1699,3 +1699,67 @@ is thousands of characters away, so the old slice swallowed unrelated code and s
 the label-skip assertion pins the guard expression rather than the words around it, and the
 `_stringHex` assertion reads that function's **first return**. Full run green: dsp 187, r3 42,
 r4 60, m27 51, r5 259, headless 64, four tamper guards.
+
+## Small changes a/b/c (session 26, user request)
+
+Three items from one message: a shelf glyph that contradicted its own name, a set of
+defaults the user re-set after looking at real material, and a key for the collision marks.
+
+**(a) The shelf icons could not tell a low shelf from a high one.** The user's report —
+"the icon used for HI SHELF … is the same as LOW SHELF, that cannot be accurate" — was
+correct, and the question inside it deserves a plain answer: **no**, "low" and "high" do
+not mean cut and boost. A shelf names **which side of its corner frequency** it acts on,
+and it boosts or cuts by the **sign of the fitted gain** — the fit can hand a low shelf
+either sign. The glyph was drawing both curves floating on the box's centre line, so a
+LO SHELF cut and a HI SHELF boost came out as the same picture. `drawEqShapeGlyph` now
+strokes a faint 0-dB reference (`cssRGBA("ink-rgb",0.16)`) across the box and **anchors
+the flat half of each shelf on it**: a low shelf leaves the reference flat on the right
+and departs on the left, a high shelf the reverse, with `dy = up ? -5 : +5` carrying the
+direction. Name and picture now agree in all four combinations. No fit math moved.
+
+**(b) Defaults the user set after seeing them.** The colormap default is **parula** and
+the selector reads `Parula, Viridis, Cividis, Magma, Inferno` (`CMAP_NAMES` reordered;
+`_CMAPS` stays pre-seeded with `MAGMA`, so magma remains byte-identical and free, and
+three internal fallbacks moved off the literal `"magma"` onto `CMAP_NAMES[0]`). Sheet
+legibility defaults to **10 %** and hold fade to **80 %** (`state.sgScrim 0.10`,
+`state.sgDim 0.80`, with the HTML `value=`/`<output>` pairs matched). `SG_TRACKS` gains
+**Bright yellow** and **Bright red** as fixed colors, and the Triad default becomes
+**white / bright yellow / bright red** for root / third / fifth.
+
+**String hues is now genuinely a modifier.** It was mixing at 0.62, which mostly replaced
+the chosen color; it mixes at **0.30**, so the choice survives and the string is a tint on
+top of it, which is what the checkbox says.
+
+**A measured floor gave way to a stated choice, and the cost is written down.** R5.7 chose
+the Triad defaults by measurement: minimum pairwise CIE ΔE > 90 *and* ΔE > 40 against every
+entry of parula. White/yellow/red keeps the first (min pairwise **97.0**) but breaks the
+second: parula **ends** in bright yellow (`#f9fb0e`), so the third's track measures **ΔE
+2.8** from the hottest cells and will disappear inside them. The user named the palette
+outright, and a stated choice outranks a measured one — so `tests/r5.test.js` now pins the
+three colors by name instead of enforcing the background floor, with the 2.8 recorded in
+the assertion's own comment rather than hidden behind a rule the palette no longer meets.
+
+**(c) The collision marks now carry a key.** A filled ✦ and a hollow ✦ cannot say what they
+mean by themselves. The R5.3 pass, after placing the marks, draws both of them again above
+the plot — **as the pane draws them**, halo and all, each on an 18×18 chip of
+`cmapColor(cmap, 0.05)` because a cream star on a cream panel is nothing — labelled *"same
+pitch — inside 6 ¢"* (the number printed from `COINCIDENCE_CENTS`, never typed into a
+caption) and *"a near miss — you hear it beating"*. It skips rather than smears if the row
+would run past the plot's right edge.
+
+The row lives in a **dynamic top margin**: `SG_MT_BASE 30 → SG_MT_KEY 52`, set at the head
+of `drawSpectrogramScene` before `pH` is derived from it, exactly like `SG_MR_BASE →
+SG_MR_LABELS`. It keys off **`model.clusters`, the whole set** — deliberately not the marks
+that survive this pane's zoom window — because `SGPLOT` is a module-level singleton written
+by whichever pane draws last and read *live* by `attachSgramCrosshair` and `_sgTrackAt`: a
+margin that varied per pane would let the crosshair measure one pane's pixels against
+another pane's geometry. A pane with no clusters keeps `mT = 30` and is layout-identical to
+the shipped build.
+
+**Gate.** `tests/r5.test.js` 259 → **267**: the two re-set ranges, the widened track roster,
+the named Triad palette, the colormap order, and eight contracts for the key — that it draws
+real marks rather than describing them, prints the tier constant, chips them against the
+colormap's own floor, and that the margin is dynamic, pane-invariant and set before `pH`.
+All new and changed assertions were mutation-checked. The key is drawn on canvas, **outside**
+the R5.3 sentinels, so no frozen copy block moved. Full run green: dsp 187, r3 42, r4 60,
+m27 51, r5 267, headless 64, four tamper guards.

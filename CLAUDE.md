@@ -329,13 +329,13 @@ build educational copy from it, never re-derive from scratch.
   locked tier and `E2 ×5 ≈ G♯4` beyond it; the `≈` carries the lesson (the 5th harmonic is
   14 ¢ under the tempered note, THEORY §1/§5). Drawn highest-first, **skipped rather than
   smeared** within 12 px (M2.6c's rule). **This reverses R5.1's "no labels"**, which held
-  only while one string could be overlaid. **(a) Scrim:** `state.sgScrim` (default 0.45,
-  range 0–90 % in the card head, `?sgscrim=`) fills the plot rect between the image and the
+  only while one string could be overlaid. **(a) Scrim:** `state.sgScrim` (default 0.45 — **0.10 since
+  session 26**, range 0–90 % in the card head, `?sgscrim=`) fills the plot rect between the image and the
   tracks — **no comb, no sheet**, so the measurement is never dimmed for its own sake.
   **(c) Hold-to-follow:** `attachSgFocus(i)` hit-tests with `_sgTrackAt()` (the same
   `notePartials()` question the model asks, through the pane's zoom window, 8 px), sets
   `state.sgFocus` to that **string**, and every other comb draws at `1 − state.sgDim`
-  (default 0.85, range 0–95 %, `?sgdim=`) with its labels gone; a drag past 3 px hands off to
+  (default 0.85 — **0.80 since session 26**, range 0–95 %, `?sgdim=`) with its labels gone; a drag past 3 px hands off to
   the zoom box, mouseup/mouseleave clear, `?sgfocus=<0-5>` holds without a mouse. Both ranges
   ship `disabled` and `syncSgHarmSel()` enables them at every door into `state.sgFrets` (it
   also clears a focus whose string stopped sounding). None of the three keys is persisted,
@@ -463,16 +463,53 @@ build educational copy from it, never re-derive from scratch.
   assertion reads that function's *first return*. R3's and R4's frozen copy blocks were
   **re-frozen by their author** (`HARM_NODES` 6–8; `harmonicRowNoteHtml`'s gate `h>5` → `h>8`),
   each new SHA commented in `tests/verify.sh` **and** in its suite. Awaiting the user's visual test.
-- **NEXT — R5.4** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
-  in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
-  bound the overlay in time, then **R5.5** near-floor disclosure on the LTAS
-  Difference. R5.1/R5.2/R5.6/R5.3/R5.7 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
+- **Small changes a/b/c BUILT (session 26, reviewer).** Three items the user asked for
+  after testing the quality-of-life batch. **(a) A glyph that lied:** in the EQ-match device
+  faces, LO SHELF and HI SHELF drew the *same* mark, because `drawEqShapeGlyph` floated both
+  curves on the vertical centre — a low-shelf cut and a high-shelf boost are then geometrically
+  identical. The answer to the user's question is **no**: low/high names *which side of the
+  corner frequency* the shelf acts on; the **sign of the fitted gain** sets boost or cut. So
+  the glyph now strokes a faint 0-dB reference across the cell (`cssRGBA("ink-rgb",.16)`) and
+  anchors each shelf's flat half **on** it, its other half stepping up or down (`dy = up ? -5 : 5`).
+  Same for peak/HP/LP: every mark is now read against a stated zero. **(b) Defaults from real
+  material:** `CMAP_NAMES` is reordered to **parula, viridis, cividis, magma, inferno** and
+  parula is the default (`_CMAPS` still pre-seeded with `MAGMA`, so magma stays byte-identical
+  and free; three internal fallbacks moved from `"magma"` to `CMAP_NAMES[0]`); scrim 0.45 →
+  **0.10**, hold-fade 0.85 → **0.80**, both in `state` and in the range/`<output>` markup;
+  `SG_TRACKS` gains **Bright yellow** and **Bright red** as fixed colors; the Triad default is
+  now the user's stated **white / bright yellow / bright red**; and String hues **tints rather
+  than replaces** — the mix ran at 0.62, which is closer to substitution, and is **0.30** now.
+  One cost is recorded rather than hidden: min pairwise ΔE for the new triad is 97.0 (still
+  above the suite's 90 floor), but parula *ends* in bright yellow (`#f9fb0e`), so the third's
+  track measures **ΔE 2.8** against the hottest cells of the newly-default colormap. R5.7's
+  `minBg > 40` background floor was therefore replaced by a contract pinning the stated
+  palette, with the number written into the test's own comment. **(c) A key for the two
+  stars:** the collision marks now carry a one-row key above the plot — both stars **drawn by
+  the same `starPath()` the pane uses**, each on an 18×18 chip of `cmapColor(cmap,.05)` so the
+  cream reads against its real background, labelled *"same pitch — inside 6 ¢"* (printed from
+  `COINCIDENCE_CENTS`, never typed) and *"a near miss — you hear it beating"*, and skipped
+  rather than smeared if it would run past the plot's right edge. It lives in a dynamic top
+  margin, `SG_MT_BASE 30 → SG_MT_KEY 52`, set at the head of `drawSpectrogramScene` **before**
+  `pH` is derived and keyed off `model.clusters` — a **pane-invariant** field, because
+  `SGPLOT` is a module-level singleton that `attachSgramCrosshair`/`_sgTrackAt` read live: a
+  margin keyed off anything per-pane would measure one pane's geometry against another's
+  pixels. Gate: `tests/r5.test.js` 259 → **267**, no new suite, no new `verify.sh` step, no
+  new headless launch, no frozen block touched; all new assertions mutation-checked.
+- **NEXT — R5.5** (tasks + gates in docs/ROADMAP.md — start at its **Milestones at a glance**
+  table; specs in docs/STORY.md, math in docs/THEORY.md; do before M3/M4, which remain gated
+  on explicit user go-ahead): **near-floor disclosure on the LTAS Difference** — dash the
+  segments where both curves sit at the floor, so a large per-bin Δ that is really two views
+  of silence says so. The user calls this the caveat that gates a public release.
+  **R5.4 (bound the overlay in time) is no longer part of R5** — the user moved it into R6 as
+  **R6.4** on 2026-08-26, so R5 closes with R5.5.
+  R5.1/R5.2/R5.6/R5.3/R5.7/Q1/Q2 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
   explainers (joint period, comb alignment, Plomp–Levelt roughness) — still blocked until
-  the user resolves the two docs/THEORY.md §2.5 numeric caveats. Educational tone: measure
+  the user resolves the two docs/THEORY.md §2.5 numeric caveats (R6.4 is not blocked: it is
+  plumbing, not physics). Educational tone: measure
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 259, headless 64, plus
+- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 267, headless 64, plus
   all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -566,7 +603,8 @@ build educational copy from it, never re-derive from scratch.
   (the comb being held) and `data-sgclusters="<count>"` (R5.3 collision marks actually
   **drawn**, after the x-stride thinner — not the number of clusters found), all absent
   when there is nothing to report,
-  `?sgcmap=<magma|inferno|viridis|cividis|parula>`, `?sgtrack=<white|black|triad>`,
+  `?sgcmap=<parula|viridis|cividis|magma|inferno>`,
+  `?sgtrack=<white|black|yellow|red|triad>`,
   `?sgdash=<dash|dot|fine|solid>` (default **dash** since R5.7), `?sghue=<0|1>` (R5.7's
   String-hues modifier) and `?sgtriad=<RRGGBB,RRGGBB,RRGGBB>` (the three Triad colors, root
   first; each validated
@@ -633,8 +671,9 @@ build educational copy from it, never re-derive from scratch.
   metrics integrate 60 Hz–20 kHz only; octave smoothing off/1-12/1-6/1-3; peak detection
   always on 1/6-oct curve. Spectrogram 2048-pt Hann, 256 log cells 60 Hz–20 kHz,
   **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale,
-  drawn in one of **five** perceptual colormaps (`CMAP_HEX`: magma — the default — inferno,
-  viridis, cividis, parula; `state.sgCmap`, named on the status chip). Like every data
+  drawn in one of **five** perceptual colormaps (`CMAP_HEX`, selector order = `CMAP_NAMES`:
+  **parula — the default** — viridis, cividis, magma, inferno; `state.sgCmap`, named on the
+  status chip; `_CMAPS` stays pre-seeded with `MAGMA`, so magma is byte-identical and free). Like every data
   palette they **never theme**: the map is the user's choice, not the theme's;
   individual panes get
   a Free / File-time / First-onset time-axis choice; envelope overlay
@@ -716,10 +755,10 @@ build educational copy from it, never re-derive from scratch.
   `E2 ×3 = B3` inside R3's locked tier, `E2 ×5 ≈ G♯4` outside it (the 5th harmonic really
   is 14 ¢ flat of the tempered note — the `≈` is the lesson, THEORY §1/§5). Labels draw
   highest-first and are **skipped, never smeared**, within 12 px. The draw order is
-  image → **scrim** (`state.sgScrim`, default 0.45, 0–90 % range, `?sgscrim=`) → chrome →
+  image → **scrim** (`state.sgScrim`, default **0.10**, 0–90 % range, `?sgscrim=`) → chrome →
   tracks → labels: the sheet separates prediction from measurement and appears **only when
   a comb does**. Holding the mouse on a track sets `state.sgFocus` to its **string** (comb,
-  not line) and dims every other comb to `1 − state.sgDim` (default 0.85, 0–95 %,
+  not line) and dims every other comb to `1 − state.sgDim` (default **0.80**, 0–95 %,
   `?sgdim=`); a >3 px drag hands off to the zoom box. `sgScrim`/`sgDim`/`sgFocus` are view
   state like `sgFrets` — unpersisted, unexported, not in the refine cache key — and their
   ranges ship disabled until something is overlaid.
@@ -731,16 +770,27 @@ build educational copy from it, never re-derive from scratch.
   labels' vertical guard. Clicking one opens `clusterRatio()`'s reading of the chord —
   fundamentals go as `1/h_i`, octave duplicates folded, named only where docs/THEORY.md
   fixes the ratio (`4:5:6`, `10:12:15`, five intervals) and left as a bare ratio otherwise.
+  The two marks come with a **key** drawn above the plot (session 26): both stars again, as
+  the pane draws them, each on an 18×18 chip of `cmapColor(cmap,.05)`, labelled from
+  `COINCIDENCE_CENTS` — never a number typed into a caption. It lives in a dynamic top
+  margin (`SG_MT_BASE 30 → SG_MT_KEY 52`, set before `pH` is derived) keyed off
+  **`model.clusters`, the whole set** — `SGPLOT` is a singleton the crosshair reads live, so
+  a per-pane margin would measure one pane against another's geometry.
   **Track color and dash (look pass, rewritten at R5.7):** `SG_TRACKS` is
-  **White / Black / Triad** (Cyan and Magenta removed) and `SG_DASHES` is
+  **White / Black / Bright yellow / Bright red / Triad** (Cyan and Magenta removed; the two
+  bright colors added session 26) and `SG_DASHES` is
   **Dashes `[6,4]` — the default** / Dots `[2,4]` / Fine `[1,3]` / Solid; fundamentals are
   always solid. **String hues is a separate checkbox modifier** (`state.sgHue`, default
-  **off**) that tints whichever color is chosen — it was never a color of its own — and a
+  **off**) that tints whichever color is chosen at a **0.30** mix (0.62 was replacement, not
+  tint) — it was never a color of its own — and a
   **halo is drawn only under that modifier** (`halo = !!model.hue`), so a plain White or
   Black track is one 1.4 px stroke, which is the point of offering it. **Triad** paints
   root/third/fifth of the sounding chord (`triadDegrees()` in block 0) with every harmonic
   in its own note's color; its three pickers are `disabled` outside Triad and default to
-  colors **measured** for mutual distinctness and contrast against parula, not chosen by eye.
+  **white / bright yellow / bright red** — the palette the user named (session 26), replacing
+  R5.7's measured pick. Min pairwise ΔE is still 97.0, but parula *ends* in bright yellow, so
+  the third's track sits ΔE 2.8 from the hottest cells: a known cost, recorded in the gate's
+  own comment rather than hidden behind a floor the palette no longer meets.
   **Nothing is overlaid by default** — the note selector starts at `None` — and the harmonic
   labels sit **outside the plot** in the right margin, which `SGPLOT.mR` widens (98 → 150)
   whenever a comb exists. `sgCmap`/`sgTrack`/`sgDash`/`sgHue`/`sgTriad` are

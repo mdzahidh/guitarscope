@@ -1006,14 +1006,14 @@ kbd{
           <div class="ctlgroup">
             <span>Legibility</span>
             <label class="rangelbl" title="How far the spectrogram is dimmed under the tracks. The sheet is drawn between the measurement and the prediction, so the lines read as an overlay.">Sheet
-              <input type="range" id="sgScrimRange" min="0" max="90" step="5" value="45" disabled
+              <input type="range" id="sgScrimRange" min="0" max="90" step="5" value="10" disabled
                      aria-label="Spectrogram overlay sheet opacity">
-              <output id="sgScrimOut">45%</output>
+              <output id="sgScrimOut">10%</output>
             </label>
             <label class="rangelbl" title="How far the other combs recede while one is held. Press and hold a track to follow it.">Hold fade
-              <input type="range" id="sgDimRange" min="0" max="95" step="5" value="85" disabled
+              <input type="range" id="sgDimRange" min="0" max="95" step="5" value="80" disabled
                      aria-label="Spectrogram held-comb fade">
-              <output id="sgDimOut">85%</output>
+              <output id="sgDimOut">80%</output>
             </label>
           </div>
           <div class="ctlgroup">
@@ -2299,8 +2299,8 @@ const CMAP_HEX = {
     "c83bf2c839f3c938f4ca37f5ca36f6cb34f7cb33f9cc32facd31fbcd2ffcce2efccf2dfcd12cfcd22bfcd32afcd529fbd628fbd827fbd926fbdb25fbdc24fbdd" +
     "23fbdf22fbe021fbe220fbe31ffbe41efae61dfae71cfae91bfaea1afaeb19faed18faee17faf016faf115faf314f9f413f9f512f9f711f9f810f9fa0ff9fb0e"
 };
-const CMAP_NAMES = ["magma","inferno","viridis","cividis","parula"];
-const _CMAPS = { magma: MAGMA };
+const CMAP_NAMES = ["parula","viridis","cividis","magma","inferno"];
+const _CMAPS = { magma: MAGMA };   // pre-seeded: magma stays byte-identical to MAGMA
 function cmapTable(name){
   const key = CMAP_HEX[name] ? name : "magma";
   let t = _CMAPS[key];
@@ -3869,10 +3869,21 @@ function sgramImage(sg, dbMax, dbMin, dbOffset, cmap){
 // _sgTrackAt() afterwards, so the hit-test always agrees with what was drawn.
 const SGPLOT={mL:52, mR:98, mT:30, mB:34};
 const SG_MR_BASE=98, SG_MR_LABELS=150;
+// The top margin carries the filename and the status chip. When collision marks are
+// drawn it carries a second row too — the key that says what a filled mark means and
+// what a hollow one means (a star alone cannot say it). Dynamic for the same reason mR
+// is: the row must never eat into the image, and it must vanish when there is no mark.
+const SG_MT_BASE=30, SG_MT_KEY=52;
 
 function drawSpectrogramScene(ctx, w, h, model, hits){
   const {sg, image, name, color, onsets, dbMax, dbMin}=model;
   SGPLOT.mR=(model.comb&&model.comb.length)?SG_MR_LABELS:SG_MR_BASE;
+  // Asked here, before pH and yOfF are derived from mT, because the answer decides mT.
+  // Deliberately the whole cluster set, not the ones inside this pane's zoom window:
+  // clusters come from the comb, which is global, so both panes lay out identically and
+  // the crosshair -- which reads SGPLOT live, after whichever pane drew last -- can never
+  // read one pane's margin against another pane's pixels.
+  SGPLOT.mT=(model.clusters&&model.clusters.length)?SG_MT_KEY:SG_MT_BASE;
   const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
   const dur=sg.duration;
   // view = display-time window [T0,T1]; the file occupies [d0, d0+dur].
@@ -4076,6 +4087,37 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
       if(hits) hits.push({x:x-R-5, y:y-R-5, w:2*R+10, h:2*R+10, cluster:cl});
     }
     ctx.restore();
+
+    // ...and the key that reads them. Two marks drawn exactly as they are drawn on the
+    // image — including the black halo — each sitting on a chip of the colormap's own
+    // floor, because a light neutral star on a light panel would be invisible and the
+    // point of a key is to show the thing itself. Wording follows the popover the mark
+    // opens (locked = the same pitch, not neighbouring ones; tempered = a near miss the
+    // ear hears as beating), so the two can never say different things. Cents come from
+    // the tier constants, never a typed-in number.
+    const ky=SG_MT_BASE+11;
+    const kfloor=cmapColor(model.cmap||CMAP_NAMES[0], 0.05);
+    ctx.save();
+    ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="middle";
+    ctx.lineJoin="round"; ctx.setLineDash([]);
+    let kx=SGPLOT.mL+11;
+    const kItems=[["locked","same pitch — inside "+COINCIDENCE_CENTS+" \u00a2"],
+                  ["tempered","a near miss — you hear it beating"]];
+    for(const [ktier,klabel] of kItems){
+      const kw=11+ctx.measureText(klabel).width;
+      // skip rather than smear: the key stays inside the plot's own width
+      if(kx+kw>SGPLOT.mL+pW) break;
+      ctx.fillStyle="rgb("+kfloor[0]+","+kfloor[1]+","+kfloor[2]+")";
+      ctx.fillRect(kx-9, ky-9, 18, 18);
+      ctx.strokeStyle="rgba(0,0,0,0.8)"; ctx.lineWidth=3;
+      starPath(ctx,kx,ky,5.5); ctx.stroke();
+      if(ktier==="locked"){ ctx.fillStyle="rgba(247,242,232,0.96)"; starPath(ctx,kx,ky,5.5); ctx.fill(); }
+      else { ctx.strokeStyle="rgba(247,242,232,0.96)"; ctx.lineWidth=1.6; starPath(ctx,kx,ky,5.5); ctx.stroke(); }
+      ctx.fillStyle=cssColor("mut");
+      ctx.fillText(klabel, kx+11, ky+0.5);
+      kx+=kw+20;
+    }
+    ctx.restore();
   }
 
   // colorbar: the exact colormap → dB mapping the image used (pinned at the
@@ -4249,20 +4291,29 @@ function drawEqSlider(ctx, x, yTop, yBot, t, valueText, freqText){
   ctx.fillStyle=cssColor("dim"); ctx.fillText(freqText, x, yBot+13);
 }
 function drawEqShapeGlyph(ctx, cx, cy, type, up){
-  // 26×14 miniature of the band shape, sign-aware
-  const x0=cx-13, x1=cx+13, y0=cy+(up?4:-4), dy=up?-8:8;
+  // 26×14 miniature of the band shape, sign-aware. The flat half sits ON a faint
+  // 0 dB reference and only the band's own half leaves it, so the glyph says two
+  // things at once: WHICH side of fc the band owns (low = left, high = right), and
+  // whether it boosts or cuts. Without that reference the whole curve floated on cy
+  // — a LO SHELF cut and a HI SHELF boost drew the same rising line, which is what
+  // made the two icons indistinguishable.
+  const x0=cx-13, x1=cx+13, dy=up?-5:5;
+  ctx.strokeStyle=cssRGBA("ink-rgb",0.16); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x0,cy+0.5); ctx.lineTo(x1,cy+0.5); ctx.stroke();
   ctx.strokeStyle=cssRGBA("ink-rgb",0.55); ctx.lineWidth=1.2; ctx.lineJoin="round";
   ctx.beginPath();
   if(type==="peak"){
-    ctx.moveTo(x0,y0);
-    ctx.bezierCurveTo(cx-5,y0, cx-5,y0+dy, cx,y0+dy);
-    ctx.bezierCurveTo(cx+5,y0+dy, cx+5,y0, x1,y0);
+    ctx.moveTo(x0,cy);
+    ctx.bezierCurveTo(cx-5,cy, cx-5,cy+dy, cx,cy+dy);
+    ctx.bezierCurveTo(cx+5,cy+dy, cx+5,cy, x1,cy);
   }else if(type==="lowshelf"){
-    ctx.moveTo(x0,y0+dy);
-    ctx.bezierCurveTo(cx-3,y0+dy, cx+3,y0, x1,y0);
+    ctx.moveTo(x0,cy+dy); ctx.lineTo(cx-7,cy+dy);
+    ctx.bezierCurveTo(cx-2,cy+dy, cx+2,cy, cx+7,cy);
+    ctx.lineTo(x1,cy);
   }else{ // highshelf
-    ctx.moveTo(x0,y0);
-    ctx.bezierCurveTo(cx-3,y0, cx+3,y0+dy, x1,y0+dy);
+    ctx.moveTo(x0,cy); ctx.lineTo(cx-7,cy);
+    ctx.bezierCurveTo(cx-2,cy, cx+2,cy+dy, cx+7,cy+dy);
+    ctx.lineTo(x1,cy+dy);
   }
   ctx.stroke();
 }
@@ -4444,11 +4495,11 @@ const state={ slots:[null,null], tuning:"estd", customOffset:0,
               // R5.6 legibility: the sheet under the tracks, how far an unheld comb
               // recedes, and which comb is being held right now. Debugging aids and a
               // transient gesture — never persisted, never exported (see saveSettings).
-              sgScrim:0.45, sgDim:0.85, sgFocus:null,
+              sgScrim:0.10, sgDim:0.80, sgFocus:null,
               // The look of the picture and of the lines drawn on it. Same class as
               // the R5.6 keys above: view state, not analysis — unpersisted, never
               // exported, and not part of the refine cache key.
-              sgCmap:"magma", sgTrack:"white", sgDash:"dash", sgHue:false, sgTriad:null };
+              sgCmap:"parula", sgTrack:"white", sgDash:"dash", sgHue:false, sgTriad:null };
 // M2.7: gate hook — ?refine=0 disables the zoom refine (never persisted, no UI)
 const _refineEnabled = !/[?&]refine=0(?:&|$)/i.test(location.search);
 // A pan or a wheel writes ZOOMS and redraws on every event, so the refine waits
@@ -4944,7 +4995,7 @@ function sgramModelFor(i,scale){
   const s=state.slots[i], tv=s&&s.tvis;
   if(!tv||!tv.sg) return null;
   const off=i===1?sgLmDb():0;
-  const cm=state.sgCmap||"magma";
+  const cm=state.sgCmap||CMAP_NAMES[0];
   // Two keys: gkey is the analysis the refine asks for, key adds the colormap.
   // Recoloring must never re-run an FFT — it is a look, not a measurement.
   const gkey=scale.dbMax+"|"+scale.dbMin+"|"+off.toFixed(4);
@@ -6019,7 +6070,7 @@ function updateDiffSub(){
 function updateSgramSub(){
   const align=state.sgAlign==="file"?" · shared time axis"
     :state.sgAlign==="onset"?" · time axes aligned at each file's first onset":"";
-  const cm=" · "+(state.sgCmap||"magma")+" colormap";
+  const cm=" · "+(state.sgCmap||CMAP_NAMES[0])+" colormap";
   sgramSub.textContent=bothLoaded()
     ? "time–frequency energy, shared color scale across A and B"+
       (sgLmDb()?" · level-match applied to B":"")+align+cm
@@ -6503,15 +6554,19 @@ function _setStringColor(si, hex, commit){
 const SG_TRACKS={
   white:{label:"White", rgb:[255,255,255]},
   black:{label:"Black", rgb:[0,0,0]},
+  yellow:{label:"Bright yellow", rgb:[255,255,0]},
+  red:{label:"Bright red", rgb:[255,0,0]},
   triad:{label:"Triad", triad:true}
 };
-const SG_TRACK_NAMES=["white","black","triad"];
-// Root / third / fifth. Measured, not chosen by eye: maximise the minimum pairwise CIE
-// ΔE subject to a floor on ΔE against every one of parula's 256 entries (the busiest
-// background a line here sits on) and L* ≥ 50. Result: min pairwise ΔE 145.7, each at
-// least 65 ΔE from all of parula. Pure primaries score higher pairwise but drop blue to
-// L* 32, which reads as a hole in the line rather than a color.
-const SG_TRIAD_DEFAULT=["#ff4400","#00ff00","#cc00ff"];
+const SG_TRACK_NAMES=["white","black","yellow","red","triad"];
+// Root / third / fifth — the user's stated choice (2026-08-26), replacing the
+// contrast-optimised set. They are still far apart from each other: minimum pairwise
+// CIE ΔE 97.0 (white↔yellow), well past the ~90 that keeps three voices of one chord
+// legible. What they no longer guarantee is separation from the picture behind them:
+// bright yellow is ΔE 2.8 from parula's top entry, so a third landing in the hottest
+// cells of a parula pane fades into them. Measured, said plainly, and kept — the colour
+// is the user's call, and the four fixed track colours below cover the other cases.
+const SG_TRIAD_DEFAULT=["#ffffff","#ffff00","#ff0000"];
 const SG_DASHES={
   fine:{label:"Fine dots", pat:[1,3]},
   dot:{label:"Dots", pat:[2,4]},
@@ -6530,7 +6585,7 @@ function _mixRgb(a, b, t){ return [0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*t))
 // identical in Bright and Dark.
 function _trackHueRgb(si){ return liftForDark(_hexRgb((state.stringColors&&state.stringColors[si%6])||STRING_COLORS[si%6]), 0.62); }
 // The paint for one partial: its base color (fixed, or the Triad slot its string's chord
-// degree maps to), optionally mixed toward that string's data hue by the String-hues
+// degree maps to), optionally tinted toward that string's data hue by the String-hues
 // modifier. The model carries both, so the draw pass still reads nothing but its model.
 function _trackBaseRgb(model, key){
   const tk=SG_TRACKS[model.track]||SG_TRACKS.white;
@@ -6543,7 +6598,11 @@ function _trackBaseRgb(model, key){
 }
 function _trackPaint(model, key, alpha){
   let rgb=_trackBaseRgb(model, key);
-  if(model.hue) rgb=_mixRgb(rgb, _trackHueRgb(key), 0.62);
+  // A tint, not a substitution (2026-08-26, user): at the old 0.62 the string hue won
+  // and the chosen color barely showed, which made String hues read as a sixth entry in
+  // the color list rather than a modifier on the one already picked. At 0.30 the base
+  // color still names the track and the hue only says which string it belongs to.
+  if(model.hue) rgb=_mixRgb(rgb, _trackHueRgb(key), 0.30);
   return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
 }
 // Eight open chords — the user's case (b) (ROADMAP R5.2). Frets are per-string
@@ -7869,7 +7928,7 @@ function boot(){
   // The look of the picture and of the lines on it (user request, 2026-08-26).
   // A colormap change repaints from the cached analysis — see sgramModelFor().
   if(sgCmapSel) sgCmapSel.addEventListener("change",()=>{
-    state.sgCmap=CMAP_HEX[sgCmapSel.value]?sgCmapSel.value:"magma";
+    state.sgCmap=CMAP_HEX[sgCmapSel.value]?sgCmapSel.value:CMAP_NAMES[0];
     updateSgramSub(); requestDraw();
   });
   if(sgTrackSel) sgTrackSel.addEventListener("change",()=>{
@@ -8301,7 +8360,7 @@ function boot(){
     state.sgDim=v/100; if(sgDimRange) sgDimRange.value=String(v); if(sgDimOut) sgDimOut.textContent=v+"%"; requestDraw(); }
   const sgfc=location.search.match(/[?&]sgfocus=([0-5])(?:&|$)/i);                 // test hook — holds a comb without a mouse
   if(sgfc){ const k=parseInt(sgfc[1],10); if(state.sgFrets[k]!=null){ state.sgFocus=k; requestDraw(); } }
-  const sgcm=location.search.match(/[?&]sgcmap=([a-z]+)(?:&|$)/i);                 // test hook — an unstocked name keeps magma
+  const sgcm=location.search.match(/[?&]sgcmap=([a-z]+)(?:&|$)/i);                 // test hook — an unstocked name keeps the default
   if(sgcm&&CMAP_HEX[sgcm[1].toLowerCase()]){ state.sgCmap=sgcm[1].toLowerCase();
     if(sgCmapSel) sgCmapSel.value=state.sgCmap; updateSgramSub(); requestDraw(); }
   const sgtk=location.search.match(/[?&]sgtrack=([a-z]+)(?:&|$)/i);                // test hook

@@ -1193,6 +1193,9 @@ means "this hue comes from the colormap's neighbourhood, so it needs separating.
   *R5.7 rewrote both tables: Cyan and Magenta are gone, String hues stopped being an entry
   and became a checkbox modifier, Triad joined, and the default dash went back to `[6,4]`.
   The `halo = !tk.rgb` test became `halo = !!model.hue`. See "R5.7" below.*
+  *Session 26 stocked two more fixed colors — Bright yellow and Bright red — and reordered
+  `CMAP_NAMES` to `parula, viridis, cividis, magma, inferno`, making **parula** the default.
+  See "Small changes a/b/c" below.*
 - **Block 3, the draw pass.** With a fixed color: no halo, one 1.4 px stroke — a third of the
   ink R5.1a laid down. With String hues: unchanged from R5.1a (5 px black at 0.75α, then
   2.5 px lifted hue). The fundamental is always solid; `model.dash` styles the harmonics.
@@ -1254,11 +1257,16 @@ string it came from.
   three is 145.7 (the gate demands > 90), and each one's minimum ΔE to any of parula's 256
   entries is > 40. The user asked for "most distinct perceptually and highest contrast with
   parula"; that is a number, so it is asserted as one.
+  *Superseded in session 26: the user named the palette outright — white / bright yellow /
+  bright red — so the defaults are now a **stated** choice, not a measured one. The pairwise
+  floor still holds (min ΔE 97.0); the background floor does not, and the cost is recorded
+  rather than papered over. See "Small changes a/b/c" below.*
 - **String hues became a modifier.** It was never a color — it is "tint by origin", which is
   orthogonal to "which voice is this". `state.sgHue` (default **off**) is a checkbox;
   `_trackPaint(model, key, alpha)` resolves the base color (`white`/`black`/the triad slot)
   and, when the modifier is on, mixes it toward `_trackHueRgb(si)` and re-enables the 5 px
-  black halo. **The halo is now a property of the modifier**, not of the color table:
+  black halo. *(The mix ran at 0.62 until session 26, which is closer to replacement than
+  tint; it is 0.30 now — the chosen color has to survive the modifier.)* **The halo is now a property of the modifier**, not of the color table:
   `const halo = !!model.hue`. Cyan and Magenta were removed on the user's instruction.
 - **Default dash back to `[6,4]`.** The look pass made fine `[1,3]` the default against the
   magma background; with the labels outside the plot and fewer lines by default, the user
@@ -1351,6 +1359,65 @@ searched was too big. The old `drawStringAxis` slice ran to the next `"\nfunctio
 The fix is to **brace-match the function**, and the general rule is: *an assertion that reads
 source must scope to the smallest construct that can hold the thing it claims* — then delete the
 code and confirm it goes red.
+
+## Small changes a/b/c (session 26): a glyph that lied, defaults from real material, and a key
+
+**(a) The shelf glyph contradicted its own name.** `drawEqShapeGlyph` drew every shape
+centred on the box, so both halves of a shelf floated on nothing: a low-shelf **cut** and a
+high-shelf **boost** produced the same picture, and the two Logic-EQ band icons were
+indistinguishable. The fix is one line of context — a faint 0-dB reference stroked across the
+box in `cssRGBA("ink-rgb", 0.16)` — plus **anchoring the flat half of each shelf on it**. A
+low shelf sits on the reference to the right of the corner and departs to the left; a high
+shelf is the mirror; `dy = up ? -5 : +5` carries the sign. Four distinguishable pictures for
+four cases.
+
+  The report carried a question worth answering in the docs, because the naming trips people:
+  **low/high names the side of the corner frequency, not the direction.** A shelf boosts or
+  cuts by the sign of `gainDb`, and the least-squares fit hands either sign to either shelf.
+  The RBJ math was already right; only the icon was wrong.
+
+**(b) Defaults, and one place a measured floor was retired.** `CMAP_NAMES` is reordered to
+`parula, viridis, cividis, magma, inferno` — the head of that list is both the selector's
+first row and the default, so one edit does both. `_CMAPS` stays pre-seeded with `MAGMA`, so
+**magma remains byte-identical and costs nothing** even though it is no longer what you open
+on; three internal fallbacks that said `"magma"` now say `CMAP_NAMES[0]`, so the default can
+move again without hunting literals. Scrim 45 % → **10 %**, hold fade 85 % → **80 %**.
+`SG_TRACKS` gains Bright yellow and Bright red.
+
+  **String hues mixes at 0.30, not 0.62.** At 0.62 the modifier was effectively a substitution
+  — the checkbox promised a tint and delivered a different color. The R5.1a lift that produced
+  0.62 was solving a different problem (a hue read against the magma), and that problem is now
+  the *halo's*.
+
+  **The Triad palette is a stated choice now, not a measured one.** R5.7 asserted two floors:
+  min pairwise ΔE > 90 and min ΔE > 40 against every parula entry. White/yellow/red keeps the
+  first (97.0) and fails the second, because **parula ends in bright yellow** (`#f9fb0e`) —
+  the third's track measures ΔE **2.8** from the hottest cells and vanishes inside them. When
+  the user names a palette, the gate pins the palette; the measurement that no longer holds is
+  written into the assertion's comment so the next reader sees the trade instead of
+  rediscovering it. (The escape, if it bites in use: pick a different colormap, or switch the
+  third off the default.)
+
+**(c) The collision key, and a margin that must not vary per pane.** The R5.3 pass draws both
+marks a second time above the plot — filled and hollow, halo and all, **as the pane draws
+them**, never described in words — each on an 18×18 chip of `cmapColor(cmap, 0.05)`, because
+the marks are fixed cream and a cream star on a cream panel is invisible. The tolerance in the
+label prints from `COINCIDENCE_CENTS`; a number typed into a caption is a number that can
+drift from the detector. The row skips rather than smears if it would reach the plot's right
+edge.
+
+  `SGPLOT.mT` is dynamic for the same reason `mR` is — `SG_MT_BASE 30 → SG_MT_KEY 52`, set at
+  the head of `drawSpectrogramScene` **before `pH` is derived from it**. The subtle part is
+  what it keys off: **`model.clusters`, the whole set**, not the marks that survive this pane's
+  zoom window. `SGPLOT` is a module-level singleton, written by whichever pane drew last and
+  read *live* by `attachSgramCrosshair` and `_sgTrackAt`; a margin that differed between A and
+  B would have the crosshair measuring one pane's pixels against the other's geometry. Any
+  future dynamic margin must obey the same rule: **depend only on pane-invariant model
+  fields.** A pane with no clusters keeps `mT = 30`, so nothing moves until something is found.
+
+Gate: `tests/r5.test.js` 259 → **267**, all new and changed assertions mutation-checked; no
+new suite, no new `verify.sh` step, no headless launch — the rot risk here is source-shaped.
+The key is canvas drawing **outside** the R5.3 sentinels, so no frozen copy block moved.
 
 ## Hard-won correctness notes (dead ends — do not retry)
 

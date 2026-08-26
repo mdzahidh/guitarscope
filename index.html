@@ -2750,6 +2750,45 @@ function divergeColor(t){
            Math.round(DIVERGE_NEUTRAL[2] + (c[2]-DIVERGE_NEUTRAL[2])*a) ];
 }
 
+// ---------- near-floor disclosure on the LTAS Difference (R5.5) ----------
+// The Difference is a log-ratio per bin; the Band Energy share is a linear power
+// integral. A 0 % share beside a large per-bin delta is not a contradiction — it is
+// two views of the floor. Rather than warp the delta, say where both curves sit so
+// low that whatever separates them cannot be heard.
+// Either test marks a bin: absolute (nothing this quiet survives any sane monitoring
+// level) OR relative (45 dB under this spectrum's own loudest point, i.e. buried under
+// its own body). The looser of the two floors therefore wins, so a hot recording is
+// judged against its own peak and a quiet one against full scale. The mark is a
+// disclosure, never a rewrite — the floor it used is printed on the plot, so the claim
+// is a stated measurement rather than an unexplained verdict.
+const NEARFLOOR_ABS_DB = -60;   // dB re full-scale sine
+const NEARFLOOR_REL_DB = 45;    // below the loudest point of either curve
+// A lone bin that dips under the floor between audible neighbours is a notch in an
+// audible region, not a floor region — and one grid point of faint fill inside a solid
+// one reads as a rendering artefact. Runs shorter than this are dropped. The log grid
+// runs ~84 points per octave, so 4 points is about half a semitone wide.
+const NEARFLOOR_MIN_RUN = 4;
+function nearFloorDb(a, b){
+  const n = Math.min(a.length, b.length);
+  let peak = -Infinity;
+  for(let i=0;i<n;i++){ if(a[i]>peak) peak=a[i]; if(b[i]>peak) peak=b[i]; }
+  if(!isFinite(peak)) return -Infinity;
+  return Math.max(NEARFLOOR_ABS_DB, peak - NEARFLOOR_REL_DB);
+}
+function nearFloorMask(a, b){
+  const n = Math.min(a.length, b.length), m = new Uint8Array(n);
+  const floor = nearFloorDb(a, b);
+  if(!isFinite(floor)) return m;
+  for(let i=0;i<n;i++) if(Math.max(a[i],b[i]) < floor) m[i]=1;
+  for(let i=0;i<n;){                       // drop runs shorter than NEARFLOOR_MIN_RUN
+    if(!m[i]){ i++; continue; }
+    let j=i+1; while(j<n && m[j]) j++;
+    if(j-i < NEARFLOOR_MIN_RUN) for(let k=i;k<j;k++) m[k]=0;
+    i=j;
+  }
+  return m;
+}
+
 // ==== [NODE-TEST BOUNDARY] ==== everything below touches DOM / Web Audio ====
 </script>
 <script>
@@ -3791,26 +3830,44 @@ function drawDiffScene(ctx, w, h, model, hits){
   const {grid, diff}=model;
   ctx.save();
   ctx.beginPath(); ctx.rect(PLOT.mL-1, 0, pW+2, h); ctx.clip(); // x-clip (see drawCurve)
+  // R5.5: walk the curve in runs of equal near-floor state. Runs overlap by one point
+  // so neighbours meet with no seam; a run where both curves sit under the floor draws
+  // faint — fill included, since the fill is what shouts "big difference here" — and
+  // dashed. Nothing about the values changes; only what they claim.
+  const nf=model.nearFloor, runs=[];
+  for(let i0=0;i0<grid.length;){
+    const near=nf?nf[i0]:0;
+    let i1=i0+1;
+    while(i1<grid.length && (nf?nf[i1]:0)===near) i1++;
+    runs.push([Math.max(0,i0-1), i1, near]);
+    i0=i1;
+  }
   // sign-split fills: above zero = A louder (A color), below = B louder
-  for(const sign of [1,-1]){
-    ctx.beginPath();
-    ctx.moveTo(xOfF(grid[0],w), yOf(0));
-    for(let i=0;i<grid.length;i++){
-      const v=diff[i];
-      ctx.lineTo(xOfF(grid[i],w), yOf(sign>0 ? Math.max(0,v) : Math.min(0,v)));
+  for(const [start,end,near] of runs){
+    for(const sign of [1,-1]){
+      ctx.beginPath();
+      ctx.moveTo(xOfF(grid[start],w), yOf(0));
+      for(let i=start;i<end;i++){
+        const v=diff[i];
+        ctx.lineTo(xOfF(grid[i],w), yOf(sign>0 ? Math.max(0,v) : Math.min(0,v)));
+      }
+      ctx.lineTo(xOfF(grid[end-1],w), yOf(0));
+      ctx.closePath();
+      ctx.fillStyle=withAlpha(sign>0?model.colorA:model.colorB, near?0.06:0.20);
+      ctx.fill();
     }
-    ctx.lineTo(xOfF(grid[grid.length-1],w), yOf(0));
-    ctx.closePath();
-    ctx.fillStyle=withAlpha(sign>0?model.colorA:model.colorB, 0.20);
-    ctx.fill();
   }
-  ctx.beginPath();
-  for(let i=0;i<grid.length;i++){
-    const x=xOfF(grid[i],w), y=yOf(diff[i]);
-    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  ctx.lineWidth=1.3; ctx.lineJoin="round";
+  for(const [start,end,near] of runs){
+    ctx.beginPath();
+    for(let i=start;i<end;i++){
+      const x=xOfF(grid[i],w), y=yOf(diff[i]);
+      if(i===start) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.setLineDash(near?[4,4]:[]);
+    ctx.strokeStyle=cssRGBA("ink-rgb", near?0.40:0.75);
+    ctx.stroke();
   }
-  ctx.strokeStyle=cssRGBA("ink-rgb",0.75); ctx.lineWidth=1.3; ctx.lineJoin="round";
-  ctx.stroke();
   ctx.restore();
   // side labels
   ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="middle";
@@ -5181,8 +5238,13 @@ function buildDiffModel(){
   // (diff of the smoothed displays) — so the diff plot prints the same status chip.
   let st=statusText();
   if(z) st+=" · "+zoomNoteFor("diff");
+  // R5.5: the delta stays raw; the plot discloses where it is a difference of silences.
+  const nf=nearFloorMask(dispDb[0],dispDb[1]);
+  let nNear=0; for(let i=0;i<nf.length;i++) nNear+=nf[i];
+  if(nNear) st+=" · dashed = both below "+nearFloorDb(dispDb[0],dispDb[1]).toFixed(0)+" dB (≈ inaudible)";
   const dmarkers=stringAxisMarkers();
   return {grid:GRID,diff:diffBuf,yMax:diffYMax,
+    nearFloor:nf, nNearFloor:nNear,
     fv:zoomXf("diff"),
     yLo:z&&z.y0!=null?z.y0:null, yHi:z&&z.y0!=null?z.y1:null,
     statusText:st,
@@ -5204,6 +5266,10 @@ function drawAll(){
     const d=setupCanvas(diffCanvas);
     drawDiffScene(d.ctx,d.w,d.h,dm,diffHits);
   }
+  // R5.5: grid points drawn as "both near floor" — node cannot read the canvas,
+  // and the dashing is the whole disclosure.
+  if(dm && dm.nNearFloor) diffCanvas.setAttribute("data-nearfloor", String(dm.nNearFloor));
+  else diffCanvas.removeAttribute("data-nearfloor");
   const scale=collState.sgram?null:sgramScale();
   if(scale) for(let i=0;i<2;i++){
     const model=sgramModelFor(i,scale);

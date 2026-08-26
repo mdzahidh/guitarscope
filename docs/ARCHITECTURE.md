@@ -1419,6 +1419,62 @@ Gate: `tests/r5.test.js` 259 → **267**, all new and changed assertions mutatio
 new suite, no new `verify.sh` step, no headless launch — the rot risk here is source-shaped.
 The key is canvas drawing **outside** the R5.3 sentinels, so no frozen copy block moved.
 
+## R5.5 (session 26): a difference of silences, disclosed rather than corrected
+
+Two views of the same band can look like they contradict each other. Above ~10 kHz the demo
+pair shows a per-bin Δ of several dB on the **LTAS Difference** while the **Band Energy**
+share for that band reads 0 %. Neither number is wrong: the Difference is a **log-ratio per
+bin**, and a ratio does not care how small its operands are; the share is a **linear power
+integral**, and two very small numbers integrate to nothing. A large Δ where both curves sit
+on the floor is a difference *of silences*.
+
+The house rule fixes what to do about it: keep the raw Δ honest, and **disclose** where it is
+inaudible rather than warp it. A loudness-weighted Δ (A-weighting, or a sone/ERB
+specific-loudness integral) would fold the disclosure into the number itself — deferred, and
+still recorded in ROADMAP, because it replaces a defensible measurement with a modelled one.
+
+- **The predicate is dual, and the looser floor wins.** `nearFloorDb(a,b)` is
+  `Math.max(NEARFLOOR_ABS_DB, peak − NEARFLOOR_REL_DB)` with `-60` dBFS and `45` dB. The
+  absolute test catches what no sane monitoring level would reveal; the relative test catches
+  what is buried under its **own** spectrum's body. Taking the **max** means a hot recording
+  is judged against its own peak and a quiet one against full scale — a single fixed floor
+  would mark half of a quiet take as inaudible. The peak is scanned across **both** curves
+  (the predicate must be symmetric in A and B, or swapping the slots would change the
+  disclosure), and a bin is marked only when **both** curves are under it: one curve alone
+  under the floor is a real, audible difference.
+- **Despeckling belongs in the predicate, not the renderer.** Single grid points dipping under
+  the floor between audible neighbours drew as 1-px light streaks through the solid fill around
+  10–13 kHz. `NEARFLOOR_MIN_RUN = 4` drops runs shorter than four grid points **inside
+  `nearFloorMask`**, because the physical claim is the same as the fix: a lone bin under the
+  floor between audible neighbours is a **notch in an audible region**, not a floor region. In
+  the predicate it is pure, node-testable, and `data-nearfloor` keeps describing exactly what
+  is drawn. In the renderer it would have been an unexplained cosmetic threshold. The log grid
+  runs ≈84 points/octave, so four points is about half a semitone; on the demo pair the count
+  went 61 → 58.
+- **Runs overlap by one point.** `drawDiffScene` walks the curve in runs of equal near-floor
+  state and pushes `[Math.max(0,i0-1), i1, near]`, so consecutive runs share their boundary
+  point and the line has no seam where the style changes. One `runs` array drives both the
+  sign-split fill and the stroke, so fill and line can never disagree about where the floor is.
+- **The fill dims too.** ROADMAP specified the line only (40 % alpha, dashed `[4,4]`). The
+  sign-split fill at 0.20 alpha is what actually shouts *big difference here*, so it drops to
+  0.06 in near-floor runs. A faint dashed line inside a full-strength fill would have
+  contradicted itself.
+- **The footnote prints the floor it used.** `dashed = both below -60 dB (≈ inaudible)`, not a
+  static caption — every visible number defensible. It is appended to the existing status chip
+  only when `nNearFloor > 0`, so a pair with no floor region reads exactly as before.
+- **Zero near-floor points is byte-identical to the pre-R5.5 render.** `runs` collapses to
+  `[[0,N,0]]`, one fill path per sign and one solid stroke — which is why R5.5 needed no new
+  headless launch and why every existing Difference-plot pixel assertion stayed valid.
+- **All four consumers inherit it** because the mask lives on the model: `drawAll`, the magnify
+  overlay, the crosshair readout, and `exportDiffPNG` (PNG = the view). The numeric `+X.X dB`
+  at the crosshair is unchanged — the disclosure qualifies the claim, never the value.
+
+Gate: `tests/r5.test.js` 267 → **284** (6 pure-math on `nearFloorDb`/`nearFloorMask`, 11
+source-read wiring contracts, including an **inverted** one that no delta value is rewritten
+after the mask is built). All mutation-checked in one batched driver; two of them first passed
+vacuously — an empty regex slice satisfies "nothing was written to `diffBuf`" — and were
+strengthened to require a non-trivial body. No new suite, no new `verify.sh` step.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

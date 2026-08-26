@@ -495,21 +495,44 @@ build educational copy from it, never re-derive from scratch.
   margin keyed off anything per-pane would measure one pane's geometry against another's
   pixels. Gate: `tests/r5.test.js` 259 → **267**, no new suite, no new `verify.sh` step, no
   new headless launch, no frozen block touched; all new assertions mutation-checked.
-- **NEXT — R5.5** (tasks + gates in docs/ROADMAP.md — start at its **Milestones at a glance**
-  table; specs in docs/STORY.md, math in docs/THEORY.md; do before M3/M4, which remain gated
-  on explicit user go-ahead): **near-floor disclosure on the LTAS Difference** — dash the
-  segments where both curves sit at the floor, so a large per-bin Δ that is really two views
-  of silence says so. The user calls this the caveat that gates a public release.
+- **R5.5 near-floor disclosure BUILT (session 26) — R5 is closed.** The user's release gate:
+  the LTAS Difference is a **log-ratio per bin** and the Band Energy share is a **linear power
+  integral**, so several dB of Δ above 10 kHz beside a 0 % share is not a contradiction — it is
+  two views of the floor, a difference *of silences*. House rule: keep the raw Δ honest,
+  **disclose** inaudibility rather than warp the number (a loudness-weighted Δ folds the
+  judgement into the value and stays deferred). Block 0 gains `NEARFLOOR_ABS_DB = -60`,
+  `NEARFLOOR_REL_DB = 45`, `NEARFLOOR_MIN_RUN = 4`, `nearFloorDb()` and `nearFloorMask()` —
+  pure, node-tested, no drawing. The floor is the **looser** of the two tests (`Math.max`), so a
+  hot take is judged against its own peak and a quiet one against full scale; the peak scans
+  **both** curves (symmetric in A/B) and a bin is marked only when **both** are under it — one
+  curve alone under the floor is a real difference. `buildDiffModel()` publishes
+  `nearFloor`/`nNearFloor` and all four consumers inherit it (`drawAll`, magnify, crosshair,
+  `exportDiffPNG` — PNG = the view); `drawDiffScene()` walks the curve in runs of equal state
+  that **overlap by one point** so there is no seam, one `runs` array driving both fill and
+  stroke. `diffCanvas` carries `data-nearfloor`. **Three deliberate deviations from the ROADMAP
+  spec:** the footnote prints the *measured* floor (`dashed = both below -60 dB (≈ inaudible)`)
+  rather than a static caption; the **fill** dims 0.20 → 0.06 as well as the line (the fill is
+  what shouts *big difference here*); and `NEARFLOOR_MIN_RUN` was added after visual testing —
+  single-bin dips drew as 1-px streaks at 10–13 kHz, and the despeckle lives **in the predicate**
+  because the physical claim is the fix (a lone bin between audible neighbours is a **notch**,
+  not a floor region), keeping `data-nearfloor` a description of what is drawn. **Zero near-floor
+  points renders byte-identically to before** (`runs === [[0,N,0]]`), which is why no headless
+  assertion moved. Gate: `tests/r5.test.js` 267 → **284** (6 math + 11 source-read, one
+  inverted), all mutation-checked in one batched driver; no new suite, no new `verify.sh` step,
+  no new Chrome launch.
+- **NEXT — the user's visual test.** R5 is closed; nothing is queued. (Tasks + gates in
+  docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
+  in docs/THEORY.md.) M3/M4 remain gated on explicit user go-ahead.
   **R5.4 (bound the overlay in time) is no longer part of R5** — the user moved it into R6 as
-  **R6.4** on 2026-08-26, so R5 closes with R5.5.
-  R5.1/R5.2/R5.6/R5.3/R5.7/Q1/Q2 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
+  **R6.4** on 2026-08-26, so R5 closed with R5.5.
+  R5.1/R5.2/R5.6/R5.3/R5.7/Q1/Q2/R5.5 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
   explainers (joint period, comb alignment, Plomp–Levelt roughness) — still blocked until
   the user resolves the two docs/THEORY.md §2.5 numeric caveats (R6.4 is not blocked: it is
   plumbing, not physics). Educational tone: measure
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 267, headless 64, plus
+- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 284, headless 64, plus
   all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -611,6 +634,9 @@ build educational copy from it, never re-derive from scratch.
   against its own table, an unknown name falling back to the default — these *do* have UI
   controls in the sgram card head, the hooks exist so the gate can set them); every drawn
   pane carries `data-sgcmap` and, when a comb exists, `data-sgtrack`,
+  the LTAS Difference canvas carries `data-nearfloor="<count>"` — grid points drawn as
+  "both curves below the floor" (R5.5), absent when there are none (again: node cannot read a
+  canvas),
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
@@ -683,7 +709,14 @@ build educational copy from it, never re-derive from scratch.
   explicit user flip this session is never overridden, snapshots pre-prime the latch
   (old snapshots' `sgLm` arms it too), dropping to one source re-arms it. Difference
   views have no toggle — they exist whenever two sources do (fold the card to
-  dismiss). Both line plots print the status chip (smoothing · level-match · zoom);
+  dismiss). **Near-floor disclosure (R5.5):** the Difference Δ is never rewritten, but where
+  **both** curves sit under `nearFloorDb()` — the *looser* of −60 dBFS and peak − 45 dB, peak
+  scanned across both curves — that run draws faint (fill 0.06, line alpha 0.40) and dashed
+  `[4,4]`, and the status chip names the floor it used. Runs shorter than
+  `NEARFLOOR_MIN_RUN = 4` grid points are dropped **in the predicate**: a lone bin under the
+  floor between audible neighbours is a notch, not silence. A large Δ where both curves are on
+  the floor is a difference of silences — the Difference is a log-ratio, the Band Energy share
+  is a power integral, and the plot says which one it is showing. Both line plots print the status chip (smoothing · level-match · zoom);
   the header Regions field holds the vocabulary selector. **Strings axis (M2.6b):**
   header toggle (default off, `gsStrings`, "S" key) draws open-string fundamentals as
   dotted verticals labeled on the **bottom** axis of both frequency line plots; labels

@@ -60,7 +60,7 @@ CLAUDE.md status list and the SPEC.md changelog.
 | **R5.7** | Nothing overlaid by default; labels outside the plot; Triad colors that mean the chord. | ✅ done | `### R5.7 — nothing on by default` |
 | **Q1** | Quality of life: A/B color keys, EQ "Reshape", solid-vs-dashed harmonics on the line plots with user-set hues. | ✅ done | `### Q1 — quality-of-life batch a/b/c` |
 | **Q2** | Small changes: the shelf glyph that lied, defaults from real material, a key for the two stars. | ✅ done | `### Q2 — small changes a/b/c` |
-| **R5.5** | **Near-floor disclosure on the LTAS Difference** — say where a large Δ is two views of the floor rather than a real difference. | 🔨 next | `### R5.5 — near-floor disclosure` |
+| **R5.5** | **Near-floor disclosure on the LTAS Difference** — say where a large Δ is two views of the floor rather than a real difference. | ✅ done | `### R5.5 — near-floor disclosure` |
 | **R6** | **Interval consonance explainer** — joint period, comb alignment, Plomp–Levelt/Sethares roughness. Now also carries **R6.4**, the overlay's time bound (was R5.4). | ⏸ blocked: two `docs/THEORY.md` §2.5 numeric caveats are unresolved (R6.4 is not blocked) | `# R6 — Interval consonance explainer` |
 | **Warped sgram difference** | Replace the removed pixel-wise spectrogram difference with an onset-warped / DTW one. | ⏸ deferred until after R6 | `### Deferred — warped spectrogram difference` |
 | **M3** | Live input; still owes the task-based entry points deferred from M2. | 🚫 gated on explicit user go-ahead | `# Gated` |
@@ -1359,14 +1359,14 @@ rather than quietly dropped.
 headless launch, no frozen copy block moved (the key is drawn on canvas, outside the R5.3
 sentinels). All new assertions mutation-checked.
 
-### R5.5 — near-floor disclosure on the LTAS Difference (small, after R5.2)
+### R5.5 — near-floor disclosure on the LTAS Difference — BUILT (session 26)
 
 The LTAS Difference is a log-ratio per bin; the Band Energy share is a linear power
 integral. A 0 % share above 10 kHz alongside a large per-bin Δ in the same band is
 not a contradiction — it is two views of the floor. The house rule is to keep the raw
 Δ honest and to disclose where it is inaudible rather than to warp the number.
 
-*Do next, before a loudness-weighted metric:* when both curves are near the floor,
+*Built as specified, with three recorded deviations.* When both curves are near the floor,
 draw that segment of the Difference line at 40 % alpha, dashed `[4,4]`, and add a
 status-chip footnote `dashed = both near floor (≈ inaudible)` — see session-21
 recommendation for thresholds (`max dispDb < -60 dBFS` or `< peak − 45 dB`) and for
@@ -1375,7 +1375,42 @@ Keep the numeric `+X.X dB` at the crosshair; the Band Energy % remains the audib
 
 *Done when* `tests/r5.test.js` asserts the dashed style only where the dual-floor
 predicate holds, the footnote appears only when any segment is dashed, and the
-headless LTAS Difference still renders the raw Δ (no value rewritten).
+headless LTAS Difference still renders the raw Δ (no value rewritten). — **met.**
+
+**What shipped.** Block 0, immediately above the NODE-TEST BOUNDARY, gains
+`NEARFLOOR_ABS_DB = -60`, `NEARFLOOR_REL_DB = 45`, `NEARFLOOR_MIN_RUN = 4`,
+`nearFloorDb(a,b)` and `nearFloorMask(a,b)` — pure, node-tested, no drawing. The floor is
+the **looser** of the two tests (`Math.max`), so a hot recording is judged against its own
+peak and a quiet one against full scale; the peak is taken across **both** curves, and a bin
+is marked only when **both** curves sit under it. `buildDiffModel()` publishes `nearFloor`
+(a `Uint8Array`) and `nNearFloor`; all four consumers inherit it (`drawAll`, the magnify
+overlay, the crosshair, `exportDiffPNG` — PNG = the view). `drawDiffScene()` walks the curve
+in runs of equal near-floor state, each run overlapping its neighbour by one point so there
+is no seam. `diffCanvas` carries `data-nearfloor="<count>"` when any point is marked, since
+node cannot read a canvas.
+
+**Deviations from the spec above, all deliberate.**
+1. **The footnote prints the measured floor**, not the static string — `dashed = both below
+   -60 dB (≈ inaudible)`. House rule: every visible number defensible. A stated threshold is
+   a measurement; `near floor` alone is an unexplained verdict.
+2. **The fill dims too** (0.20 → 0.06 alpha), not only the line. The spec named the line, but
+   the sign-split fill is what shouts *big difference here*; leaving it at full alpha would
+   have contradicted the dashing beside it.
+3. **`NEARFLOOR_MIN_RUN = 4`** — added after visual testing, which showed single-bin dips
+   drawing as 1-px light streaks through the solid fill around 10–13 kHz. A lone bin under
+   the floor between audible neighbours is a **notch in an audible region**, not a floor
+   region, so the despeckle lives in the predicate rather than the renderer and stays
+   node-testable. The log grid runs ≈84 points/octave, so 4 points ≈ half a semitone.
+   On the demo pair `data-nearfloor` went 61 → 58 and the streaks are gone.
+
+**Back-compat.** With no near-floor points `runs === [[0,N,0]]` and the render is
+byte-identical to the pre-R5.5 single-path fill and solid line — every existing headless
+pixel assertion stays valid, which is why R5.5 needed no new headless launch.
+
+*Verification, in proportion.* `tests/r5.test.js` 267 → **284** (6 pure-math + 11 source-read
+wiring contracts), all mutation-checked in one batched driver — 14 single-anchor mutations,
+each killing exactly its target, including two assertions that first passed vacuously and
+were strengthened. No new suite, no new `verify.sh` step, no new Chrome launch.
 
 ### Deferred — warped spectrogram difference (not in R5; after R6)
 

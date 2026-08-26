@@ -1763,3 +1763,60 @@ colormap's own floor, and that the margin is dynamic, pane-invariant and set bef
 All new and changed assertions were mutation-checked. The key is drawn on canvas, **outside**
 the R5.3 sentinels, so no frozen copy block moved. Full run green: dsp 187, r3 42, r4 60,
 m27 51, r5 267, headless 64, four tamper guards.
+
+### 2026-08-26 — R5.5: near-floor disclosure on the LTAS Difference (session 26, user request)
+
+The user's release gate: *"R5.5 is important cavaet as after that I can truly release this to
+the public as a reliable tool to compare guitar tones and learn about harmonics."* Built here,
+not delegated (≈70 lines).
+
+**The contradiction it answers.** Above ~10 kHz the demo pair shows several dB of per-bin Δ on
+the LTAS Difference while Band Energy reports a 0 % share for the same band. Both are correct:
+the Difference is a **log-ratio per bin**, indifferent to how small its operands are; the share
+is a **linear power integral**, and two tiny numbers integrate to nothing. The large Δ is a
+difference *of silences*. A user comparing two guitars reads that as a real tonal difference,
+which is precisely the kind of unreliable claim the release gate is about.
+
+**The decision: disclose, never correct.** The Δ stays raw. Where both curves sit on the floor,
+the plot says so — the segment draws faint and dashed and the status chip names the floor it
+used. The alternative, a loudness-weighted Δ (A-weighting or a sone/ERB specific-loudness
+integral), folds the judgement into the number and replaces a defensible measurement with a
+modelled one; it stays deferred in ROADMAP.
+
+**The predicate is dual, and the looser floor wins.** `nearFloorDb(a,b) =
+max(NEARFLOOR_ABS_DB, peak − NEARFLOOR_REL_DB)` at `-60` dBFS and `45` dB. Absolute catches
+what no monitoring level reveals; relative catches what is buried under its own spectrum's
+body. The **max** means a hot take is judged against its own peak and a quiet one against full
+scale. The peak is scanned across **both** curves so the predicate is symmetric in A and B, and
+a bin is marked only when **both** curves are under the floor — one curve alone under it is a
+real, audible difference.
+
+**Three deviations from the ROADMAP spec, all deliberate and all recorded there.**
+1. The footnote prints the **measured** floor (`dashed = both below -60 dB (≈ inaudible)`)
+   rather than the spec's static caption — every visible number defensible; a bare "near floor"
+   is an unexplained verdict.
+2. The near-floor **fill** dims 0.20 → 0.06 as well as the line. The spec named the line, but
+   the sign-split fill is what shouts *big difference here*.
+3. `NEARFLOOR_MIN_RUN = 4` was added after visual testing: single-bin dips drew as 1-px light
+   streaks through the solid fill at 10–13 kHz. The despeckle lives **in the predicate**,
+   because the physical claim is the same as the fix — a lone bin under the floor between
+   audible neighbours is a notch in an audible region, not a floor region — which keeps it pure,
+   node-testable, and keeps `data-nearfloor` describing exactly what is drawn. The log grid runs
+   ≈84 points/octave, so 4 points ≈ half a semitone; the demo pair went 61 → 58 marked points.
+
+**Back-compat.** With nothing near the floor the run walker collapses to `[[0,N,0]]` and the
+render is byte-identical to the pre-R5.5 plot, so every existing headless pixel assertion held
+and R5.5 needed no new Chrome launch.
+
+**Gate.** `tests/r5.test.js` 267 → **284** — 6 pure-math assertions plus 11 source-read wiring
+contracts, one of them **inverted** (no delta value may be rewritten after the mask is built).
+All mutation-checked in a single batched driver, 14 single-anchor mutations, each killing
+exactly its target; two assertions first passed vacuously against an empty regex slice and were
+strengthened. Per the user's standing instruction to *"heavily simplify your testing and
+verification strategies"*: no new suite, no new `verify.sh` step, no new headless launch. Full
+run green — dsp 187, r3 42, r4 60, m27 51, r5 284, headless 64, four tamper guards.
+
+**A note on the `tests/` guard.** Step 7 diffs `"$BASE...HEAD" -- tests/`, a *commit-range*
+diff, so it reports a reviewer-authored test change once it is committed. That is the intended
+behaviour — the guard exists so a **delegated builder** cannot edit the tests it must pass; the
+reviewer may, and records the change here, as with every prior reviewer commit.

@@ -64,7 +64,12 @@ fs.writeFileSync(tmp, blocks[0] +
   "clusterRatio:(typeof clusterRatio==='undefined'?null:clusterRatio)," +
   "CMAP_NAMES:(typeof CMAP_NAMES==='undefined'?null:CMAP_NAMES)," +
   "cmapTable:(typeof cmapTable==='undefined'?null:cmapTable),"+
-  "triadDegrees:(typeof triadDegrees==='undefined'?null:triadDegrees)};\n");
+  "triadDegrees:(typeof triadDegrees==='undefined'?null:triadDegrees)," +
+  "nearFloorDb:(typeof nearFloorDb==='undefined'?null:nearFloorDb)," +
+  "nearFloorMask:(typeof nearFloorMask==='undefined'?null:nearFloorMask)," +
+  "NEARFLOOR_ABS_DB:(typeof NEARFLOOR_ABS_DB==='undefined'?null:NEARFLOOR_ABS_DB)," +
+  "NEARFLOOR_REL_DB:(typeof NEARFLOOR_REL_DB==='undefined'?null:NEARFLOOR_REL_DB)," +
+  "NEARFLOOR_MIN_RUN:(typeof NEARFLOOR_MIN_RUN==='undefined'?null:NEARFLOOR_MIN_RUN)};\n");
 const D = require(tmp);
 
 const TUNING_KEYS = ["estd", "eb", "dstd", "dropd", "dadgad"];
@@ -1083,6 +1088,91 @@ section("Look — the line style is a table, and it never reaches the FFT");
   const keyLines = mf ? mf[0].split("\n").filter(l => /key\s*=/.test(l)) : [];
   ok(keyLines.length >= 2 && !/sgTrack|sgDash|sgHue|sgTriad/.test(keyLines.join("\n")),
     "…and no line style reaches the refine cache key: restyling must not re-run an FFT");
+}
+
+section("R5.5 — near-floor disclosure: the delta stays raw, the claim gets qualified");
+{
+  const ABS = D.NEARFLOOR_ABS_DB, REL = D.NEARFLOOR_REL_DB, RUN = D.NEARFLOOR_MIN_RUN;
+  const flat = (v, n) => new Array(n === undefined ? 40 : n).fill(v);
+  const mask = (a, b) => Array.from(D.nearFloorMask(a, b));
+
+  okf("the floor is the LOOSER of absolute and relative — a hot take is judged against " +
+      "its own peak, a quiet one against full scale",
+    () => {
+      const hot = flat(-6), quiet = flat(-70);        // peak -6 -> -6-45 = -51 > -60
+      return D.nearFloorDb(hot, quiet) === -6 - REL &&
+             D.nearFloorDb(flat(-70), flat(-72)) === ABS;   // peak -70 -> -115, abs wins
+    });
+  okf("…and the peak is taken across BOTH curves: a loud A lifts the floor B is judged by",
+    () => D.nearFloorDb(flat(-70), flat(-6)) === D.nearFloorDb(flat(-6), flat(-70)));
+
+  okf("a bin is near-floor only when BOTH curves are under it — a loud A over a silent B " +
+      "is a real difference, not silence",
+    () => {
+      const a = flat(-20), b = flat(-99);
+      return mask(a, b).every(v => v === 0);
+    });
+  okf("…and a stretch where both are under the floor is marked",
+    () => {
+      const a = flat(-20), b = flat(-20);
+      for (let i = 10; i < 20; i++) { a[i] = -80; b[i] = -85; }
+      const m = mask(a, b);
+      return m.slice(10, 20).every(v => v === 1) &&
+             m.slice(0, 10).concat(m.slice(20)).every(v => v === 0);
+    });
+  okf("a run shorter than NEARFLOOR_MIN_RUN is dropped — one bin dipping under between " +
+      "audible neighbours is a notch, and one grid point of faint fill reads as an artefact",
+    () => {
+      const a = flat(-20), b = flat(-20);
+      for (let i = 5; i < 5 + RUN - 1; i++) { a[i] = -99; b[i] = -99; }
+      const short = mask(a, b).some(v => v);
+      const a2 = flat(-20), b2 = flat(-20);
+      for (let i = 5; i < 5 + RUN; i++) { a2[i] = -99; b2[i] = -99; }
+      const long = mask(a2, b2).filter(v => v).length;
+      return RUN > 1 && !short && long === RUN;
+    });
+  okf("the mask is per grid point and the same length as the curves — it indexes the plot",
+    () => D.nearFloorMask(flat(-99, 31), flat(-99, 31)).length === 31);
+}
+
+section("R5.5 — the wiring: dashed where the predicate holds, footnote only when dashed");
+{
+  const s3 = decomment(b3), s4 = decomment(b4);
+  const bm = /function buildDiffModel[\s\S]*?\n\}/.exec(s4);
+  ok(bm, "buildDiffModel is where the mask is computed");
+  const body = bm ? bm[0] : "";
+  // The mask is built from the DISPLAYED dB curves, not the raw difference: the
+  // predicate asks how loud the two spectra are, never how far apart they are.
+  ok(/nearFloorMask\(\s*dispDb\[0\]\s*,\s*dispDb\[1\]\s*\)/.test(body),
+    "…from the two displayed spectra, never from the delta itself");
+  ok(/nearFloor\s*:/.test(body) && /nNearFloor\s*:/.test(body),
+    "…and published on the model, mask and count both");
+  // "no value rewritten" — the done-when. Nothing in the builder may touch the
+  // delta buffer under the mask.
+  const after = body.slice(body.indexOf("nearFloorMask") + 1);
+  const wrote = new RegExp("(diffBuf|diff)\\s*\\[[^\\]]*\\]\\s*=[^=]").test(after);
+  ok(after.length > 40 && !wrote,
+    "…and no delta value is rewritten after the mask exists: the number stays raw");
+
+  const foot = /if\s*\(\s*nNear\s*\)[^\n]*/.exec(body);
+  ok(foot && /dashed/.test(foot[0]),
+    "the status-chip footnote is guarded by the count — no dashes, no footnote");
+  ok(foot && /nearFloorDb\(/.test(foot[0]),
+    "…and it prints the floor it actually used: every visible number defensible");
+
+  const ds = /function drawDiffScene[\s\S]*?\n\}/.exec(s3);
+  ok(ds, "drawDiffScene is where the disclosure is drawn");
+  const d = ds ? ds[0] : "";
+  ok(/setLineDash\(\s*near\s*\?\s*\[\s*4\s*,\s*4\s*\]\s*:\s*\[\s*\]\s*\)/.test(d),
+    "…dashed [4,4] on a near-floor run, solid everywhere else");
+  ok(/cssRGBA\(\s*["']ink-rgb["']\s*,\s*near\s*\?\s*0?\.4/.test(d),
+    "…at 40 % alpha, as specified");
+  // The fill is the loudest thing on the plot; leaving it solid under a dashed
+  // line would shout the misreading R5.5 exists to defuse.
+  ok(/withAlpha\([^)]*,\s*near\s*\?\s*0?\.0\d+\s*:/.test(d),
+    "…and the sign fill dims with it, not just the line");
+  ok(/runs\.push\(\s*\[\s*Math\.max\(0,\s*i0\s*-\s*1\)/.test(d),
+    "…runs overlap by one point, so neighbouring runs meet with no seam");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

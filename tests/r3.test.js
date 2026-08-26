@@ -214,7 +214,9 @@ section("R3.4 — the copy stays frozen");
   if (i > 0 && j > i) {
     const block = html.slice(i, j + END.length) + "\n";
     const sha = crypto.createHash("sha256").update(block).digest("hex");
-    ok(sha === "e4b277b2918a25367723636701fadb93a9520ef377c6c48f949cfdc2c789addf",
+    // Re-frozen 2026-08-26: HARM_NODES gained harmonics 6-8 (THEORY §6.1) when the
+    // string popover widened to 8. Author extending the prose, not a builder rewriting it.
+    ok(sha === "9c7a7e1aaa9d62b7e0a24893ee39a8a26c53ecb1da321bedcd11bf1606b162c0",
       "the copy block is byte-identical to the reviewed text", sha.slice(0, 16));
   }
   // The two docs/THEORY.md §2.5 figures still under review must not surface anywhere.

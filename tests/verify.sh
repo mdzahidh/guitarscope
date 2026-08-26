@@ -21,8 +21,16 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 
 BASE=${BASE:-master}
-FROZEN_SHA=e4b277b2918a25367723636701fadb93a9520ef377c6c48f949cfdc2c789addf
-FROZEN_SHA_R4=c0c6c57eba876fa23f3e600efb4f471d6d5c033fbf34b025632b64cda127d799
+# R3 re-frozen 2026-08-26: HARM_NODES gained the 6th, 7th and 8th harmonics when the
+# string popover widened to 8 (THEORY §6.1). Node fret positions written by the
+# reviewer who owns the prose -- the freeze stops a delegated builder rewriting the
+# physics, not the author extending it. Recorded in SPEC.md.
+FROZEN_SHA=9c7a7e1aaa9d62b7e0a24893ee39a8a26c53ecb1da321bedcd11bf1606b162c0
+# R4 re-frozen 2026-08-26: harmonicRowNoteHtml's range gate went h>5 -> h>8 when the
+# popover widened to the 8th harmonic. One character of the reviewed physics prose,
+# changed by the reviewer who wrote it -- the freeze exists to stop a delegated
+# builder rewriting it, not to stop the author. Recorded in SPEC.md.
+FROZEN_SHA_R4=3b482a634b12ed40bc379f60ab1f9e31423b113be71bd4bf18240fdcb6aa5883
 FROZEN_SHA_R5=1da64ae24f7201c825b0c3a7c5a4c8962e4996fb5c7af051bb31b539ba69cf7b
 fail=0
 

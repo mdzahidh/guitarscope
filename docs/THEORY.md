@@ -205,6 +205,34 @@ Harmonic:        2nd (oct)   3rd (5th)    4th (2 oct)  5th (maj 3rd, pure −14�
 String divides:  1/2         1/3          1/4          1/5
 ```
 
+### 6.1 · Nodes above the 5th harmonic (added 2026-08-26)
+
+A node of the *n*th harmonic sits at every fraction *k/n* of the string (0 < k < n). Touching
+one there kills every partial that does **not** have a node at that point, leaving harmonic *n*
+and its multiples. The *fret* nearest that touch point follows from fret spacing itself:
+
+> **fret(k, n) = 12 · log₂( 1 / (1 − k/n) )**
+
+which is just the geometric series below, read backwards. Every node whose *k/n* reduces
+(2/6 = 1/3, 4/8 = 1/2, …) is a node the lower harmonic already owns, so only the *unreduced*
+fractions are new. Continuing the map:
+
+```
+Harmonic:        6th (5th, 2 oct up)   7th ("blues 7th")        8th (3 oct)
+String divides:  1/6                   1/7                      1/8
+New nodes:       ~3.2nd fret,          ~2.7th, ~5.8th,          ~2.3rd, ~8.1st,
+                 ~31st (1/6, 5/6)      ~9.7th fret              ~17th fret
+Shares nodes w/: 3rd (7th), 2nd (12th) — none —                 4th (5th), 2nd (12th)
+In tune w/ 12-TET? ✓ (+2¢, the 3rd    ✗ (−31¢, between       ✓ (exact octave of
+                   harmonic an oct up)    frets — see §1)          the fundamental)
+```
+
+Practical reading: the 6th and 8th harmonics are easy — they are the 3rd and 4th an octave
+higher, so they still answer where those do — the 6th at frets 7 and 12, the 8th at frets
+5 and 12 — as well as at their own new nodes. The 7th is the odd one out: 7 is prime, so **none** of its six nodes coincides
+with a lower harmonic's, the three lowest all sit between frets, and the pitch it sounds is
+31¢ flat of anything the fretboard owns — the same fact §1 records as "between frets!", seen from the string's side.
+
 Fret spacing itself is the geometric series L·2^(−n/12) — the physical picture of "every semitone = same *ratio*, not same distance," which is also why capos and Eb tuning change nothing about any of the above: harmony is ratios, and ratios ride along.
 
 ---

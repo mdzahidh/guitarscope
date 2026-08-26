@@ -1622,3 +1622,80 @@ its assertions were rewritten from constants (`data-sgclusters` = 11 on A, 11 on
 relations, with the exact numbers kept in the node suite; two overlay pixel sections merged into
 one layout-stable section, cutting six launches to four. Full run green: dsp 171, r3 42, r4 60,
 m27 51, r5 259, headless 64, four tamper guards.
+
+## Quality-of-life batch a/b/c (session 25, user request)
+
+Three small items the user asked to lump into a sub-milestone of their own. All three are
+about *reading* the plots, not about new measurement — no DSP changed, and no educational
+claim was invented (the one piece of new prose is a node map lifted from docs/THEORY.md §6.1).
+
+**(a) Every card says which color is which.** A `.abkey` strip — one `.abchip` per loaded
+source, the letter in that guitar's accent, the file name beside it — is inserted by
+`syncAbKeys()` into each of the six analysis cards listed in `AB_KEY_CARDS`
+(`verdictCard`, `freqCard`, `toneCard`, `eqCard`, `sgramCard`, `envCard`). It goes in as a
+**sibling after `.cardhead`**, never inside it: M2.6d made the whole head a fold target, and a
+strip inside it would collapse the card on every click. `verdictCard` has no head, so it gets
+`afterbegin`. The strip is rebuilt from `updateVisibility()` and from `applyUserColors()`, so
+it follows both the source count and a user recolor.
+
+**The EQ card's "Target" is renamed "Reshape", and the fitted response takes the reshaped
+guitar's color.** The user's reasoning is the correct one: the guitar being reshaped is the one
+in their hands. `buildEqModels()` now emits `colorFit: COLORS[fit.src]` (was the destination's)
+and `legendTarget: "reshape A: B − A (1/6 oct)"`; the magnify title and `renderEqNote()` follow.
+Nothing in the fit math moved — the curve was always `dst − src`; only the label and the hue
+now say whose curve it is.
+
+**(b) Solid fundamentals, dashed harmonics, in a color the user owns.** `drawStringAxis`'s
+vertical pass splits on `m.harm > 1`: an open string draws solid at 1.4 px and alpha 0.85, its
+harmonics dashed `[5,4]` at 1 px and alpha 0.55, both in `_stringColor(m.si, …)`. The line
+style carries "measured note vs predicted overtone"; the hue carries "which string".
+
+The hue is now **user-settable and remembered**. `state.stringColors` (six hex strings, seeded
+from `STRING_COLORS`) is read by `_stringHex(si)` and therefore by `_stringColor` and
+`_trackHueRgb` — one override, every consumer. The control is a `Line color` row at the top of
+the open-string popover: an `<input type="color">` that previews live on `input` (repaint plus
+the popover's own dots) and commits on `change`, beside a `Default` button. Commit persists,
+then re-renders the popover, because R4's ancestry section also draws a dot for the *adjacent*
+string and a blanket dot rewrite would recolor the wrong one. `gsSettings` goes **v3 → v4**;
+v1–v3 payloads still load, and `j.stringColors` is hex-validated per slot before it is trusted.
+
+**The popover now offers harmonics 2–8** (`HARM_MAX = 8`, `HARM_SLOTS = HARM_MAX - 1`; the
+per-string grid, the settings payload and every loop are sized from those constants rather than
+from literals). The documentation was extended with it: `harmonicIntervalPhrase` already read
+6/7/8 correctly through `octaveFold` (an octave and a fifth / two octaves and a harmonic seventh
+/ three octaves), so only `HARM_NODES` needed new entries, taken verbatim from docs/THEORY.md
+§6.1 — the 6th shares the 3rd's 7th fret, the 7th's nodes all fall between frets because 7 is
+prime, the 8th shares the 4th's 5th fret.
+
+**R3's coincidence set is unchanged by the widening, and that is geometry rather than luck**:
+harmonic 5 sits 27.86 semitones above its fundamental (6 → 31.02, 7 → 33.69, 8 → 36), and the
+widest open-string span in any stocked tuning is 26 (Drop D). Nothing above the 4th harmonic can
+land on an open string, so `findCoincidences()` returns exactly what it returned before. The
+comment above `HARM_NODES` records this, so the inert entries are not mistaken for live paths.
+
+**Two frozen copy blocks were re-frozen by their author.** R4's `harmonicRowNoteHtml` range gate
+went `h>5` → `h>8`, and R3's `HARM_NODES` gained three entries. The freeze exists to stop a
+delegated builder rewriting reviewed physics, not to stop the reviewer who wrote it from
+extending it; both new SHAs carry a comment in `tests/verify.sh` saying which change and why.
+
+**(c) The harmonics are labeled on the line plots too.** A third pass in `drawStringAxis` prints
+`partialLabel(m, state.a4)` — the spectrogram's own wording, so the two views cannot disagree —
+in the string's hue over a 3 px `--panel` halo, with the same skip-rather-than-smear rule as
+every other label in the app (11 px here).
+
+**Deviation from the brief, deliberate:** the user asked for labels "towards the bottom" of the
+plot, and R5.7 put the spectrogram's labels horizontally outside the plot. These are **rotated
+−90°, reading up from the bottom axis**. Horizontal text cannot work here: with six strings ×
+seven harmonics the plot can carry forty-two verticals, several of them within a few pixels on a
+log axis, and horizontal labels would be skipped almost everywhere. Rotated, the guard rejects
+almost nothing. This reverses R5.1's "tracks carry no labels" for the **line plots** only; the
+spectrogram's own labels are unchanged.
+
+**Gate.** The three items are guarded by 16 source-read assertions appended to
+`tests/dsp.test.js` (171 → **187**) rather than by a new suite and a new `verify.sh` step —
+"Verification, in proportion". All 16 were mutation-checked; three initially survived and were
+strengthened: the `drawStringAxis` slice is now **brace-matched** (the next top-level `function`
+is thousands of characters away, so the old slice swallowed unrelated code and stopped failing),
+the label-skip assertion pins the guard expression rather than the words around it, and the
+`_stringHex` assertion reads that function's **first return**. Full run green: dsp 187, r3 42,
+r4 60, m27 51, r5 259, headless 64, four tamper guards.

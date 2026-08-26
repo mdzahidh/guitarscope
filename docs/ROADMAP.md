@@ -1253,6 +1253,40 @@ proportion" above. Note for anyone touching the headless pixel checks: a pane wi
 reserves a wider right margin, so an overlay-on vs overlay-off compare re-lays-out the whole
 image and can only prove *that* something changed. Compare comb against comb.
 
+### Q1 — quality-of-life batch a/b/c ✅ BUILT (session 25, reviewer)
+
+Not a planned task: three reading-the-plot items the user asked to lump into a sub-milestone.
+(a) every analysis card reminds the user which color is A and which is B, and the EQ card's
+"Target" becomes **Reshape** — named for the guitar in the player's hands, and drawn in that
+guitar's accent. (b) on the two frequency line plots an open string is **solid** and its
+harmonics **dashed** in the same hue, that hue is user-settable per string in the open-string
+popover and **persisted**, and the popover now offers harmonics **2–8** with the documentation
+extended to match. (c) those harmonics are labeled on the line plots.
+
+*As built.* `AB_KEY_CARDS` + `syncAbKeys()` insert a `.abkey` strip as a **sibling after
+`.cardhead`** — inside it, M2.6d's fold-on-head-click would fire on every chip. `buildEqModels()`
+emits `colorFit: COLORS[fit.src]` and `legendTarget:"reshape …"`; no fit math moved.
+`state.stringColors` is read by `_stringHex(si)`, so `_stringColor` and `_trackHueRgb` inherit the
+override from one place; `gsSettings` goes v3 → **v4** (v1–v3 still load, each slot hex-validated).
+`HARM_MAX = 8` / `HARM_SLOTS` size the grid, the payload and every loop. Labels are
+`partialLabel(m, state.a4)` — the spectrogram's wording, so the views cannot disagree — rotated
+−90° at the bottom axis, skipped within 11 px.
+
+*Two things to know before touching this.* **The widening to 8 harmonics cannot change R3's ✦
+set**: harmonic 5 is 27.86 semitones up (8 → 36) and the widest open-string span in any stocked
+tuning is 26, so nothing above the 4th can land on an open string. And **the label orientation is
+a deliberate deviation** from both the brief ("towards the bottom") and R5.7's horizontal
+right-margin labels: forty-two verticals on a log axis would skip horizontal text almost
+everywhere. This reverses R5.1's "no labels" for the line plots only.
+
+*Done when* — met. 16 source-read assertions appended to `tests/dsp.test.js` (171 → **187**), no
+new suite and no new `verify.sh` step. Three of them survived mutation and were strengthened: the
+`drawStringAxis` slice is now **brace-matched** (the next top-level `function` is thousands of
+characters away), the label-skip assertion pins the guard expression, and the `_stringHex`
+assertion reads that function's first return. R3 and R4's frozen copy blocks were **re-frozen by
+their author** (`HARM_NODES` gained 6–8 from THEORY §6.1; `harmonicRowNoteHtml`'s gate went h>5 →
+h>8), each new SHA commented in `tests/verify.sh`.
+
 ### R5.4 — bound it in time
 
 Restrict the overlay to a selected time span rather than the full pane width, composing

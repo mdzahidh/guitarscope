@@ -751,10 +751,11 @@ What ships:
 ## M2.6i (session 12): versioned `gsSettings` — one store, one reset
 
 - **Scope.** `gsSettings` (v1 → **v2** when harmonics became per-string → **v3** when
-  the instrument selector was removed) stores the analysis-fact settings the user
+  the instrument selector was removed → **v4** when per-string line colors were added,
+  session 25) stores the analysis-fact settings the user
   *chose* (intent, not data):
   `tuning`+`customOffset`, `a4`, `smooth`, `eqDevice`/`eqDir`, `vocab`,
-  `strings`, `stringHarmonics` (6×4). `lm` (level-match) is
+  `strings`, `stringHarmonics` (now 6×7, harmonics 2–8), `stringColors`. `lm` (level-match) is
   deliberately excluded — its auto-latch already handles the common case and
   a saved `lm` would fight the latch. `gsTheme`/`gsColors`/`gsCollapse` stay
   separate (viewer prefs with their own scopes).
@@ -1275,6 +1276,81 @@ Gate: `tests/r5.test.js` 264 → **259** and `tests/headless.js` stayed at 64 �
 deleted marker pass took its assertions with it, and three headless assertions that pinned
 absolute counts (`data-sgclusters` = 11 / 8) became relational, with the exact numbers pinned
 in the node suite where they cost no browser launch.
+
+## Quality-of-life batch a/b/c (session 25): who is who, and which harmonic is that
+
+Three items the user asked to lump into one sub-milestone. None is deep, but each touches a
+place the app had been quietly ambiguous.
+
+**(a) A/B color keys, and why the strip sits *outside* `.cardhead`.** `AB_KEY_CARDS` names the
+six analysis cards; `syncAbKeys()` builds a `.abkey` strip of `.abchip` swatches and inserts it
+as a **sibling immediately after** each card's `.cardhead` (`verdictCard`, which has no fold
+head, takes `afterbegin`). Placing it *inside* the head is the obvious thing and it is wrong:
+M2.6d made the entire header of a foldable card a toggle, so every click on a color chip would
+fold the card. The strip is rebuilt from `updateVisibility()` (slot count changes) and
+`applyUserColors()` (the user recolored a guitar), so it can never disagree with the plots.
+
+**The EQ card's "Target" is now "Reshape".** The old label named the *goal* curve; the user
+reads the card the other way round — the guitar being reshaped is the one in their hands, and
+the response plot shows what happens when *that* guitar is played. So `buildEqModels()` emits
+`legendTarget:"reshape …"`, `legendFit:"… response on <letter>"` and, most importantly,
+`colorFit: COLORS[fit.src]` — the fitted response now wears the reshaping guitar's accent
+instead of a fixed one. **No fit math moved**; this is naming and color only.
+
+**(b) Solid fundamentals, dashed harmonics, and one override point for the hue.** Pass 1 of
+`drawStringAxis` now branches on `const isHarm = m.harm && m.harm > 1` —
+`setLineDash(isHarm?[5,4]:[])` — and strokes `_stringColor(m.si, …)`. The hue itself comes from
+a new one-liner:
+
+```js
+function _stringHex(si){ return (state.stringColors && state.stringColors[si%6]) || STRING_COLORS[si%6]; }
+```
+
+Everything that wanted a string's color already went through `_stringColor` or `_trackHueRgb`,
+and both now read `_stringHex`, so **the override has exactly one door**. The popover's new
+**Line color** row previews live on `input` and commits on `change` (and on Default) via
+`_setStringColor(si, hex, commit)`; commit re-renders the *whole* popover rather than patching
+the swatch, because R4's ancestry section also prints a dot for the **adjacent** string, which
+may be the one that just changed.
+
+Persistence took `gsSettings` **v3 → v4**: the payload gains
+`stringColors:(state.stringColors||STRING_COLORS).slice()`, v1–v3 payloads still load, and each
+stored slot is hex-validated on read (a corrupt slot falls back rather than poisoning a stroke).
+
+**Harmonics to the 8th.** `HARM_MAX = 8` with `HARM_SLOTS = HARM_MAX-1` sizes the 6×7 grid, the
+settings payload and every loop that walked 2–5. `harmonicIntervalPhrase` already named 6/7/8
+correctly; `HARM_NODES` gained their fret positions from THEORY §6.1. **This cannot change R3's
+✦ set**, and the reason is arithmetic, not testing: harmonic 5 sits 27.86 semitones above its
+fundamental (6 → 31.02, 7 → 33.69, 8 → 36), while the widest open-string span in any stocked
+tuning is **26** (Drop D). Nothing above the 4th harmonic can reach another open string, in any
+tuning the app stocks.
+
+**(c) Labels, rotated.** A third pass draws `partialLabel(m, state.a4)` — deliberately the
+spectrogram's own function, so the two views can never word the same fact differently — near
+the bottom axis, **rotated −90°**, skipped rather than smeared within 11 px. The brief said
+"inside the plot … towards the bottom", and horizontal was tried first: with strings and
+harmonics on, a log axis carries ~42 verticals, and horizontal text collides with its neighbour
+almost everywhere, so the skip guard would have eaten most of the labels. Rotating trades one
+line of transform for labels that nearly all survive. This **reverses R5.1's "no labels" rule
+for the line plots only** — the spectrogram's own rule was already reversed at R5.6.
+
+**Two frozen blocks re-frozen by their author.** `HARM_NODES` lives inside R3's frozen copy
+block and `harmonicRowNoteHtml`'s range gate (`h>5` → `h>8`) inside R4's, so both SHAs moved.
+That is legitimate — the freeze exists to stop a *delegated builder* rewriting reviewed physics,
+not to stop the reviewer who wrote it extending it — but the discipline is: diff the extracted
+block against `master` first to prove the change is yours, then update **both** copies of the SHA
+(`tests/verify.sh` *and* the suite that also asserts it), each with a comment naming the change,
+and record it in SPEC.md.
+
+**Gate, and a lesson about source-read assertions.** 16 assertions appended to
+`tests/dsp.test.js` (171 → **187**); no new suite, no new `verify.sh` step. Three survived
+mutation and had to be strengthened, all for the same structural reason: the slice being
+searched was too big. The old `drawStringAxis` slice ran to the next `"\nfunction "`, which is
+**thousands of characters away** — 9267 against the function's true 5006 — so it swallowed
+`VOCABS`, and `/partialLabel\(/` and `/continue;/` matched happily with the label pass deleted.
+The fix is to **brace-match the function**, and the general rule is: *an assertion that reads
+source must scope to the smallest construct that can hold the thing it claims* — then delete the
+code and confirm it goes red.
 
 ## Hard-won correctness notes (dead ends — do not retry)
 

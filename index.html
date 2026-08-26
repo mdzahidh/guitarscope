@@ -240,6 +240,15 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .card.collapsed .collbtn::before{ transform:translateX(-2px) rotate(-45deg); }
 .card.collapsed .cardbody{ display:none; }
 .card.collapsed .cardhead .controls{ display:none; }
+
+/* A/B accent key (2026-08-26) — every card names its own colors, so the reader
+   never has to scroll back to the file cards to learn which accent is which. */
+.abkey{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:0 20px 10px; }
+#verdictCard .abkey{ padding:14px 20px 0; }
+.card.collapsed .abkey{ display:none; }
+.abchip{ display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--dim); }
+.abchip i{ width:9px; height:9px; border-radius:2px; flex:none; }
+.abchip b{ color:var(--mut); font-weight:600; }
 /* the whole header folds/unfolds (controls excepted in JS), so it advertises it */
 .card.foldable .cardhead{ cursor:pointer; }
 .card.foldable .cardhead:hover .cardtitle{ color:var(--ink); }
@@ -499,6 +508,8 @@ table.datatable tr.grp td{
 .pop-val .l{ color:var(--mut); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pop-val .v{ margin-left:auto; color:var(--ink); white-space:nowrap; }
 .pop-val .v small{ color:var(--dim); }
+.pop-val input[type="color"]{ width:28px; height:18px; padding:0; border:1px solid var(--line); border-radius:3px; background:none; cursor:pointer; vertical-align:middle; }
+.pop-val .btn{ font-size:10px; padding:2px 7px; }
 .pop-sub{ font-size:11px; color:var(--dim); margin:-1px 0 2px 16px; }
 .pop-more{ margin-top:10px; font-size:11.5px; line-height:1.55; color:var(--mut); }
 .pop-more summary{ cursor:pointer; color:var(--ink); }
@@ -3378,13 +3389,16 @@ function drawStringAxis(ctx, w, h, markers, hits, coincidences){
   if(!markers||!markers.length) return 0;
   const pH=h-PLOT.mT-PLOT.mB;
   ctx.save();
-  // first pass: verticals — color-coded per string, denser dash, fundamentals more opaque
+  // first pass: verticals — color-coded per string. An open string is a SOLID line
+  // and its harmonics are dashed in the same hue (user request, 2026-08-26): the
+  // line style says "measured note" vs "predicted overtone", the hue says which
+  // string it came from. The hue itself is user-settable per string (state.stringColors).
   for(const m of markers){
     if(m.f<XV.f0 || m.f>XV.f1) continue;
     const x=xOfF(m.f,w);
     const isHarm=m.harm&&m.harm>1;
-    ctx.strokeStyle=_stringColor(m.si, isHarm?0.48:0.85);
-    ctx.setLineDash(isHarm?[2,3]:[3,3]); ctx.lineWidth=isHarm?1:1.4;
+    ctx.strokeStyle=_stringColor(m.si, isHarm?0.55:0.85);
+    ctx.setLineDash(isHarm?[5,4]:[]); ctx.lineWidth=isHarm?1:1.4;
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -3408,14 +3422,32 @@ function drawStringAxis(ctx, w, h, markers, hits, coincidences){
       hits.push({x:x-tw/2-3, y:PLOT.mT+pH+18, w:tw+6, h:14, string:m.si});
     }
   }
-  // harmonics: no labels — color alone ties them to their fundamental; keep line hits
-  if(hits){
-    for(const m of markers){
-      if(!m.harm||m.harm<=1) continue;
-      if(m.f<XV.f0 || m.f>XV.f1) continue;
-      const x=xOfF(m.f,w);
-      hits.push({x:x-4, y:PLOT.mT, w:8, h:pH, string:m.si});
-    }
+  // third pass: harmonic labels — inside the plot, along the bottom, where the
+  // curves have usually fallen away (user request, 2026-08-26; this reverses the
+  // earlier "harmonics carry no labels", which held only while a fundamental had
+  // at most four of them). partialLabel() is the spectrogram's own wording, so the
+  // two views read alike: "E2 ×3 = B3" inside R3's locked tier, "≈" outside it.
+  // Rotated to read upward: a label is ~60 px wide and up to 42 harmonic verticals
+  // can crowd the upper half of a log axis, so horizontal text would be skipped
+  // nearly everywhere, while vertical text runs parallel to its own line.
+  // Skip rather than smear, as everywhere else (M2.6c).
+  const harms=markers.filter(m=>m.harm&&m.harm>1&&m.f>=XV.f0&&m.f<=XV.f1)
+                     .map(m=>({m,x:xOfF(m.f,w)})).sort((a,b)=>a.x-b.x);
+  ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="middle";
+  let lastHX=-100;
+  for(const hm of harms){
+    if(hits) hits.push({x:hm.x-4, y:PLOT.mT, w:8, h:pH, string:hm.m.si});
+    if(hm.x-lastHX<11) continue;
+    lastHX=hm.x;
+    const txt=partialLabel(hm.m, state.a4);
+    ctx.save();
+    ctx.translate(hm.x-3, PLOT.mT+pH-6);
+    ctx.rotate(-Math.PI/2);
+    ctx.lineWidth=3; ctx.lineJoin="round"; ctx.strokeStyle=cssColor("panel");
+    ctx.strokeText(txt,0,0);
+    ctx.fillStyle=_stringColor(hm.m.si,0.95);
+    ctx.fillText(txt,0,0);
+    ctx.restore();
   }
   // fourth pass: ✦ coincidences — a drawn path, never the ✦ glyph (a glyph sits small
   // inside its em box, so font size cannot make it read: session-15's chevron trap).
@@ -4396,11 +4428,17 @@ let COLORS=["#f0a13e","#44c2d4"];
 const GRID=makeLogGrid(700,60,20000);
 
 // ---------- state (contract shared with the glossary) ----------
-const _defaultHarmonics=()=>Array.from({length:6},()=> [false,false,false,false]); // per string: hh 2,3,4,5
+// Harmonics offered per string, on the plots and in the popover: 2..8 (2026-08-26,
+// widened from 2..5). The grid is one row per string, one slot per harmonic at hh-2.
+const HARM_MAX=8, HARM_SLOTS=HARM_MAX-1;
+const _defaultHarmonics=()=>Array.from({length:6},()=> Array(HARM_SLOTS).fill(false)); // per string: hh 2..8
 const state={ slots:[null,null], tuning:"estd", customOffset:0,
               a4:440, smooth:6, lm:false, lmOffset:null, strings:false,
               tolCents: COINCIDENCE_CENTS,
               stringHarmonics:_defaultHarmonics(),
+              // per-string line colors; seeded from STRING_COLORS once that palette
+              // is declared (block 4, below), overridable by the user and persisted
+              stringColors:null,
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix",
               sgFrets:[null,null,null,null,null,null], sgHarm:6,
               // R5.6 legibility: the sheet under the tracks, how far an unheld comb
@@ -4803,7 +4841,7 @@ function stringAxisMarkers(){
   for(const m of base){
     const arr=state.stringHarmonics[m.si];
     if(!arr) continue;
-    for(let hh=2;hh<=5;hh++){
+    for(let hh=2;hh<=8;hh++){
       if(!arr[hh-2]) continue;
       const f=m.f*hh;
       if(f<FMIN||f>FMAX) continue;
@@ -5076,9 +5114,9 @@ function buildEqModels(){
       yMax:Math.ceil(maxAbs/3)*3,
       fv:zoomXf("eqresp"),
       yLo:z&&z.y0!=null?z.y0:null, yHi:z&&z.y0!=null?z.y1:null,
-      colorFit:COLORS[fit.dst],
-      legendTarget:"target: "+SLOT_LETTER[fit.dst]+" − "+SLOT_LETTER[fit.src]+" (1/6 oct)",
-      legendFit:fit.device.name+" response",
+      colorFit:COLORS[fit.src],
+      legendTarget:"reshape "+SLOT_LETTER[fit.src]+": "+SLOT_LETTER[fit.dst]+" − "+SLOT_LETTER[fit.src]+" (1/6 oct)",
+      legendFit:fit.device.name+" response on "+SLOT_LETTER[fit.src],
       statusText:"residual "+fit.settings.residualRms.toFixed(2)+" dB RMS"
         +(zn?" · "+zn:"")},
   };
@@ -5187,7 +5225,7 @@ const MAG_VIEWS={
     draw:(ctx,w,h)=>{ const m=buildEnvModel(); if(m) drawEnvelopeScene(ctx,w,h,m); } },
   eqface:{ title:()=>{ const f=bothLoaded()&&eqFitData(); return "EQ match — "+(f?f.device.name+" settings":"device settings"); },
     draw:(ctx,w,h)=>{ const m=bothLoaded()&&buildEqModels(); if(m) drawEqFaceScene(ctx,w,h,m.face); } },
-  eqresp:{ title:()=>"EQ match — target vs fitted response",
+  eqresp:{ title:()=>"EQ match — reshape needed vs fitted response",
     draw:(ctx,w,h)=>{ const m=bothLoaded()&&buildEqModels(); if(m) drawEqRespScene(ctx,w,h,m.resp); } },
 };
 let magKey=null;
@@ -6012,7 +6050,7 @@ function renderEqNote(){
     model="low shelf + 4 peaking bands + high shelf (shelves Q 0.71, peak Q sampled at "+d.qChoices.join(" / ")+"), plus output "+d.trim.label;
   eqNote.textContent="Bands are modeled as RBJ analog-magnitude biquads: "+model+". "+
     "Fit is least-squares against the 1/6-octave-smoothed difference on 140 log-spaced points, 60 Hz–20 kHz; "+
-    "the trim absorbs the broadband level difference. Residual is the RMS gap between the target and the modeled response. "+
+    "the trim absorbs the broadband level difference. Residual is the RMS gap between the reshape target and the modeled response. "+
     "Real hardware differs from the model — treat the settings as a starting point, not gospel.";
 }
 // Plain-text render of the fitted settings — what you'd dial in on the real
@@ -6102,6 +6140,29 @@ function toggleCollapse(key){
   applyCollapse();
   if(!collState[key]) requestDraw(); // this panel's canvases were skipped while folded
 }
+// Every card carries the A/B accent key: the plots color by guitar, and a folded
+// card hides it with the body (nothing to key when nothing is shown).
+const AB_KEY_CARDS=["verdictCard","freqCard","toneCard","eqCard","sgramCard","envCard"];
+function syncAbKeys(){
+  for(const id of AB_KEY_CARDS){
+    const card=el(id); if(!card) continue;
+    let k=card.querySelector(":scope > .abkey");
+    if(!k){
+      k=document.createElement("div"); k.className="abkey";
+      const head=card.querySelector(":scope > .cardhead");
+      if(head) head.insertAdjacentElement("afterend",k);
+      else card.insertAdjacentElement("afterbegin",k);
+    }
+    let html="";
+    for(let i=0;i<2;i++){
+      const s=state.slots[i]; if(!s) continue;
+      html+='<span class="abchip"><i style="background:'+COLORS[i]+'"></i><b>'+
+        SLOT_LETTER[i]+'</b> '+esc(shortName(s.name,26))+'</span>';
+    }
+    k.innerHTML=html;
+    k.style.display=html?"":"none";
+  }
+}
 function updateVisibility(){
   const n=(state.slots[0]?1:0)+(state.slots[1]?1:0), both=n===2;
   verdictCard.style.display=n?"":"none";
@@ -6151,6 +6212,7 @@ function updateVisibility(){
     sgramNote.textContent=who+" — the original audio was not stored, so a spectrogram cannot be recomputed.";
     envNote.textContent=who+" — the original audio was not stored, so an envelope cannot be redrawn.";
   }
+  syncAbKeys();
 }
 function renderAnalysis(){
   renderVerdict();
@@ -6400,9 +6462,31 @@ function openPopover(key,anchor){
 // ---------- per-string documentation (Strings-axis labels) ----------
 const STRING_ORD=["6th","5th","4th","3rd","2nd","1st"]; // index 0 = lowest string
 const STRING_COLORS=["#e74c3c","#e67e22","#27ae60","#3498db","#8e44ad","#d64582"]; // 6 distinct, data colors (not theme)
+// The user may recolor any string from its popover; the choice persists (gsSettings v4).
+// Still a *data* palette either way — one hue per string in both themes.
+state.stringColors = STRING_COLORS.slice();
+function _stringHex(si){ return (state.stringColors && state.stringColors[si%6]) || STRING_COLORS[si%6]; }
 function _hexRgb(h){ return [1,3,5].map(k=>parseInt(h.slice(k,k+2),16)); }
 function _stringColor(si, alpha){
-  const [r,g,b]=_hexRgb(STRING_COLORS[si%6]); return `rgba(${r},${g},${b},${alpha})`;
+  const [r,g,b]=_hexRgb(_stringHex(si)); return `rgba(${r},${g},${b},${alpha})`;
+}
+// Set one string's line color from its popover. Live preview on `input` (repaint plus
+// the popover's own dots); `change` and the Default button commit — persist, then
+// re-render the popover, because ancestrySectionHtml() also draws dots for the
+// *adjacent* string and a blanket dot rewrite would recolor the wrong one.
+function _setStringColor(si, hex, commit){
+  if(!Number.isFinite(si)||si<0||si>5||!/^#[0-9a-f]{6}$/i.test(hex)) return;
+  state.stringColors[si]=hex.toLowerCase();
+  requestDraw();
+  if(commit){
+    saveSettings();
+    const a=popover._gsStringAnchor;
+    if(a && popover.classList.contains("open") && +popover.dataset.stringSi===si) openStringPopover(si,a);
+  }else{
+    popover.querySelectorAll(".pop-vals .dot[data-a]").forEach(d=>{
+      const al=+d.dataset.a; if(al>0) d.style.background=_stringColor(si,al);
+    });
+  }
 }
 // Track look (user request, 2026-08-26; reworked at R5.7). Three axes, all deliberately
 // small tables:
@@ -6444,7 +6528,7 @@ function _mixRgb(a, b, t){ return [0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*t))
 // ~3.4; at 0.62 that is ~4.8, and the six stay hue-distinct. This is the liftForDark()
 // precedent (the diverging endpoints), applied per surface — not a theme: the lift is
 // identical in Bright and Dark.
-function _trackHueRgb(si){ return liftForDark(_hexRgb(STRING_COLORS[si%6]), 0.62); }
+function _trackHueRgb(si){ return liftForDark(_hexRgb((state.stringColors&&state.stringColors[si%6])||STRING_COLORS[si%6]), 0.62); }
 // The paint for one partial: its base color (fixed, or the Triad slot its string's chord
 // degree maps to), optionally mixed toward that string's data hue by the String-hues
 // modifier. The model carries both, so the draw pass still reads nothing but its model.
@@ -6538,8 +6622,16 @@ function stringContentHtml(si){
   const tun=state.tuning==="custom"
     ? "E standard "+(state.customOffset>0?"+":"")+state.customOffset+" st"
     : TUNINGS[state.tuning].name;
-  let rows="";
-  for(let hh=1;hh<=5;hh++){
+  // The string's line color is the user's to set (2026-08-26) — a data color, one hue
+  // per string in both themes, persisted in gsSettings v4. Default restores STRING_COLORS.
+  let rows='<div class="pop-val" style="gap:8px">'+
+    '<span class="dot" data-a="0.9" style="background:'+_stringColor(si,0.9)+'"></span>'+
+    '<span class="l">Line color</span>'+
+    '<span class="v" style="display:inline-flex; align-items:center; gap:6px">'+
+      '<input type="color" class="string-color" value="'+_stringHex(si)+'" title="Color of this string and its harmonics on the frequency plots">'+
+      '<button class="btn string-color-reset" title="Restore this string\u2019s default color">Default</button>'+
+    '</span></div>';
+  for(let hh=1;hh<=8;hh++){
     const hf=f*hh;
     const isHarm=hh>1;
     const enabled=isHarm ? !!(state.stringHarmonics[si] && state.stringHarmonics[si][hh-2]) : true;
@@ -6547,7 +6639,7 @@ function stringContentHtml(si){
       ? '<label class="switch" style="margin-left:auto"><input type="checkbox" class="harm-toggle" data-hh="'+hh+'" '+(enabled?'checked':'')+'><span class="tk"></span></label>'
       : '<span style="margin-left:auto; font-size:10px; color:var(--dim)">always on</span>';
     const col=isHarm? _stringColor(si, enabled?0.9:0.35) : "var(--dim)";
-    rows+='<div class="pop-val" style="gap:8px"><span class="dot" style="background:'+col+'"></span>'+
+    rows+='<div class="pop-val" style="gap:8px"><span class="dot" data-a="'+(isHarm?(enabled?0.9:0.35):0)+'" style="background:'+col+'"></span>'+
       '<span class="l">'+(hh===1?"Fundamental":"Harmonic "+hh)+'</span>'+
       '<span class="v">'+esc(fmtHz(hf)+"  ·  "+noteInfo(hf,state.a4).name)+'</span>'+toggle+'</div>';
     rows+=harmonicRowNoteHtml(si,hh);
@@ -6573,8 +6665,14 @@ function stringContentHtml(si){
 // No section symbols or file names appear in the copy itself: the app states the
 // physics, it does not cite its homework. Tone: measure first, never lecture.
 const OCT_WORD=["","an octave","two octaves","three octaves","four octaves"];
-// Where the player can touch the string to sound this harmonic (THEORY §6 node map).
-const HARM_NODES={2:"12th fret",3:"7th & 19th fret",4:"5th & 24th fret",5:"≈4th, 9th & 16th fret"};
+// Where the player can touch the string to sound this harmonic (THEORY §6 node map;
+// §6.1 for 6-8). The map covers every harmonic the string popover now offers, though
+// nothing above the 4th can actually land on an open string: the 5th sits 27.9
+// semitones up and the widest open-string span in any stocked tuning is 26.
+const HARM_NODES={2:"12th fret",3:"7th & 19th fret",4:"5th & 24th fret",5:"≈4th, 9th & 16th fret",
+  6:"≈3rd fret — or the 7th, where the 3rd harmonic answers",
+  7:"between frets — ≈2.7, ≈5.8, ≈9.7 (7 is prime: no node is shared)",
+  8:"≈2nd, 8th & 17th fret — or the 5th, where the 4th harmonic answers"};
 // Why the gap isn't zero, keyed by the octave-folded ratio (THEORY §5 error table).
 const TEMPER_NOTE={
   "1/1":"Octaves are the one interval equal temperament renders exactly, so there is nothing to compromise here — the gap is zero by construction.",
@@ -6705,7 +6803,7 @@ function landingFor(si,h){
 // itself — it just says how to see the mark.
 function harmonicRowNoteHtml(si,hh){
   const h=hh|0;
-  if(h<2||h>5) return "";
+  if(h<2||h>8) return "";
   const on=!!(state.stringHarmonics[si]&&state.stringHarmonics[si][h-2]);
   const hit=landingFor(si,h);
   let t=_cap(harmonicIntervalPhrase(h))+".";
@@ -6919,6 +7017,7 @@ function openStringPopover(si,anchor){
   if(!html) return;
   stopPlayback();
   popover.dataset.stringSi=si;
+  popover._gsStringAnchor=anchor;
   const f=midiToFreq(tuningMidi(state.tuning,state.customOffset)[si],state.a4);
   // audition a 1/3-octave band centred on the open-string fundamental
   popover.innerHTML=html+auditionBlock(f*Math.pow(2,-1/6),f*Math.pow(2,1/6));
@@ -7333,12 +7432,15 @@ function setVocab(v){
 // vocab, Strings, harmonics — NOT level-match. Written only on explicit
 // user actions, read on boot with migration from legacy keys.
 // v3 dropped `mode` when the instrument selector was removed; v1/v2 payloads
-// still load, their stale `mode` key simply ignored.
-const SETTINGS_VER=3;
+// still load, their stale `mode` key simply ignored. v4 (2026-08-26) widens the
+// harmonic grid to 2..8 and adds the user's per-string line colors; narrower
+// grids from v1-v3 load as-is, their missing slots simply staying off.
+const SETTINGS_VER=4;
 function _settingsPayload(){
   return {v:SETTINGS_VER, tuning:state.tuning, customOffset:state.customOffset,
     a4:state.a4, smooth:state.smooth, eqDevice:state.eqDevice, eqDir:state.eqDir,
-    vocab:state.vocab, strings:state.strings, stringHarmonics:state.stringHarmonics.map(a=>a.slice())};
+    vocab:state.vocab, strings:state.strings, stringHarmonics:state.stringHarmonics.map(a=>a.slice()),
+    stringColors:(state.stringColors||STRING_COLORS).slice()};
 }
 function saveSettings(){
   try{ localStorage.setItem("gsSettings", JSON.stringify(_settingsPayload())); }catch(_e){}
@@ -7350,7 +7452,7 @@ function _hasAnyHarmonics(){
   return state.stringHarmonics.some(a=>a.some(v=>v));
 }
 function _clearAllHarmonics(){
-  for(let i=0;i<6;i++) for(let j=0;j<4;j++) state.stringHarmonics[i][j]=false;
+  for(let i=0;i<6;i++) for(let j=0;j<HARM_SLOTS;j++) state.stringHarmonics[i][j]=false;
 }
 function syncClearHarmonicsBtn(){
   clearHarmonicsBtn.disabled = !state.strings || !_hasAnyHarmonics();
@@ -7360,7 +7462,7 @@ function loadSettings(){
     const raw=localStorage.getItem("gsSettings");
     if(raw){
       const j=JSON.parse(raw);
-      if(j&& (j.v===SETTINGS_VER || j.v===1 || j.v===2)){
+      if(j&& (j.v===SETTINGS_VER || j.v===1 || j.v===2 || j.v===3)){
         if(typeof j.tuning==="string"&&(TUNINGS[j.tuning]||j.tuning==="custom")) state.tuning=j.tuning;
         if(typeof j.customOffset==="number") state.customOffset=j.customOffset|0;
         if(isFinite(j.a4)&&j.a4>=415&&j.a4<=466) state.a4=+j.a4;
@@ -7369,15 +7471,16 @@ function loadSettings(){
         if(j.eqDir===0||j.eqDir===1) state.eqDir=j.eqDir;
         if(typeof j.vocab==="string"&&VOCAB_BY_ID[j.vocab]) state.vocab=j.vocab;
         if(typeof j.strings==="boolean") state.strings=j.strings;
+        if(Array.isArray(j.stringColors)) for(let i=0;i<6;i++) if(/^#[0-9a-f]{6}$/i.test(j.stringColors[i]||"")) state.stringColors[i]=j.stringColors[i];
         // v1 had harmonics:boolean, v2 has stringHarmonics:6x4
         if(Array.isArray(j.stringHarmonics) && j.stringHarmonics.length===6){
-          for(let i=0;i<6;i++) for(let k=0;k<4;k++) state.stringHarmonics[i][k]=!!(j.stringHarmonics[i]&&j.stringHarmonics[i][k]);
+          for(let i=0;i<6;i++) for(let k=0;k<HARM_SLOTS;k++) state.stringHarmonics[i][k]=!!(j.stringHarmonics[i]&&j.stringHarmonics[i][k]);
         } else if(typeof j.harmonics==="boolean" && j.harmonics){
           // migrate old global harmonics=true → enable 2–4 for all strings
           for(let i=0;i<6;i++) for(let k=0;k<3;k++) state.stringHarmonics[i][k]=true;
         } else if(Array.isArray(j.stringHarmonics)){
           // handle length mismatch
-          for(let i=0;i<Math.min(6,j.stringHarmonics.length);i++) for(let k=0;k<4;k++) state.stringHarmonics[i][k]=!!(j.stringHarmonics[i]&&j.stringHarmonics[i][k]);
+          for(let i=0;i<Math.min(6,j.stringHarmonics.length);i++) for(let k=0;k<HARM_SLOTS;k++) state.stringHarmonics[i][k]=!!(j.stringHarmonics[i]&&j.stringHarmonics[i][k]);
         }
         // apply to UI
         tuningSel.value=state.tuning; customOffsetWrap.style.display=state.tuning==="custom"?"":"none"; customOffsetEl.value=state.customOffset;
@@ -7396,7 +7499,7 @@ function loadSettings(){
       const v=localStorage.getItem("gsVocab"); if(v&&VOCAB_BY_ID[v]){ state.vocab=v; setVocab(v); migrated=true; }
       const s=localStorage.getItem("gsStrings"); if(s!=null){ state.strings=s==="1"; stringsToggle.checked=state.strings; migrated=true; }
       const sh=localStorage.getItem("gsStringHarmonics");
-      if(sh){ try{ const a=JSON.parse(sh); if(Array.isArray(a)&&a.length===6){ for(let i=0;i<6;i++) for(let k=0;k<4;k++) state.stringHarmonics[i][k]=!!(a[i]&&a[i][k]); migrated=true; } }catch(_e){} }
+      if(sh){ try{ const a=JSON.parse(sh); if(Array.isArray(a)&&a.length===6){ for(let i=0;i<6;i++) for(let k=0;k<HARM_SLOTS;k++) state.stringHarmonics[i][k]=!!(a[i]&&a[i][k]); migrated=true; } }catch(_e){} }
       else {
         const hh=localStorage.getItem("gsHarmonics"); if(hh==="1"){ for(let i=0;i<6;i++) for(let k=0;k<3;k++) state.stringHarmonics[i][k]=true; migrated=true; }
         if(hh!=null) stringsToggle.checked=state.strings;
@@ -7415,7 +7518,7 @@ function resetSettings(){
   }catch(_e){}
   state.tuning="estd"; state.customOffset=0; state.a4=440;
   state.smooth=6; state.eqDevice="ge7"; state.eqDir=0; state.vocab="mix";
-  state.strings=false; _clearAllHarmonics();
+  state.strings=false; _clearAllHarmonics(); state.stringColors=STRING_COLORS.slice();
   tuningSel.value=state.tuning; customOffsetWrap.style.display="none"; customOffsetEl.value=state.customOffset;
   a4Input.value=state.a4;
   setSmoothUI(state.smooth);
@@ -7647,6 +7750,7 @@ function applyUserColors(){
   setDivergeEndpoints(pos,neg);
   requestDraw();
   if(anyLoaded()) renderAnalysis(); // accent dots in the HTML tables embed COLORS
+  syncAbKeys();                    // ... and so does the per-card A/B key
 }
 function setSlotColor(i,hex,live){
   userColors[theme][i]=hex;
@@ -7946,7 +8050,13 @@ function boot(){
   attachHitClicks(diffCanvas,diffHits);
   attachHitClicks(sgramCanvases[0],sgHits[0]);   // R5.3: collision marks
   attachHitClicks(sgramCanvases[1],sgHits[1]);
+  popover.addEventListener("input",e=>{
+    const c=e.target.closest?e.target.closest(".string-color"):null;
+    if(c) _setStringColor(+popover.dataset.stringSi, c.value, false);
+  });
   popover.addEventListener("click",e=>{
+    const rb=e.target.closest?e.target.closest(".string-color-reset"):null;
+    if(rb){ const si=+popover.dataset.stringSi; _setStringColor(si, STRING_COLORS[((si%6)+6)%6], true); return; }
     const b=e.target.closest?e.target.closest(".popplay"):null;
     if(!b) return;
     if(b.classList.contains("playing")){ stopPlayback(); return; }
@@ -7954,18 +8064,20 @@ function boot(){
       setPopPlayUI(b);
   });
   popover.addEventListener("change",e=>{
+    const cc=e.target.closest?e.target.closest(".string-color"):null;
+    if(cc){ _setStringColor(+popover.dataset.stringSi, cc.value, true); return; }
     const tog=e.target.closest?e.target.closest(".harm-toggle"):null;
     if(!tog) return;
     const si=+popover.dataset.stringSi;
     const hh=+tog.dataset.hh;
-    if(!Number.isFinite(si)||!Number.isFinite(hh)||hh<2||hh>5) return;
+    if(!Number.isFinite(si)||!Number.isFinite(hh)||hh<2||hh>8) return;
     state.stringHarmonics[si][hh-2]=tog.checked;
     saveSettings();
     try{ localStorage.setItem("gsStringHarmonics", JSON.stringify(state.stringHarmonics)); }catch(_e){}
     syncClearHarmonicsBtn();
     // update dot color in the same row
     const row=tog.closest(".pop-val");
-    if(row){ const dot=row.querySelector(".dot"); if(dot) dot.style.background=_stringColor(si, tog.checked?0.9:0.35); }
+    if(row){ const dot=row.querySelector(".dot"); if(dot){ dot.dataset.a=tog.checked?0.9:0.35; dot.style.background=_stringColor(si, +dot.dataset.a); } }
     requestDraw();
   });
   document.addEventListener("click",e=>{
@@ -8158,7 +8270,7 @@ function boot(){
   const hh=location.search.match(/[?&]harmonics=(0|1)(?:&|$)/i);                   // test hook (M2.6g compat: global flag enables all per-string harmonics)
   if(hh){
     const on=hh[1]==="1";
-    for(let i=0;i<6;i++) for(let k=0;k<4;k++) state.stringHarmonics[i][k]=on && k<3; // 2–4 when global on
+    for(let i=0;i<6;i++) for(let k=0;k<HARM_SLOTS;k++) state.stringHarmonics[i][k]=on && k<3; // 2–4 when global on
     try{ syncClearHarmonicsBtn(); }catch(_e){}
     saveSettings(); requestDraw();
   }

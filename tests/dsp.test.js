@@ -862,6 +862,64 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
     ok(third.includes("14 ¢ sharp of a true 5:4"), "the tempered third names its error");
   }
 
+
+  // ---- quality-of-life batch (2026-08-26): the three user requests, as source contracts ----
+  // Small feature, small gate (ROADMAP "Verification, in proportion"): one assertion per
+  // thing that would be a silent regression, read out of index.html rather than re-derived.
+  {
+    // Brace-match drawStringAxis: the next top-level "function" is thousands of
+    // characters away, so a naive slice swallows unrelated code and the assertions
+    // below stop failing when the label pass is removed (caught by mutation).
+    const axis = (() => {
+      const i = html.indexOf("function drawStringAxis(");
+      let d = 0, k = html.indexOf("{", i);
+      for (; k < html.length; k++) {
+        const c = html[k];
+        if (c === "{") d++;
+        else if (c === "}" && --d === 0) { k++; break; }
+      }
+      return html.slice(i, k);
+    })();
+    const nodes = html.slice(html.indexOf("const HARM_NODES={"));
+    const nodeMap = nodes.slice(0, nodes.indexOf("};"));
+
+    // (b) eight harmonics, sized from one constant, documented all the way up.
+    const hm = html.match(/const HARM_MAX=(\d+), *HARM_SLOTS=HARM_MAX-1;/);
+    ok(hm && +hm[1] === 8, "harmonics run to the 8th");
+    ok(/Array\(HARM_SLOTS\)\.fill\(false\)/.test(html), "the per-string grid is sized from HARM_SLOTS, not a literal");
+    ok(/for\(let hh=1;hh<=8;hh\+\+\)/.test(html), "the string popover lists every one of them");
+    ok([2, 3, 4, 5, 6, 7, 8].every(h => new RegExp("(^|[{,\\s])" + h + ':"').test(nodeMap)),
+      "HARM_NODES names the fretboard node of every offered harmonic");
+
+    // (b) line style: an open string is solid, its harmonics dashed, both in its own hue.
+    ok(/const isHarm=m\.harm&&m\.harm>1;/.test(axis), "the vertical pass separates fundamentals from harmonics");
+    ok(/setLineDash\(isHarm\?\[5,4\]:\[\]\)/.test(axis), "harmonics dash and fundamentals stay solid");
+    ok(/strokeStyle=_stringColor\(m\.si,/.test(axis), "both take the colour of the string they came from");
+
+    // (c) harmonic labels on the line plots, skipped rather than smeared (M2.6c's rule).
+    ok(/const txt=partialLabel\(hm\.m/.test(axis) && /fillText\(txt/.test(axis),
+      "the line plots label their harmonics with the spectrogram’s own wording");
+    ok(/hm\.x-lastHX<\d+\) continue;/.test(axis), "crowded labels are skipped, never smeared");
+
+    // (b) the per-string colour is the user's, and it is remembered.
+    ok(/const SETTINGS_VER=4\b/.test(html), "settings are at v4 — the version that carries string colours");
+    ok(/stringColors:\(state\.stringColors\|\|STRING_COLORS\)\.slice\(\)/.test(html),
+      "saved settings carry the string colours");
+    const sh = html.slice(html.indexOf("function _stringHex("));
+    const firstRet = sh.slice(sh.indexOf("return"), sh.indexOf(";", sh.indexOf("return")));
+    ok(/state\.stringColors/.test(firstRet),
+      "_stringHex returns the override first, so a custom hue actually paints");
+
+    // (a) every card reminds the user which colour is which.
+    const ab = html.match(/const AB_KEY_CARDS=\[([^\]]*)\]/);
+    ok(ab && ab[1].split(",").length === 6, "all six analysis cards carry an A/B key");
+    ok((html.match(/syncAbKeys\(\)/g) || []).length >= 3, "the key is re-synced when visibility or colours change");
+
+    // (a) EQ match: the fitted response belongs to the guitar being reshaped.
+    ok(/colorFit:COLORS\[fit\.src\]/.test(html), "the fitted curve takes the reshaped guitar's colour");
+    ok(/legendTarget:"reshape "/.test(html), 'the target curve is labelled "reshape", not "target"');
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

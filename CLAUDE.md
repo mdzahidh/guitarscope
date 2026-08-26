@@ -429,15 +429,41 @@ build educational copy from it, never re-derive from scratch.
   constants, merge sections that share a page load, run the full gate once at the end, and
   **shrink the suite when the feature shrinks** (`tests/r5.test.js` 264 → **259**, headless
   held at 64 with six Chrome launches cut to four). Awaiting the user's visual test.
-- **NEXT — the a/b/c quality-of-life sub-milestone the user asked for 2026-08-26**: (a) every
-  card head reminds the user of the A/B color coding, and EQ Match's "Target" becomes
-  **"Reshape"** — the guitar being reshaped is the one the user plays, so the response plot
-  takes *that* guitar's accent; (b) in the spectrum and Difference plots, open strings draw
-  **solid** and their harmonics **dashed in the same hue**, the per-note color configurable
-  in the string popover **and persisted**, harmonics supported **up to the 8th** with the
-  docs expanded to match; (c) label those harmonics in the line plots, inside the plot but
-  **toward the bottom**, where there is usually room.
-- **THEN — R5.4** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
+- **Quality-of-life batch a/b/c BUILT (session 25, reviewer).** Three reading-the-plot items
+  the user asked to lump into a sub-milestone. **(a)** Every analysis card head carries an
+  **A/B color key** — `AB_KEY_CARDS` (6 cards) + `syncAbKeys()` insert a `.abkey` strip as a
+  **sibling after `.cardhead`**, never inside it: M2.6d made the whole card head a fold
+  toggle, so a chip placed inside would fold the card on every click. Rebuilt from
+  `updateVisibility()` and `applyUserColors()`. EQ Match's **"Target" is now "Reshape"** —
+  named for the guitar in the player's hands — and the response plot takes *that* guitar's
+  accent (`colorFit: COLORS[fit.src]`, `legendTarget:"reshape …"` in `buildEqModels()`); the
+  fit math is untouched. **(b)** On both frequency line plots an open string draws **solid**
+  and its harmonics **dashed `[5,4]` in the same hue** (`const isHarm=m.harm&&m.harm>1`).
+  The hue is user-settable per string from the open-string popover's **Line color** row (live
+  preview on `input`, commit on `change`/Default — the whole popover re-renders, because R4's
+  ancestry section also draws an *adjacent* string's dot) and **persisted**: `state.stringColors`
+  is read by **`_stringHex(si)`**, the single override point `_stringColor` and `_trackHueRgb`
+  both inherit, and `gsSettings` goes **v3 → v4** (v1–v3 still load; each stored slot is hex-
+  validated). The popover now runs to the **8th harmonic** (`HARM_MAX = 8`,
+  `HARM_SLOTS = HARM_MAX-1` sizing the 6×7 grid, the payload and every loop);
+  `harmonicIntervalPhrase` already covered 6/7/8 and `HARM_NODES` gained their fret positions
+  from THEORY §6.1. **Widening to 8 cannot change R3's ✦ set**: harmonic 5 sits 27.86
+  semitones above its fundamental (8 → 36) and the widest open-string span in any stocked
+  tuning is 26, so nothing above the 4th can land on an open string. **(c)** Those harmonics
+  are **labeled** with `partialLabel(m, state.a4)` — the spectrogram's own wording, so the two
+  views cannot disagree — **rotated −90° at the bottom axis**, skipped within 11 px.
+  **A deliberate deviation from the brief's "inside the plot … towards the bottom":** ~42
+  verticals on a log axis would force horizontal text to be skipped almost everywhere. This
+  reverses R5.1's "no labels" **for the line plots only**. Gate: 16 source-read assertions
+  appended to `tests/dsp.test.js` (171 → **187**), no new suite and no new `verify.sh` step
+  ("Verification, in proportion"). Three survived mutation and were strengthened — the
+  `drawStringAxis` slice is now **brace-matched** (the next top-level `function` is thousands
+  of characters away, so the naive slice swallowed `VOCABS` and the label assertions passed
+  with the label pass deleted), the skip guard is pinned by expression, and the `_stringHex`
+  assertion reads that function's *first return*. R3's and R4's frozen copy blocks were
+  **re-frozen by their author** (`HARM_NODES` 6–8; `harmonicRowNoteHtml`'s gate `h>5` → `h>8`),
+  each new SHA commented in `tests/verify.sh` **and** in its suite. Awaiting the user's visual test.
+- **NEXT — R5.4** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
   bound the overlay in time, then **R5.5** near-floor disclosure on the LTAS
   Difference. R5.1/R5.2/R5.6/R5.3/R5.7 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
@@ -446,7 +472,7 @@ build educational copy from it, never re-derive from scratch.
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 259, headless 64, plus
+- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 259, headless 64, plus
   all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -622,9 +648,13 @@ build educational copy from it, never re-derive from scratch.
   the header Regions field holds the vocabulary selector. **Strings axis (M2.6b):**
   header toggle (default off, `gsStrings`, "S" key) draws open-string fundamentals as
   dotted verticals labeled on the **bottom** axis of both frequency line plots; labels
-  click to a per-string docs popover (ET formula, harmonics, ±1/6-oct audition). No
-  frequency text on plots — peak/annotation markers are dots-only click targets and
-  the glossary values print Hz + nearest note. (The sgram's right-edge string-marker
+  click to a per-string docs popover (ET formula, harmonics up to the **8th**, per-string
+  **Line color**, ±1/6-oct audition). A string draws **solid**, its shown harmonics **dashed
+  in the same hue**; the hue comes from `_stringHex(si)` — `state.stringColors` if the user
+  set one, `STRING_COLORS` otherwise — and persists in `gsSettings` **v4**. Peak/annotation
+  markers are still dots-only click targets and the glossary values print Hz + nearest note,
+  but harmonic verticals now **do** carry text (batch c): `partialLabel()`, the spectrogram’s
+  own wording, rotated −90° at the bottom axis and skipped within 11 px. (The sgram's right-edge string-marker
   pass was **deleted at R5.7** — open strings appear there only when overlaid.) **Region-boundary Hz labels (M2.6c):** the lane
   prints each region's start/end frequency directly below its ticks (per lane row,
   compact axis format; full precision stays in the region's glossary popover);

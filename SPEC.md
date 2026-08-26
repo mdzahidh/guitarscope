@@ -904,8 +904,8 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
   scrolling past its end and chaining to the page, which dismissed it — was fixed
   before the merge.
 - **Delegation decision (user's request):** future milestones are built by a cheaper
-  builder (Muse Spark) working from docs/ROADMAP.md, which opens a PR that this
-  reviewer reviews and merges. Spark writes no gating tests of its own, so **the gate
+  builder (Sonnet) working from docs/ROADMAP.md, which opens a PR that this
+  reviewer reviews and merges. The builder writes no gating tests of its own, so **the gate
   has to exist before the work does**.
 - **`./tests/verify.sh` is that gate** (`0c713b7`) — one command, exit 0 means the
   branch is reviewable. It runs the DSP suite (shipped math must not regress),
@@ -937,7 +937,7 @@ append-only changelog of scope decisions. New decisions go at the bottom of the 
 
 ### 2026-08-24 — R3 discovery moments: gate 3 passed, merged
 
-- **Merged `ddde88b`** (`--no-ff`). Muse Spark built R3.2–R3.5 in the two prescribed
+- **Merged `ddde88b`** (`--no-ff`). Sonnet built R3.2–R3.5 in the two prescribed
   commits; `./tests/verify.sh` re-run by the reviewer prints **`gate passed`**, exit 0 —
   171 + 40 + 20 assertions, `tests/` byte-identical to the base, frozen ✦-copy SHA intact.
   Nothing under `tests/`, `SPEC.md` or the `CLAUDE.md` status section was touched by the
@@ -1074,7 +1074,7 @@ Same order as R3: the gate first, then the handoff, then the builder. Two commit
 
 ### Session 18 (2026-08-24) — R4 built by the delegated builder, gate 4 passed
 
-R4 (harmonic ancestry in the per-string popover) was built by Muse Spark from
+R4 (harmonic ancestry in the per-string popover) was built by Sonnet from
 `docs/handoff/spark-r4.md` and merged to master as `9be2849` (builder commits
 `5780f50` + `471d5c6`). The diff is 13 lines of `index.html` — three call sites and
 two CSS rules — because the physics was pre-landed inert and SHA-frozen at the gate
@@ -1166,7 +1166,7 @@ drew, not a bigger number. `drew()`/`domDrawn()`/`shotDrawn()` in `tests/headles
 
 Third delegate-and-gate cycle, same order as R3 and R4: gate first (`529a498`), the two
 contradicted documents corrected before the code (`42e8154`), handoff
-(`docs/handoff/spark-m27.md`, `7d7f6a5`), Muse Spark builds (`3272e23`), reviewer merges
+(`docs/handoff/spark-m27.md`, `7d7f6a5`), Sonnet builds (`3272e23`), reviewer merges
 (`c6ab4f9`) and fixes (`f96e806`). `./tests/verify.sh` prints `gate passed`: dsp 171,
 r3 42, r4 60, **m27 51**, headless 34, all three tamper verdicts intact. The shipped
 behaviour is the one the gate was written against — an unzoomed pane pixel-identical to
@@ -1312,3 +1312,55 @@ The other two items were repairs with numbers behind them: the spectrogram panes
 tooltip, and ships `disabled` until a note is overlaid — with `select:disabled{opacity:.4}`
 so that state is visible. Gate: `tests/r5.test.js` 76 → **102**, every new assertion
 mutation-checked the day it was written.
+
+## The spectrogram difference pane, removed (session 21, user report)
+
+The user looked at the sgram difference pane and named its premise: it subtracts the two
+spectrograms **cell by cell at shared file time**, which only says anything if both takes
+play the same section, start together, and hold the same tempo. Two real performances of the
+same riff drift within a bar, and after the drift every pixel compares one note against a
+different note. The number it printed was well-defined and meaningless.
+
+**Decision: delete rather than patch.** There is no honest reading of a naive subtraction of
+unaligned time axes, and a caveat under the plot would not have made one. `sgramCanvasD`,
+`buildSgramDiffModel`, `drawSgramDiffScene` and `attachSgramDiffCrosshair` are gone (≈290
+lines). What was kept: `sgramDifference()` in block 0 — pure, node-tested math the warped
+replacement will call *after* the warp — and its CSS, left inert rather than churning a
+stylesheet the gate hashes. What survives as the comparison: the **LTAS Difference**
+(`diffCanvas`), which needs no alignment because a long-term average spectrum is
+time-invariant by construction. That is why it was the original difference view.
+
+The replacement — an onset-warped / beat-aligned (DTW) difference that maps one file's time
+axis onto the other's onset grid before subtracting — is recorded in docs/ROADMAP.md as
+deferred until after R6. It is a real feature, not a consolation: it is the version whose
+number means what the picture implies.
+
+## R5.2 — a chord, from a picker (session 21)
+
+R5.1 could overlay one string. One note's partials rarely collide with anything; the picture
+worth looking at is a **chord**, where several strings' harmonic series interleave and the
+merge is visible in the image *before* anything is marked. That ordering is deliberate —
+R5.3's ✦ clusters name what the eye has already found.
+
+**Decision: a chord is stored as fret offsets, never as pitches.** `SG_CHORDS` stocks eight
+open shapes (E, Em, A, Am, C, D, Dm, G) as six-slot fret arrays with `null` for a muted
+string; the pitch comes from `tuningMidi(state.tuning, state.customOffset)[si] + fret`
+through the same ET formula everything else uses. So the shapes **move with the tuning** —
+pick Drop D and the E shape sounds what those frets actually sound, which is the physically
+true answer and also the more interesting one. Storing MIDI numbers would have frozen the
+chords in E standard and quietly lied under any other tuning.
+
+No new state and no new draw code: `state.sgFrets` was always six slots, and R5.1 merely
+never filled more than one. `sgramModelFor()` hands `notePartials()` the **six-slot** array
+(the R5.1 trap: `key` indexes what it was given, and `key` picks the hue), so a chord paints
+six hues for free.
+
+**Gate.** `tests/r5.test.js` 102 → **128**, `tests/headless.js` 40 → **45**, plus the new
+gate-only hook `?sgchord=<name>` — the canvas is unreachable from node, so headless reads
+`data-sgcomb` (sounding strings × harmonic limit): `E` → 36, `D&sgharm=3` → 12, and an
+unstocked name overlays nothing, because the hook mutes all six slots before it resolves.
+One assertion had to be tightened after mutation testing: `state.sgFrets.map(… + fr)` was
+loose enough that hard-coding the open notes still passed, so the test now captures the
+tuning variable's own name from `const <v> = tuningMidi(state.tuning` and requires
+`<v>[si] + fr` inside the map body. Every new assertion was mutation-checked the day it was
+written.

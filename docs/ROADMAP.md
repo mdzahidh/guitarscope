@@ -203,7 +203,7 @@ R4 is then one stack (low risk — it reuses the reviewed detector); R5.1 review
 
 ## Gate 1 — reviewed 2026-08-23: **pass**
 
-Branch `rameau-r1r2`, base `675afd6`, R1.1–R1.5 + R2.1–R2.5 built by Muse Spark 1.2.
+Branch `rameau-r1r2`, base `675afd6`, R1.1–R1.5 + R2.1–R2.5 built by Sonnet 1.2.
 Verified independently: 117/0 tests; the shipped snapshot reader accepts both app names
 and rejects a foreign app / a per-card export / an empty file list; the rename is
 complete in user-visible strings; the About text matches `docs/STORY.md`; both themes
@@ -234,7 +234,7 @@ button content model, and its `aria-label` overrides the title as the accessible
 
 ## Gate 3 — reviewed 2026-08-24: **pass**, merged `ddde88b`
 
-Branch `rameau-r3`, base `0c713b7`, R3.2–R3.5 built by Muse Spark in the two prescribed
+Branch `rameau-r3`, base `0c713b7`, R3.2–R3.5 built by Sonnet in the two prescribed
 commits. `./tests/verify.sh` re-run by the reviewer on this machine: **171 + 40 + 20
 assertions green, both tamper guards intact, exit 0.** The diff matches the handoff task
 for task; nothing under `tests/`, `SPEC.md` or the `CLAUDE.md` status section was touched.
@@ -1033,14 +1033,29 @@ affordances and their three call sites, and the **inverted** exporter contract (
 may assign to those state keys). Every one mutation-checked the day it was written; ten
 mutations, ten caught.
 
-### R5.2 — a chord, from a picker
+### R5.2 — a chord, from a picker — **BUILT** (session 21)
 
 Eight open chords as a table of `{name, frets[6]}`, `null` = muted:
 `E [0,2,2,1,0,0]`, `Em [0,2,2,0,0,0]`, `A [null,0,2,2,2,0]`, `Am [null,0,2,2,1,0]`,
 `C [null,3,2,0,1,0]`, `D [null,null,0,2,3,2]`, `Dm [null,null,0,2,3,1]`,
 `G [3,2,0,0,0,3]`. They join `#sgNoteSel` under a second optgroup; pitches come from the
-existing ET formula, colors from `_stringColor(key)`. 17 tracks where there should be 36 —
+existing ET formula, colors from `_trackColor(key)`. 17 tracks where there should be 36 —
 **the merge is visible before anything is marked**, which is the point.
+
+*As built.* `SG_CHORDS` + `_sgChordName()` in block 4; the shapes are **fret offsets**, so a
+chord moves with the tuning (`tuningMidi(...)[si] + fret`) instead of freezing in E standard.
+No new draw code and no new state — `state.sgFrets` was always six slots and R5.1 just never
+filled more than one, so `sgramModelFor()` hands `notePartials()` the same six-slot array and
+each string keeps its own hue (`key` indexes what it was given). The change handler mutes all
+six before assigning `ch.frets.slice()` — a copy, never the shipped table.
+
+*Done when* — met: `?sgchord=<name>` exists as a gate-only hook (unpersisted, no UI, mutes
+before it resolves so an unstocked name overlays nothing); `tests/r5.test.js` pins the stocked
+fret table against the independently measured one, the fret-plus-open-midi arithmetic (with
+the tuning variable captured by name, after a loose version survived mutation), the picker
+built *from* `SG_CHORDS`, and the hook's wiring — 102 → **128**; `tests/headless.js` reads
+`data-sgcomb` through real Chrome (E → 36, D at N=3 → 12, `Zz` → absent) and confirms a chord
+marks more pixels than one string does — 40 → **45**.
 
 ### R5.3 — collisions marked and clickable
 
@@ -1059,6 +1074,36 @@ wires it.**
 Restrict the overlay to a selected time span rather than the full pane width, composing
 with M2.7's zoom refinement. Deliberately last: the user asked to ignore time-span until
 the rest works.
+
+### R5.5 — near-floor disclosure on the LTAS Difference (small, after R5.2)
+
+The LTAS Difference is a log-ratio per bin; the Band Energy share is a linear power
+integral. A 0 % share above 10 kHz alongside a large per-bin Δ in the same band is
+not a contradiction — it is two views of the floor. The house rule is to keep the raw
+Δ honest and to disclose where it is inaudible rather than to warp the number.
+
+*Do next, before a loudness-weighted metric:* when both curves are near the floor,
+draw that segment of the Difference line at 40 % alpha, dashed `[4,4]`, and add a
+status-chip footnote `dashed = both near floor (≈ inaudible)` — see session-21
+recommendation for thresholds (`max dispDb < -60 dBFS` or `< peak − 45 dB`) and for
+the deferred alternative (A-weighted or sone/ERB specific-loudness integrated Δ).
+Keep the numeric `+X.X dB` at the crosshair; the Band Energy % remains the audibility view.
+
+*Done when* `tests/r5.test.js` asserts the dashed style only where the dual-floor
+predicate holds, the footnote appears only when any segment is dashed, and the
+headless LTAS Difference still renders the raw Δ (no value rewritten).
+
+### Deferred — warped spectrogram difference (not in R5; after R6)
+
+M2.5's `sgramCanvasD` / `buildSgramDiffModel` / `drawSgramDiffScene` / `attachSgramDiffCrosshair`
+was a naive pixel-wise `sgramDifference()` subtraction at shared file time. It assumed the two
+files play the same section at the same time and with the same tempo — a false premise the
+user called out on 2026-08-25. The pane was removed in that session (index.html 290 lines;
+CSS kept inert for the gate); `sgramDifference(sgA,t0A,sgB,t0B,dbOffsetB)` in block 0 is pure
+math and was kept for reuse. A replacement is deferred until after R6: an **onset-warped /
+beat-aligned / DTW** difference that warps one spectrogram's time axis onto the other's
+onset/beat grid before subtracting, with the LTAS Difference (`diffCanvas`) — which needs no
+warping — left as the comparison that survives today.
 
 ### Deliberately not in R5
 

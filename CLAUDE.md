@@ -147,8 +147,8 @@ build educational copy from it, never re-derive from scratch.
   Known open taste call: the `About` button wraps the `.globals` cluster to a second row
   at 1440 px.
 - **R3 gate harness BUILT (session 16, `0c713b7`); the milestone it guards is now BUILT too — see the R3 bullet below.** The
-  user's workflow from here is: a delegated builder (Muse Spark) implements a milestone
-  and opens a PR, I review and merge. Spark writes no tests, so the gate exists first:
+  user's workflow from here is: a delegated builder (Sonnet) implements a milestone
+  and opens a PR, I review and merge. Sonnet writes no tests, so the gate exists first:
   **`./tests/verify.sh`** is the definition of done and is **deliberately red** until
   R3.2–R3.5 land. It runs `tests/dsp.test.js` (shipped-math baseline),
   `tests/r3.test.js` (block-0 coincidence math, green, + the R3.2/R3.3/R3.4 wiring
@@ -165,7 +165,7 @@ build educational copy from it, never re-derive from scratch.
   power-of-two denominator (E std/Eb/D std 3 each, drop D 2, DADGAD 5 with 4 exact).
   That insensitivity is the empirical case for a fixed ±6 ¢ over a slider.
 - **R3 discovery moments BUILT — gate 3 passed, merged to master 2026-08-24
-  (`ddde88b` + reviewer commit `49878f1`).** Built by the delegated builder (Muse Spark)
+  (`ddde88b` + reviewer commit `49878f1`).** Built by the delegated builder (Sonnet)
   from `docs/handoff/spark-r3.md`; `./tests/verify.sh` prints **`gate passed`** (171 + 40
   + 20 assertions, both tamper guards). A quiet ✦ sits on both frequency plots wherever a
   *shown* harmonic of one string lands within **±6 ¢** of another **open string's**
@@ -203,7 +203,7 @@ build educational copy from it, never re-derive from scratch.
   four mutation-checked.
 - **R4 harmonic ancestry BUILT — gate 4 passed, merged to master 2026-08-24 (`9be2849`;
   builder commits `5780f50` + `471d5c6`).** Gate first, then handoff
-  (`docs/handoff/spark-r4.md`), then the delegated builder (Muse Spark), launched from
+  (`docs/handoff/spark-r4.md`), then the delegated builder (Sonnet), launched from
   here — same order as R3, second time it worked. Block 0
   carries `JUST_INTERVALS`/`isPow2`/`stringAncestry()`; block 4 carries a **second frozen
   copy block** (`// ---------- harmonic ancestry copy (R4) ----------` → its end sentinel:
@@ -232,7 +232,7 @@ build educational copy from it, never re-derive from scratch.
 - **M2.7 resolution follows attention BUILT — gate 6 passed, merged to master 2026-08-24
   (`c6ab4f9`, builder commit `3272e23`; reviewer fixes `f96e806`).** Same delegate-and-gate
   order as R3/R4 — gate first (`529a498`), docs corrected before the code (`42e8154`),
-  handoff (`docs/handoff/spark-m27.md`, `7d7f6a5`), Muse Spark builds, reviewer merges and
+  handoff (`docs/handoff/spark-m27.md`, `7d7f6a5`), Sonnet builds, reviewer merges and
   fixes. **Spectrogram zoom is no longer only a crop:** when a pane carries an x-zoom the
   STFT is recomputed for that window at a finer resolution — `sgramWindowFor(spanSec, rate)`
   in block 0 (8192 below 2 s, 4096 at/above, floor 2048, capped by `1<<floor(log2(span*rate/4))`,
@@ -294,18 +294,45 @@ build educational copy from it, never re-derive from scratch.
   sgram-PNG taste call and the older "✦ never reaches a PNG" rule. Gate: `tests/r5.test.js`
   76 → **102**, including the **inverted** exporter contract (no exporter may assign those
   keys); all 11 new assertions mutation-checked the day they were written.
-- **NEXT — R5.2** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
+- **Spectrogram difference pane REMOVED (session 21, user report).** The pane subtracted the
+  two spectrograms **cell by cell at shared file time** — meaningful only if both takes play
+  the same section, start together and hold the same tempo. Real takes drift within a bar, so
+  after the drift every pixel compared one note against a different note. Deleted rather than
+  caveated (≈290 lines: `sgramCanvasD`, `buildSgramDiffModel`, `drawSgramDiffScene`,
+  `attachSgramDiffCrosshair`). **Kept:** `sgramDifference()` in block 0 (pure node-tested math
+  the warped replacement will call after the warp) and its CSS, left inert rather than churning
+  a stylesheet the gate hashes. **The comparison that survives is the LTAS Difference**
+  (`diffCanvas`) — a long-term average spectrum is time-invariant, so it needs no alignment;
+  that is why it was the original difference view. An onset-warped / DTW replacement is
+  recorded in ROADMAP as deferred until after R6.
+- **R5.2 open-chord picker BUILT (session 21).** R5.1 overlaid one string; a chord is where
+  several harmonic series interleave and **the merge is visible before anything is marked** —
+  which is why R5.3's ✦ clusters come after it. `SG_CHORDS` stocks eight open shapes (E, Em,
+  A, Am, C, D, Dm, G) as six-slot **fret** arrays (`null` = muted), so a shape **moves with
+  the tuning** (`tuningMidi(...)[si] + fret`) instead of freezing in E standard; `_sgChordName()`
+  reverses the lookup for the status chip. No new state and no new draw code — `state.sgFrets`
+  was always six slots and R5.1 merely never filled more than one, so `sgramModelFor()` hands
+  `notePartials()` the same **six-slot** array and each string keeps its own hue (`key` indexes
+  what it was given — the R5.1 trap). The picker is a second `<optgroup label="Open chord">`
+  built **from** `SG_CHORDS`; the handler mutes all six slots, then assigns `ch.frets.slice()`
+  — a copy, never the shipped table. Gate: `?sgchord=<name>` (gate-only hook, unpersisted),
+  `tests/r5.test.js` 102 → **128**, `tests/headless.js` 40 → **45**, reading `data-sgcomb`
+  through real Chrome (E → 36, D at N=3 → 12, `Zz` → absent). One assertion was **too loose**
+  and survived a mutation that hard-coded the open notes; it now captures the tuning variable's
+  own name from `const <v> = tuningMidi(state.tuning` and requires `<v>[si] + fr` inside the map
+  body. All 31 new assertions mutation-checked the day they were written.
+- **NEXT — R5.3** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
-  eight open chords from a picker (the user's case (b) — where collisions become visible),
-  then **R5.3** one ✦ per `partialClusters()` cluster, tiers drawn distinguishably, spread
+  one ✦ per `partialClusters()` cluster, tiers drawn distinguishably, spread
   along the *time* axis (**reviewer writes and freezes the copy, builder wires it**), then
-  **R5.4** bounding the overlay in time. **R6** is the old R5 — interval consonance
+  **R5.4** bounding the overlay in time, and **R5.5** near-floor disclosure on the LTAS
+  Difference. **R6** is the old R5 — interval consonance
   explainers (joint period, comb alignment, Plomp–Levelt roughness) — still blocked until
   the user resolves the two docs/THEORY.md §2.5 numeric caveats. Educational tone: measure
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
-  the plumbing.**
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 102, headless 40, plus
+  the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 128, headless 45, plus
   all three tamper guards (`tests/` untouched, both frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -370,7 +397,7 @@ build educational copy from it, never re-derive from scratch.
 - Open `index.html` in a browser. `?demo` auto-loads the built-in demo pair
   (`?demo=a`/`=b` loads one side only). Other test hooks: `?theme=bright|dark`,
   `?sgalign=file|onset`, `?mag=<viewkey>`, `?guide`,
-  `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp|sga|sgb|sgd; data units —
+  `?zoom=key:x0,x1[,y0,y1]` (key = spec|diff|env|eqresp|sga|sgb; data units —
   sg keys take x in display-time seconds, y in Hz), `?vocab=eq|anatomy|solo|mix`
   (annotation-lane vocabulary), `?ca=RRGGBB`/`?cb=RRGGBB` (session-only guitar-color
   overrides), `?open=all|key,key` (unfold collapsed panels: diff|bands|tone|eq|sgram|
@@ -384,9 +411,12 @@ build educational copy from it, never re-derive from scratch.
   `data-sgwin="<window>"`, the window that pane actually rendered, for the same reason:
   the canvas is unreachable from node),
   `?sgnote=<0-5>` (spectrogram harmonic overlay: pick one open string; out of range selects
-  nothing) and `?sgharm=<n>` (harmonics 1–N, clamped 1–16) — **gate hooks only**,
+  nothing), `?sgchord=<name>` (one of the eight stocked open chords — `E|Em|A|Am|C|D|Dm|G`;
+  an unstocked name overlays nothing, because the hook mutes all six strings before it
+  resolves) and `?sgharm=<n>` (harmonics 1–N, clamped 1–16) — **gate hooks only**,
   unpersisted; each sgram pane canvas carries `data-sgcomb="<count>"`, the number of partial
-  tracks in that pane's overlay, absent when the overlay is off,
+  tracks in that pane's overlay (sounding strings × the harmonic limit), absent when the
+  overlay is off,
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
@@ -398,9 +428,11 @@ build educational copy from it, never re-derive from scratch.
   **It must not run inside a shell sandbox** — Chrome aborts at startup in
   `_RegisterApplication` (exit 134) when it cannot reach `launchservicesd`, and macOS
   pops a crash dialog per launch. `tests/headless.js` recognises that abort, prints the
-  cause and the fix, and stops on the first one. Delegated builds therefore launch as
+  cause and the fix, and stops on the first one. Delegated milestone builds launch as
   `/usr/local/bin/muse exec --disable-sandbox --prompt-file docs/handoff/spark-<task>.md`
-  (add `--disable-approval` unattended, `-w create` for a worktree). Never point `$CHROME`
+  (add `--disable-approval` unattended, `-w create` for a worktree). Small instrument tweaks
+  (R5.1a, the 2026-08-25 sgram-diff removal, R5.5 near-floor disclosure) delegate instead via
+  in-session Sonnet sub-agents per 2026-08-26 — same gate, `tests/` still read-only. Never point `$CHROME`
   at a stub to get past it: a gate step that cannot run is red.
 - Headless screenshot (virtual time fast-forwards the Welch yields):
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
@@ -444,8 +476,8 @@ build educational copy from it, never re-derive from scratch.
 - **DSP params:** Welch LTAS 8192-pt Hann 50 % overlap; log grid 60 Hz–20 kHz (700 pts);
   metrics integrate 60 Hz–20 kHz only; octave smoothing off/1-12/1-6/1-3; peak detection
   always on 1/6-oct curve. Spectrogram 2048-pt Hann, 256 log cells 60 Hz–20 kHz,
-  **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale,
-  difference pane onset-aligned, diverging colormap, p98 scale; individual panes get
+  **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale;
+  individual panes get
   a Free / File-time / First-onset time-axis choice; envelope overlay
   aligned at each file's first onset. **One global Level-match switch** (header
   Comparison field, M2.6a) drives plots, band table, verdict, spectrogram cells +

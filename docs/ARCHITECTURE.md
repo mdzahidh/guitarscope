@@ -970,6 +970,63 @@ claims that dissolve into taste if nobody counts pixels.
   asserts the inverse of what it used to: none of the three exporters may assign to those
   keys. `exportSgramPNG()` also gained the catch/toast the other exporters had.
 
+## Spectrogram difference removed (session 21): a false premise, deleted
+
+M2.5's spectrogram-difference pane (`sgramCanvasD`, `buildSgramDiffModel`,
+`drawSgramDiffScene`, `attachSgramDiffCrosshair`) subtracted the two spectrograms **cell by
+cell at shared file time**. That is only meaningful if both recordings play the same section,
+starting together, at the same tempo — a premise the app never checked and cannot enforce.
+The user named it on 2026-08-25: two takes of the same riff drift within a bar, and every
+pixel after the drift compares a note against a different note. The pane was removed
+(≈290 lines of `index.html`) rather than patched, because there is no honest reading of a
+naive subtraction of unaligned time axes.
+
+- **What was kept.** `sgramDifference(sgA, t0A, sgB, t0B, dbOffsetB)` stays in block 0: it is
+  pure math, node-tested, and the warped replacement will call it after the warp. Its CSS
+  rules stay too, inert — deleting them would have churned the stylesheet the gate hashes for
+  no behavioral gain.
+- **What survives as the comparison.** The **LTAS Difference** (`diffCanvas`) needs no
+  alignment at all: a long-term average spectrum is time-invariant by construction, which is
+  precisely why it was the original difference view and why it is untouched here.
+- **What replaces it, eventually.** An onset-warped / beat-aligned (DTW) difference that maps
+  one file's time axis onto the other's onset grid *before* subtracting. Deferred until after
+  R6 — see docs/ROADMAP.md "Deferred — warped spectrogram difference". The obsolete bullets
+  above (`_sgDiff` cache invalidation, the sgram-difference auto-latch, the M2.5 pane
+  description) describe code that no longer ships; they are left as the record of what was
+  built and why it was wrong.
+
+## R5.2 (session 21): a chord, from a picker
+
+R5.1 overlaid one string. A single note's partials rarely collide with anything — the
+interesting picture is a **chord**, where six strings' harmonic series interleave and the
+merge is visible in the image before anything is marked. That is the user's case (b), and it
+is why R5.3's ✦ clusters come after this and not before.
+
+- **A chord is fret offsets, not pitches.** `SG_CHORDS` (block 4) stocks eight open shapes as
+  six-slot fret arrays (`null` = muted): E, Em, A, Am, C, D, Dm, G. The pitch is computed the
+  same way everything else is — `tuningMidi(state.tuning, state.customOffset)[si] + fret`,
+  through the existing ET formula — so a chord shape **moves with the tuning**: pick Drop D
+  and the E shape sounds what those frets actually sound. Storing MIDI numbers would have
+  frozen the chords in E standard, and the gate asserts the addition explicitly (a loose
+  regex here passed a mutation that hard-coded the open notes; the assertion now captures the
+  tuning variable's own name and requires `<name>[si] + fr`).
+- **One state, one draw pass.** `state.sgFrets` was already a six-slot array — R5.1 simply
+  never filled more than one slot. A chord fills several; `sgramModelFor()` maps it to MIDI,
+  hands the **six-slot** array to `notePartials()` (`key` indexes that array and `key` picks
+  the hue — the R5.1 trap), and publishes the flat result as `comb`. Nothing in
+  `drawSpectrogramScene()` changed: one string was always just a chord with five nulls.
+- **The picker.** `fillSgNoteSel()` grows a second `<optgroup label="Open chord">` built
+  **from** `SG_CHORDS`, values namespaced `chord:<name>`; the change handler branches on
+  `startsWith("chord:")`, mutes all six slots first, and assigns `ch.frets.slice()` — a copy,
+  because the shipped table must not become the live state. `_sgChordName(frets)` reverses the
+  lookup for the status chip, requiring an exact six-slot match.
+- **`?sgchord=<name>` (gate hook only).** The canvas is unreachable from node, so headless
+  reads `data-sgcomb` — sounding strings × harmonic limit. `&sgchord=E` gives 36 at the
+  default six harmonics, `&sgchord=D&sgharm=3` gives 12 (D mutes two strings), and an
+  unstocked name (`Zz`) overlays **nothing**: the hook mutes before it resolves, so a typo
+  cannot silently leave the previous chord on screen. Unpersisted, no `gsSettings` key, no UI
+  — same standing as `?sgnote=` / `?sgharm=` / `?tol=` / `?refine=0`.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never
@@ -1118,7 +1175,7 @@ metrics) are carried as stored values and labeled as such.
 - `tests/make_samples.js`: regenerates the demo WAVs and round-trips them through the
   app's own sniffer.
 - **The R3 gate (session 16): `./tests/verify.sh`.** Written *before* the milestone it
-  guards, because the builder of R3.2–R3.5 is delegated (Muse Spark) and writes no tests
+  guards, because the builder of R3.2–R3.5 is delegated (Sonnet) and writes no tests
   of its own. Three properties make it worth the trouble:
   - **Red by design.** `tests/r3.test.js` asserts the block-0 coincidence math (green
     already — the detector is reviewer-authored) *and* the R3.2/R3.3/R3.4 wiring

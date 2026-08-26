@@ -4667,10 +4667,14 @@ function sgramModelFor(i,scale){
   // skipped), never the one selected note, or every string would draw in red.
   const sgOpen=tuningMidi(state.tuning,state.customOffset);
   const sgMidis=state.sgFrets.map((fr,si)=>(fr==null||sgOpen[si]==null)?null:sgOpen[si]+fr);
-  const sgSi=sgMidis.findIndex(m=>m!=null);
-  if(sgSi>=0){
+  if(sgMidis.some(m=>m!=null)){
     comb=notePartials(sgMidis,state.sgHarm,state.a4);
-    combNote=noteInfo(midiToFreq(sgMidis[sgSi],state.a4),state.a4).name;
+    combNote=_sgChordName(state.sgFrets);
+    if(!combNote){
+      const sgSi=sgMidis.findIndex(m=>m!=null);
+      combNote=noteInfo(midiToFreq(sgMidis[sgSi],state.a4),state.a4).name;
+      if(sgMidis.filter(m=>m!=null).length>1) combNote+=" · "+sgMidis.filter(m=>m!=null).length+" notes";
+    }
   }
   return { sg:sgToUse, image:imageToUse,
     view:{T0:zw.T0,T1:zw.T1,d0:view.d0}, fWin:{F0:zw.F0,F1:zw.F1},
@@ -6022,19 +6026,36 @@ function _trackColor(si, alpha){
   const [r,g,b]=liftForDark(_hexRgb(STRING_COLORS[si%6]), 0.62);
   return `rgba(${r},${g},${b},${alpha})`;
 }
+// Eight open chords — the user's case (b) (ROADMAP R5.2). Frets are per-string
+// offsets from the current open tuning; null = muted. Order is the stocked table.
+const SG_CHORDS=[
+  {name:"E",  frets:[0,2,2,1,0,0]}, {name:"Em", frets:[0,2,2,0,0,0]},
+  {name:"A",  frets:[null,0,2,2,2,0]}, {name:"Am", frets:[null,0,2,2,1,0]},
+  {name:"C",  frets:[null,3,2,0,1,0]}, {name:"D",  frets:[null,null,0,2,3,2]},
+  {name:"Dm", frets:[null,null,0,2,3,1]}, {name:"G",  frets:[3,2,0,0,0,3]}
+];
+function _sgChordName(frets){
+  for(const ch of SG_CHORDS) if(ch.frets.length===6 && ch.frets.every((f,i)=>f===frets[i])) return ch.name;
+  return null;
+}
 // R5.1: fills the spectrogram's Overlay string select from the current tuning —
 // six named choices (Off stays first), never hard-coded note names.
+// R5.2: plus eight open chords as a second optgroup — same pitch source (ET via
+// midiToFreq), same hue source (_trackColor via notePartials key).
 function fillSgNoteSel(){
   if(!sgNoteSel) return;
   const prev=sgNoteSel.value;
   const midis=tuningMidi(state.tuning,state.customOffset);
-  let html='<option value="off">Off</option>';
+  let html='<option value="off">Off</option><optgroup label="Single string">';
   for(let si=0;si<6;si++){
     const midi=midis[si];
     if(midi==null) continue;
     const name=noteInfo(midiToFreq(midi,state.a4),state.a4).name;
     html+='<option value="'+si+'">'+esc(STRING_ORD[si]+" — "+name)+'</option>';
   }
+  html+='</optgroup><optgroup label="Open chord">';
+  for(const ch of SG_CHORDS) html+='<option value="chord:'+esc(ch.name)+'">'+esc(ch.name)+'</option>';
+  html+='</optgroup>';
   sgNoteSel.innerHTML=html;
   sgNoteSel.value=[...sgNoteSel.options].some(o=>o.value===prev)?prev:"off";
   syncSgHarmSel();
@@ -7141,9 +7162,14 @@ function boot(){
   });
   sgNoteSel.addEventListener("change",()=>{
     const v=sgNoteSel.value;
-    const si=v==="off"?-1:parseInt(v,10);
     state.sgFrets=[null,null,null,null,null,null];
-    if(si>=0&&si<6) state.sgFrets[si]=0; // open string only — R5.1 carries no fretting UI
+    if(v.startsWith("chord:")){
+      const ch=SG_CHORDS.find(c=>c.name===v.slice(6));
+      if(ch) state.sgFrets=ch.frets.slice();
+    } else if(v!=="off"){
+      const si=parseInt(v,10);
+      if(si>=0&&si<6) state.sgFrets[si]=0; // single open string — R5.1 carries no fretting UI; R5.2 adds chords above
+    }
     syncSgHarmSel();
     requestDraw();
   });
@@ -7521,6 +7547,13 @@ function boot(){
     const si=parseInt(sgn[1],10);
     state.sgFrets=[null,null,null,null,null,null]; state.sgFrets[si]=0;
     sgNoteSel.value=String(si); syncSgHarmSel(); requestDraw();
+  }
+  const sgc=location.search.match(/[?&]sgchord=([A-Za-z0-9#]{1,4})(?:&|$)/);      // test hook — an unstocked name selects nothing
+  if(sgc){
+    const ch=SG_CHORDS.find(c=>c.name===sgc[1]);
+    state.sgFrets=[null,null,null,null,null,null];
+    if(ch){ state.sgFrets=ch.frets.slice(); sgNoteSel.value="chord:"+ch.name; }
+    syncSgHarmSel(); requestDraw();
   }
   const sgh=location.search.match(/[?&]sgharm=([0-9]+)(?:&|$)/i);                  // test hook
   if(sgh){ state.sgHarm=Math.max(1,Math.min(16,parseInt(sgh[1],10)||6)); sgHarmSel.value=String(state.sgHarm); requestDraw(); }

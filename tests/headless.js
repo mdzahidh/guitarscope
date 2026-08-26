@@ -310,7 +310,15 @@ function sgwin(page, id) {
 // neither — but the overlay-off assertions check that data-sgcomb is *absent*, and a
 // blank page supplies that for free. Anchoring readiness on data-sgwin closes that
 // false pass.
-function drew(page) { return sgwin(page, "sgramCanvasA") !== null; }
+//
+// And ask it of *both* panes. The two files decode independently, so the race is not
+// all-or-nothing: a gate run in which every pane-A assertion passed still failed twice
+// on pane B, once for data-sgwin and once for data-sgcomb, because A had drawn and B
+// had not when the launch ended. Every query below loads the demo pair, so both panes
+// are always due; a one-pane predicate just moved the false pass one canvas to the right.
+function drew(page) {
+  return sgwin(page, "sgramCanvasA") !== null && sgwin(page, "sgramCanvasB") !== null;
+}
 
 // A second race sits on top of that one, and it is M2.7's own: refinement is an
 // asynchronous pass — a settle timer, then an STFT that finishes whenever it
@@ -454,6 +462,45 @@ section("and the tracks are pixels, not an attribute");
   ok(d.length > d2.length,
     "and six harmonics mark more of it than two",
     d.length + " px vs " + d2.length + " px");
+}
+
+// R5.2 — a chord is a set of strings, so the track count is (sounding strings ×
+// harmonics). The cluster counts behind these shapes are pinned in tests/r5.test.js;
+// what only Chrome can say is that the picker reaches the drawing at all.
+section("R5.2 — a chord overlays every string it sounds");
+{
+  const e = domDrawn(SG + "&sgchord=E");
+  ok(sgcomb(e, "sgramCanvasA") === 36,
+    "E major sounds all six strings — 36 partials at the default six harmonics",
+    String(sgcomb(e, "sgramCanvasA")));
+  ok(sgcomb(e, "sgramCanvasB") === 36, "…on both panes",
+    String(sgcomb(e, "sgramCanvasB")));
+
+  // D mutes the two lowest strings. A build that ignored the nulls would draw 36
+  // here too, and would be drawing notes the player never fretted.
+  const d = domDrawn(SG + "&sgchord=D&sgharm=3");
+  ok(sgcomb(d, "sgramCanvasA") === 12,
+    "D mutes two strings and honours the limit — 4 × 3 = 12",
+    String(sgcomb(d, "sgramCanvasA")));
+
+  // An unstocked name is not a chord. Muting first is what makes this nothing
+  // rather than whatever was selected before.
+  const none = domDrawn(SG + "&sgchord=Zz");
+  ok(sgcomb(none, "sgramCanvasA") === null,
+    "an unstocked name overlays nothing at all",
+    String(sgcomb(none, "sgramCanvasA")));
+}
+
+section("…and a chord marks more of the picture than one string does");
+{
+  const off = shotDrawn(SG, TALL);
+  const one = shotDrawn(SG + "&sgnote=0", TALL);
+  const chord = shotDrawn(SG + "&sgchord=E", TALL);
+  const dOne = diffPixels(one, off, 8);
+  const dCh = diffPixels(chord, off, 8);
+  ok(dCh.length > dOne.length,
+    "six strings of tracks cover more than one string's six partials",
+    dCh.length + " px vs " + dOne.length + " px");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

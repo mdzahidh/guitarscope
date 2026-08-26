@@ -463,5 +463,113 @@ section("R5.1 — the pane is tall enough to read, and the controls say what the
     "…and a select:disabled rule makes the greying show, the same idiom .seg button uses");
 }
 
+// ---------------------------------------------------------- R5.2 wiring ----
+// The chord math is already pinned above ("the chords R5.2 will stock, measured
+// now so R5.2 cannot drift"). What is left is the picker: the shipped table must
+// BE that table, the select must offer it, and the overlay must project it
+// through the current tuning rather than a hard-coded set of midi numbers.
+section("R5.2 — the stocked chords are the ones the gate measured");
+{
+  const s = decomment(b4);
+  const i = s.indexOf("const SG_CHORDS");
+  const src = i < 0 ? "" : s.slice(i, s.indexOf("];", i) + 2);
+  ok(src !== "", "SG_CHORDS is a table in block 4, not eight branches of an if");
+  let T = null;
+  try { T = new Function(src + "\nreturn SG_CHORDS;")(); } catch (e) {}
+  ok(Array.isArray(T) && T.length === 8, "…of eight open chords",
+    T ? String(T.length) : "unevaluable");
+  // The same table this file measured at R5.0. Deep-compared, not name-compared:
+  // a right name over a wrong shape would silently move every cluster count.
+  const MEASURED = { E: [0, 2, 2, 1, 0, 0], Em: [0, 2, 2, 0, 0, 0],
+    A: [null, 0, 2, 2, 2, 0], Am: [null, 0, 2, 2, 1, 0],
+    C: [null, 3, 2, 0, 1, 0], D: [null, null, 0, 2, 3, 2],
+    Dm: [null, null, 0, 2, 3, 1], G: [3, 2, 0, 0, 0, 3] };
+  const shipped = {};
+  if (Array.isArray(T)) for (const ch of T) shipped[ch.name] = ch.frets;
+  ok(Object.keys(MEASURED).every(k => Array.isArray(shipped[k])),
+    "…named E, Em, A, Am, C, D, Dm, G — the names the cluster counts were measured under",
+    Object.keys(shipped).join(","));
+  const mismatch = Object.keys(MEASURED).filter(k =>
+    !Array.isArray(shipped[k]) ||
+    shipped[k].length !== 6 ||
+    shipped[k].some((f, j) => !Object.is(f, MEASURED[k][j])));
+  ok(mismatch.length === 0,
+    "…and every one of their fret shapes is the shape measured at R5.0",
+    mismatch.join(","));
+  ok(Array.isArray(T) && T.every(ch => ch.frets.every(f =>
+    f === null || (Number.isInteger(f) && f >= 0 && f <= 24))),
+    "…each slot a real fret or null for muted — a fret is an offset, never a midi number");
+}
+
+section("R5.2 — a chord is fret offsets from the current tuning");
+{
+  const s = decomment(b4);
+  const i = s.indexOf("function sgramModelFor");
+  const body = i < 0 ? "" : s.slice(i, s.indexOf("\nfunction ", i + 10));
+  ok(body !== "", "sgramModelFor() is in block 4");
+  // Name the tuning array the model actually built, then require the fret to be
+  // added to THAT array at the string's own index — "+ fr" alone would be satisfied
+  // by a hard-coded 40 + fr, which is E standard's low E and nothing else.
+  const openVar = /const\s+(\w+)\s*=\s*tuningMidi\s*\(\s*state\.tuning/.exec(body);
+  const mapExpr = /state\.sgFrets\.map\(([\s\S]{0,240}?)\)\s*;/.exec(body);
+  ok(!!openVar && !!mapExpr &&
+     new RegExp("\\b" + openVar[1] + "\\s*\\[\\s*si\\s*\\]\\s*\\+\\s*fr\\b").test(mapExpr[1]),
+    "…and it adds each fret to that string's OPEN midi — Drop D moves the chord with it");
+  ok(/_sgChordName\s*\(\s*state\.sgFrets\s*\)/.test(body),
+    "…and the status chip asks the table for a name before falling back to a note name");
+  ok(/statusText[\s\S]{0,400}combNote/.test(body),
+    "…so the pane prints 'C' rather than 'A2 · 5 notes' when the shape is stocked");
+
+  const iN = s.indexOf("function _sgChordName");
+  const nm = iN < 0 ? "" : s.slice(iN, s.indexOf("\n}", iN) + 2);
+  ok(nm !== "", "_sgChordName() is in block 4");
+  ok(/every\s*\(/.test(nm) && /frets\.length\s*===\s*6/.test(nm),
+    "…and it names a shape only when all six slots match — no partial-credit naming");
+}
+
+section("R5.2 — the picker offers them, and hands out copies");
+{
+  const s = decomment(b4);
+  const fill = /function fillSgNoteSel[\s\S]*?\n\}/.exec(s);
+  const f = fill ? fill[0] : "";
+  ok(f !== "", "fillSgNoteSel() builds the select");
+  ok(/optgroup label="Open chord"/.test(f) && /optgroup label="Single string"/.test(f),
+    "…in two labelled groups — one string, or one chord");
+  ok(/for\s*\(\s*const\s+ch\s+of\s+SG_CHORDS\s*\)[\s\S]{0,200}?value="chord:/.test(f),
+    "…and the chord options are built FROM the table, so a ninth chord needs no second edit");
+  ok(/<option value="off">/.test(f),
+    "…with Off still first — the overlay is opt-in");
+
+  const handler = /sgNoteSel\.addEventListener\s*\(\s*["']change["'][\s\S]*?\n  \}\);/.exec(s);
+  const h = handler ? handler[0] : "";
+  ok(h !== "", "the note select has a change handler");
+  ok(/startsWith\s*\(\s*["']chord:["']\s*\)/.test(h),
+    "…which reads the chord: prefix rather than guessing from the label");
+  ok(/\.frets\.slice\s*\(\s*\)/.test(h),
+    "…and copies the frets — aliasing SG_CHORDS would let ?sgnote= write into the table");
+  ok(/state\.sgFrets\s*=\s*\[\s*(null\s*,\s*){5}null\s*\]/.test(h),
+    "…after muting all six, so switching chords never leaves a string ringing from the last one");
+}
+
+section("R5.2 — the chord hook, for a gate that cannot see a canvas");
+{
+  const s = decomment(b4);
+  const hook = /sgchord=[\s\S]{0,500}?\n  \}/.exec(s);
+  const k = hook ? hook[0] : "";
+  ok(k !== "", "?sgchord=<name> exists — the picker is unreachable from node otherwise");
+  ok(/SG_CHORDS\.find\s*\(/.test(k),
+    "…resolving the name against the same table the select is built from");
+  ok(/state\.sgFrets\s*=\s*\[\s*(null\s*,\s*){5}null\s*\]/.test(k),
+    "…muting first, so an unstocked name selects nothing instead of half a chord");
+  ok(/\.frets\.slice\s*\(\s*\)/.test(k), "…handing out a copy, as the change handler does");
+  ok(/syncSgHarmSel\s*\(\s*\)/.test(k) && /requestDraw\s*\(\s*\)/.test(k),
+    "…and re-syncing the harmonic select and redrawing, like every other door into sgFrets");
+  ok(/sgNoteSel\.value\s*=\s*["']chord:["']\s*\+/.test(k),
+    "…and it moves the visible select too — the hook must not lie about what is overlaid");
+  // Like ?sgnote=/?sgharm=, this is a gate hook: no UI, nothing persisted.
+  ok(!/gsChord|["']sgchord["']\s*:/.test(s),
+    "…and nothing about it is remembered — no localStorage key, no settings field");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

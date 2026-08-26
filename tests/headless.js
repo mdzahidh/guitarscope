@@ -45,16 +45,31 @@ function section(t) { console.log("\n" + t); }
 // setup and never exit — minutes per shot instead of three seconds. It costs
 // nothing here: ?demo writes no localStorage (settings save on explicit clicks
 // only), and the determinism check below would catch it if that ever changed.
+// A launch very occasionally never returns: Chrome renders nothing and sits there until
+// the 120 s timeout fires. Seen once in a full gate run (a shot-13 screenshot of the
+// refine-off zoomed build) after eight clean standalone suites, so it is rare, and it is
+// not the decode race below — that one exits promptly with a blank page. It is worth its
+// own retry because execFileSync throws on timeout, and an uncaught throw here takes the
+// whole suite down with a stack trace instead of failing one assertion: a 45-minute gate
+// lost to a single stuck process. Retry the launch, not the assertion; after three tries
+// re-throw and let it be red. The SIGABRT branch must stay ahead of this — a sandboxed
+// Chrome aborts every time, and retrying it would just raise three crash dialogs.
 function chrome(args, query, extra, size) {
-  try {
-    return execFileSync(CHROME, [
-      "--headless=new", "--disable-gpu", "--hide-scrollbars",
-      "--window-size=" + (size || "1440,2600"), "--virtual-time-budget=30000",
-      ...args, APP + "?" + query,
-    ], { maxBuffer: 1 << 28, timeout: 120000, stdio: ["ignore", "pipe", "ignore"], ...(extra || {}) });
-  } catch (e) {
-    if (e && (e.signal === "SIGABRT" || e.status === 134)) sandboxDiagnosis();
-    throw e;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return execFileSync(CHROME, [
+        "--headless=new", "--disable-gpu", "--hide-scrollbars",
+        "--window-size=" + (size || "1440,2600"), "--virtual-time-budget=30000",
+        ...args, APP + "?" + query,
+      ], { maxBuffer: 1 << 28, timeout: 120000, stdio: ["ignore", "pipe", "ignore"], ...(extra || {}) });
+    } catch (e) {
+      if (e && (e.signal === "SIGABRT" || e.status === 134)) sandboxDiagnosis();
+      if (e && e.code === "ETIMEDOUT" && attempt < 3) {
+        console.log("  ..   chrome hung on " + query + " — retry " + attempt + "/2");
+        continue;
+      }
+      throw e;
+    }
   }
 }
 

@@ -963,6 +963,18 @@ kbd{
             </select>
           </div>
           <div class="ctlgroup">
+            <span>Colors</span>
+            <select id="sgCmapSel" aria-label="Spectrogram colormap"
+                    title="Which perceptual colormap paints the spectrogram. All five rise in lightness with level, so equal dB steps read as equal lightness steps — never a rainbow.">
+            </select>
+            <select id="sgTrackSel" aria-label="Overlay track color" disabled
+                    title="What color the predicted harmonic tracks are drawn in. String hues say which string a track belongs to but need a halo to clear the colormap; a fixed color sits outside every colormap, so it draws as one thin line.">
+            </select>
+            <select id="sgDashSel" aria-label="Overlay track dash pattern" disabled
+                    title="The dash pattern for harmonics above the fundamental. The fundamental is always solid.">
+            </select>
+          </div>
+          <div class="ctlgroup">
             <span>Legibility</span>
             <label class="rangelbl" title="How far the spectrogram is dimmed under the tracks. The sheet is drawn between the measurement and the prediction, so the lines read as an overlay.">Sheet
               <input type="range" id="sgScrimRange" min="0" max="90" step="5" value="45" disabled
@@ -2155,6 +2167,94 @@ const MAGMA = (()=>{
 function magmaColor(t){
   const i = Math.round((t<=0 ? 0 : t>=1 ? 1 : t)*255)*3;
   return [MAGMA[i], MAGMA[i+1], MAGMA[i+2]];
+}
+
+// ---------- the other perceptual colormaps ----------
+// Same shape as MAGMA: exact 256-entry tables packed as hex, chosen because
+// each is perceptually ordered (lightness rises with value), so equal dB
+// steps read as equal lightness steps. Never a rainbow.
+//   viridis / inferno / cividis — matplotlib 3.10.1, verbatim.
+//   parula — MATLAB's default, taken from OpenCV's COLORMAP_PARULA table.
+// Measured CIE L* from first to last entry (and the worst step backwards):
+//   magma   0.1 → 97.9  (strictly rising)
+//   inferno 0.1 → 98.0  (strictly rising)
+//   viridis 14.9 → 90.9 (−0.03)
+//   cividis 13.8 → 91.3 (−0.01, and colorblind-safe by construction)
+//   parula  24.2 → 95.6 (−0.17 — the least uniform of the five, kept
+//                        because its mid-blues leave black lines legible)
+const CMAP_HEX = {
+  magma: MAGMA_HEX,
+  inferno:
+    "00000401000501010601010802010a02020c02020e03021004031204031405041706041907051b08051d09061f0a07220b07240c08260d08290e092b10092d11" +
+    "0a30120a32140b34150b37160b39180c3c190c3e1b0c411c0c431e0c451f0c48210c4a230c4c240c4f260c51280b53290b552b0b572d0b592f0a5b310a5c320a" +
+    "5e340a5f3609613809623909633b09643d09653e0966400a67420a68440a68450a69470b6a490b6a4a0c6b4c0c6b4d0d6c4f0d6c510e6c520e6d540f6d550f6d" +
+    "57106e59106e5a116e5c126e5d126e5f136e61136e62146e64156e65156e67166e69166e6a176e6c186e6d186e6f196e71196e721a6e741a6e751b6e771c6d78" +
+    "1c6d7a1d6d7c1d6d7d1e6d7f1e6c801f6c82206c84206b85216b87216b88226a8a226a8c23698d23698f24699025689225689326679526679727669827669a28" +
+    "659b29649d29649f2a63a02a63a22b62a32c61a52c60a62d60a82e5fa92e5eab2f5ead305dae305cb0315bb1325ab3325ab43359b63458b73557b93556ba3655" +
+    "bc3754bd3853bf3952c03a51c13a50c33b4fc43c4ec63d4dc73e4cc83f4bca404acb4149cc4248ce4347cf4446d04545d24644d34743d44842d54a41d74b3fd8" +
+    "4c3ed94d3dda4e3cdb503bdd513ade5238df5337e05536e15635e25734e35933e45a31e55c30e65d2fe75e2ee8602de9612bea632aeb6429eb6628ec6726ed69" +
+    "25ee6a24ef6c23ef6e21f06f20f1711ff1731df2741cf3761bf37819f47918f57b17f57d15f67e14f68013f78212f78410f8850ff8870ef8890cf98b0bf98c0a" +
+    "f98e09fa9008fa9207fa9407fb9606fb9706fb9906fb9b06fb9d07fc9f07fca108fca309fca50afca60cfca80dfcaa0ffcac11fcae12fcb014fcb216fcb418fb" +
+    "b61afbb81dfbba1ffbbc21fbbe23fac026fac228fac42afac62df9c72ff9c932f9cb35f8cd37f8cf3af7d13df7d340f6d543f6d746f5d949f5db4cf4dd4ff4df" +
+    "53f4e156f3e35af3e55df2e661f2e865f2ea69f1ec6df1ed71f1ef75f1f179f2f27df2f482f3f586f3f68af4f88ef5f992f6fa96f8fb9af9fc9dfafda1fcffa4",
+  viridis:
+    "44015444025645045745055946075a46085c460a5d460b5e470d60470e6147106347116447136548146748166848176948186a481a6c481b6d481c6e481d6f48" +
+    "1f70482071482173482374482475482576482677482878482979472a7a472c7a472d7b472e7c472f7d46307e46327e46337f4634804535814537814538824439" +
+    "83443a83443b84433d84433e85423f854240864241864142874144874045884046883f47883f48893e49893e4a893e4c8a3d4d8a3d4e8a3c4f8a3c508b3b518b" +
+    "3b528b3a538b3a548c39558c39568c38588c38598c375a8c375b8d365c8d365d8d355e8d355f8d34608d34618d33628d33638d32648e32658e31668e31678e31" +
+    "688e30698e306a8e2f6b8e2f6c8e2e6d8e2e6e8e2e6f8e2d708e2d718e2c718e2c728e2c738e2b748e2b758e2a768e2a778e2a788e29798e297a8e297b8e287c" +
+    "8e287d8e277e8e277f8e27808e26818e26828e26828e25838e25848e25858e24868e24878e23888e23898e238a8d228b8d228c8d228d8d218e8d218f8d21908d" +
+    "21918c20928c20928c20938c1f948c1f958b1f968b1f978b1f988b1f998a1f9a8a1e9b8a1e9c891e9d891f9e891f9f881fa0881fa1881fa1871fa28720a38620" +
+    "a48621a58521a68522a78522a88423a98324aa8325ab8225ac8226ad8127ad8128ae8029af7f2ab07f2cb17e2db27d2eb37c2fb47c31b57b32b67a34b67935b7" +
+    "7937b87838b9773aba763bbb753dbc743fbc7340bd7242be7144bf7046c06f48c16e4ac16d4cc26c4ec36b50c46a52c56954c56856c66758c7655ac8645cc863" +
+    "5ec96260ca6063cb5f65cb5e67cc5c69cd5b6ccd5a6ece5870cf5773d05675d05477d1537ad1517cd2507fd34e81d34d84d44b86d54989d5488bd6468ed64590" +
+    "d74393d74195d84098d83e9bd93c9dd93ba0da39a2da37a5db36a8db34aadc32addc30b0dd2fb2dd2db5de2bb8de29bade28bddf26c0df25c2df23c5e021c8e0" +
+    "20cae11fcde11dd0e11cd2e21bd5e21ad8e219dae319dde318dfe318e2e418e5e419e7e419eae51aece51befe51cf1e51df4e61ef6e620f8e621fbe723fde725",
+  cividis:
+    "00224e00234f00245100255300255400265600275800285900285b00295d002a5f002a61002b62002c64002c66002d68002e6a002e6c002f6d00306f00307000" +
+    "31700031710132710533710833700c34700f357012357014367016377018376f1a386f1c396f1e3a6f203a6f213b6e233c6e243c6e263d6e273e6e293f6e2a3f" +
+    "6d2b406d2d416d2e416d2f426d31436d32436d33446d34456c35456c36466c38476c39486c3a486c3b496c3c4a6c3d4a6c3e4b6c3f4c6c404c6c414d6c424e6c" +
+    "434e6c444f6c45506c46516c47516c48526c49536c4a536c4b546c4c556c4d556c4e566c4f576c50576c51586d52596d535a6d545a6d555b6d555c6d565c6d57" +
+    "5d6d585e6d595e6e5a5f6e5b606e5c616e5d616e5e626e5e636f5f636f60646f61656f62656f636670646770656870656870666970676a71686a71696b716a6c" +
+    "716b6d726c6d726c6e726d6f726e6f736f70737071737172747272747273747374757474757575757676767777767777777878777979777a7a787b7a787c7b78" +
+    "7d7c787e7c787e7d787f7e78807f78817f788280798381798482798582798683798784788885788985788a86788b87788c88788d88788e89788f8a78908b7891" +
+    "8b78928c78928d78938e78948e77958f779690779791779892779992779a93769b94769c95769d95769e96769f9775a09875a19975a29975a39a74a49b74a59c" +
+    "74a69c74a79d73a89e73a99f73aaa073aba072aca172ada272aea371afa471b0a571b1a570b3a670b4a76fb5a86fb6a96fb7a96eb8aa6eb9ab6dbaac6dbbad6d" +
+    "bcae6cbdae6cbeaf6bbfb06bc0b16ac1b26ac2b369c3b369c4b468c5b568c6b667c7b767c8b866c9b965cbb965ccba64cdbb63cebc63cfbd62d0be62d1bf61d2" +
+    "c060d3c05fd4c15fd5c25ed6c35dd7c45cd9c55cdac65bdbc75adcc859ddc858dec958dfca57e0cb56e1cc55e2cd54e4ce53e5cf52e6d051e7d150e8d24fe9d3" +
+    "4eead34cebd44bedd54aeed649efd748f0d846f1d945f2da44f3db42f5dc41f6dd3ff7de3ef8df3cf9e03afbe138fce236fde334fee434fee535fee636fee838",
+  parula:
+    "352a87332c8a322e8d302f8f2f31922d33952c35982a379b28389e273aa0253ca3243ea6223fa92141ac1f43af1d45b11c47b41a48b7194aba174cbd164ebf14" +
+    "50c21251c51153c80f55cb0e57ce0c58d00b5ad3095cd6085ed90660dc0461df0363e10464e10465e00566e00567df0668df066adf076bde076cde086ddd086e" +
+    "dd096fdc0970dc0a71dc0b72db0b73db0c74da0c75da0d76da0d77d90e78d90e7ad80f7bd80f7cd8107dd7107ed7117fd61180d61281d61382d51383d51484d4" +
+    "1485d41386d31387d31388d3128ad2128bd2118cd1118dd1108ed0108fd00f90d00f91cf0f92cf0e93ce0e94ce0d95cd0d96cd0c97cc0c98cc0c9acc0b9bcb0b" +
+    "9ccb0a9dca0a9eca099fc909a0c908a1c808a2c808a3c807a4c707a5c706a6c607a7c608a8c40aa8c30ba9c20da9c10eaabf10abbe12abbd13acbb15acba16ad" +
+    "b918adb819aeb61bafb51dafb41eb0b320b0b121b1b023b1af24b2ae26b3ac28b3ab29b4aa2bb4a92cb5a72eb5a62fb6a531b6a433b7a234b8a136b8a037b99f" +
+    "39b99d3cb99c3fb99b42ba9945ba9848ba974aba954dba9450bb9353bb9156bb9058bb8e5bbb8d5ebc8c61bc8a64bc8967bc8869bc866cbc856fbd8472bd8275" +
+    "bd8178bd807abd7e7dbe7d80be7c83be7a86be7988be788bbf768ebf7591bf7493bf7296bf7298bf719abe709cbe6f9fbe6ea1be6da3be6ca5be6ba7bd6aaabd" +
+    "69acbd68aebd68b0bd67b3bd66b5bd65b7bc64b9bc63bbbc62bebc61c0bc60c2bc5fc4bb5ec7bb5ec9bb5dcbbb5ccdbb5bd0bb5ad2bb59d4ba58d6ba57d8ba56" +
+    "daba55dbbb54dcbc53ddbc51debd50dfbe4fe0be4ee2bf4ce3bf4be4c04ae5c149e6c147e7c246e8c345e9c343eac442ebc541ecc540eec63eefc63df0c73cf1" +
+    "c83bf2c839f3c938f4ca37f5ca36f6cb34f7cb33f9cc32facd31fbcd2ffcce2efccf2dfcd12cfcd22bfcd32afcd529fbd628fbd827fbd926fbdb25fbdc24fbdd" +
+    "23fbdf22fbe021fbe220fbe31ffbe41efae61dfae71cfae91bfaea1afaeb19faed18faee17faf016faf115faf314f9f413f9f512f9f711f9f810f9fa0ff9fb0e"
+};
+const CMAP_NAMES = ["magma","inferno","viridis","cividis","parula"];
+const _CMAPS = { magma: MAGMA };
+function cmapTable(name){
+  const key = CMAP_HEX[name] ? name : "magma";
+  let t = _CMAPS[key];
+  if(!t){
+    const hex = CMAP_HEX[key];
+    t = new Uint8Array(768);
+    for(let i=0;i<768;i++) t[i] = parseInt(hex.slice(i*2, i*2+2), 16);
+    _CMAPS[key] = t;
+  }
+  return t;
+}
+// t in [0,1] → [r,g,b] from the named table (unknown names fall back to magma).
+function cmapColor(name, t){
+  const tb = cmapTable(name);
+  const i = Math.round((t<=0 ? 0 : t>=1 ? 1 : t)*255)*3;
+  return [tb[i], tb[i+1], tb[i+2]];
 }
 
 // ---------- log-frequency spectrogram ----------
@@ -3701,7 +3801,7 @@ function drawStringMarkers(ctx, pW, pH, markers, yOfF){
 // (frame, log-grid cell). Cached per slot: the live canvas just stretches this
 // bitmap, so hover/resize never re-touches the FFT data. NaN cells (above the
 // file's Nyquist) stay transparent — unmeasured is drawn as nothing.
-function sgramImage(sg, dbMax, dbMin, dbOffset){
+function sgramImage(sg, dbMax, dbMin, dbOffset, cmap){
   const {frames, nFrames, gridN}=sg;
   const off=dbOffset||0;                       // sgram level-match: shifts B's cells
   const cnv=document.createElement("canvas");
@@ -3716,7 +3816,7 @@ function sgramImage(sg, dbMax, dbMin, dbOffset){
       const k=((gridN-1-i)*nFrames+f)*4;      // row 0 = top = highest frequency
       if(!(p>=0)){ px[k+3]=0; continue; }
       const db=10*Math.log10(p+1e-30)+off;
-      const rgb=magmaColor((db-dbMin)/span);
+      const rgb=cmapColor(cmap||"magma", (db-dbMin)/span);
       px[k]=rgb[0]; px[k+1]=rgb[1]; px[k+2]=rgb[2]; px[k+3]=255;
     }
   }
@@ -3824,27 +3924,36 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
   // open-string fundamentals for the selected tuning (M2.5)
   drawStringMarkers(ctx, pW, pH, model.markers, yOfF);
 
-  // harmonic-track overlay (R5.1): the note set the user picked, projected as a
-  // generative model across the measured image — theory predicts, the user sees
-  // whether the energy is really there. Two strokes, each doing one measured job:
-  // the wider black halo separates the track from the bright magma ridges (which is
-  // exactly where a confirmed prediction lands), and the narrower hue on top —
-  // lifted for this surface by _trackColor() — separates it from its own halo, which
-  // a pixel census says is 95 % of what a track actually sits against. Black is the
-  // one stroke that survives both ends of the colormap, and data colormaps never
-  // theme. Solid for the fundamental, dashed above. No text.
+  // harmonic-track overlay (R5.1, restyled): the note set the user picked, projected
+  // as a generative model across the measured image — theory predicts, the user sees
+  // whether the energy is really there.
+  //   In "String hues" the six data colors carry which string a track belongs to, and
+  //   they sit inside the colormap's own gamut — so each needs the wider black halo
+  //   under it. That is what makes the line read thick: two strokes, 5 px and 2.5 px.
+  //   In a fixed color (black, white) the track is a hue the colormap never produces,
+  //   so it separates itself: no halo, one thin stroke. Which is the point of offering
+  //   it — black on parula's mid-blues, white on magma's near-black floor.
+  // The dash pattern is model.dash (a finer dotted default than R5.1's [6,4]); the
+  // fundamental is always solid, because that distinction is information.
   if(model.comb && model.comb.length){
     const foc=(model.focus==null?null:model.focus), dim=model.dim||0;
+    const tk=SG_TRACKS[model.track]||SG_TRACKS.string, halo=!tk.rgb;
+    const dashPat=model.dash||[1,3];
     ctx.save();
     ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
     for(const p of model.comb){
       if(p.f<fw.F0||p.f>fw.F1) continue;
       const a=(foc==null||p.key===foc)?1:(1-dim);   // R5.6c: the held comb keeps its weight, the rest recede
       const y=Math.round(yOfF(p.f))+0.5;
-      if(p.harm===1) ctx.setLineDash([]); else ctx.setLineDash([6,4]);
-      ctx.strokeStyle="rgba(0,0,0,"+(0.75*a).toFixed(3)+")"; ctx.lineWidth=5;
-      ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
-      ctx.strokeStyle=_trackColor(p.key,a); ctx.lineWidth=2.5;
+      if(p.harm===1) ctx.setLineDash([]); else ctx.setLineDash(dashPat);
+      if(halo){
+        ctx.strokeStyle="rgba(0,0,0,"+(0.75*a).toFixed(3)+")"; ctx.lineWidth=5;
+        ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
+        ctx.lineWidth=2.5;
+      } else {
+        ctx.lineWidth=1.4;
+      }
+      ctx.strokeStyle=halo?_trackColor(p.key,a):_fixedTrackColor(tk,a);
       ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -3863,9 +3972,9 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
       if(clash) continue;
       used.push(y);
       const txt=partialLabel(p, model.a4);
-      ctx.lineWidth=3; ctx.strokeStyle="rgba(0,0,0,0.85)";
+      ctx.lineWidth=3; ctx.strokeStyle=halo?"rgba(0,0,0,0.85)":_trackHaloColor(tk);
       ctx.strokeText(txt, SGPLOT.mL+6, y-4);
-      ctx.fillStyle=_trackColor(p.key,1);
+      ctx.fillStyle=halo?_trackColor(p.key,1):_fixedTrackColor(tk,1);
       ctx.fillText(txt, SGPLOT.mL+6, y-4);
       nLabels++;
     }
@@ -3921,11 +4030,11 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
     ctx.restore();
   }
 
-  // colorbar: the exact magma → dB mapping the image used (pinned at the card
-  // edge — the margin between plot and colorbar belongs to the string labels)
+  // colorbar: the exact colormap → dB mapping the image used (pinned at the
+  // card edge — the margin between plot and colorbar belongs to the string labels)
   const cbX=w-50, cbW=10;
   for(let yy=0; yy<pH; yy++){
-    const rgb=magmaColor(1-yy/(pH-1));
+    const rgb=cmapColor(model.cmap||"magma", 1-yy/(pH-1));
     ctx.fillStyle="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
     ctx.fillRect(cbX, SGPLOT.mT+yy, cbW, 1);
   }
@@ -4281,7 +4390,11 @@ const state={ slots:[null,null], tuning:"estd", customOffset:0,
               // R5.6 legibility: the sheet under the tracks, how far an unheld comb
               // recedes, and which comb is being held right now. Debugging aids and a
               // transient gesture — never persisted, never exported (see saveSettings).
-              sgScrim:0.45, sgDim:0.85, sgFocus:null };
+              sgScrim:0.45, sgDim:0.85, sgFocus:null,
+              // The look of the picture and of the lines drawn on it. Same class as
+              // the R5.6 keys above: view state, not analysis — unpersisted, never
+              // exported, and not part of the refine cache key.
+              sgCmap:"magma", sgTrack:"string", sgDash:"fine" };
 // M2.7: gate hook — ?refine=0 disables the zoom refine (never persisted, no UI)
 const _refineEnabled = !/[?&]refine=0(?:&|$)/i.test(location.search);
 // A pan or a wheel writes ZOOMS and redraws on every event, so the refine waits
@@ -4332,6 +4445,7 @@ const sgAlignSeg=el("sgAlignSeg");
 const sgNoteSel=el("sgNoteSel"), sgHarmSel=el("sgHarmSel");
 const sgScrimRange=el("sgScrimRange"), sgScrimOut=el("sgScrimOut"),
       sgDimRange=el("sgDimRange"), sgDimOut=el("sgDimOut");
+const sgCmapSel=el("sgCmapSel"), sgTrackSel=el("sgTrackSel"), sgDashSel=el("sgDashSel");
 const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
 const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSel=el("eqDevSel"),
@@ -4775,9 +4889,13 @@ function sgramModelFor(i,scale){
   const s=state.slots[i], tv=s&&s.tvis;
   if(!tv||!tv.sg) return null;
   const off=i===1?sgLmDb():0;
-  const key=scale.dbMax+"|"+scale.dbMin+"|"+off.toFixed(4);
+  const cm=state.sgCmap||"magma";
+  // Two keys: gkey is the analysis the refine asks for, key adds the colormap.
+  // Recoloring must never re-run an FFT — it is a look, not a measurement.
+  const gkey=scale.dbMax+"|"+scale.dbMin+"|"+off.toFixed(4);
+  const key=gkey+"|"+cm;
   if(!s._sgImage||s._sgImage.key!==key)
-    s._sgImage={key, canvas:sgramImage(tv.sg,scale.dbMax,scale.dbMin,off)};
+    s._sgImage={key, canvas:sgramImage(tv.sg,scale.dbMax,scale.dbMin,off,cm)};
   const view=sgramView(i);
   const zKey=i===0?"sga":"sgb";
   const zw=sgramZoomWin(zKey,view.T0,view.T1);
@@ -4793,10 +4911,14 @@ function sgramModelFor(i,scale){
       const fileT0 = Math.max(0, zw.T0 - view.d0);          // the zoom, in this file's own time
       const fileT1 = Math.min(tv.sg.duration, zw.T1 - view.d0);
       if(fileT1 > fileT0)
-        want = {key: fileT0.toFixed(4)+"|"+fileT1.toFixed(4)+"|"+win+"|512|"+key, fileT0, fileT1, win};
+        want = {key: fileT0.toFixed(4)+"|"+fileT1.toFixed(4)+"|"+win+"|512|"+gkey, fileT0, fileT1, win};
     }
   }
   if(want && s._sgRefined && s._sgRefined.key===want.key){
+    if(s._sgRefined.cmap!==cm){                 // repaint the cached analysis, don't redo it
+      s._sgRefined.image = sgramImage(s._sgRefined.sg, scale.dbMax, scale.dbMin, off, cm);
+      s._sgRefined.cmap = cm;
+    }
     sgToUse = s._sgRefined.sg;
     imageToUse = s._sgRefined.image;
   }
@@ -4821,7 +4943,7 @@ function sgramModelFor(i,scale){
         ns.t0 = want.fileT0;   // frame 0 sits here in file time; pane and readout both offset by it
         if(!s._sgRefinePending || s._sgRefinePending.key!==want.key) return;
         if(state.slots[i]!==s) return;
-        s._sgRefined = {key:want.key, sg:ns, image:sgramImage(ns, scale.dbMax, scale.dbMin, off)};
+        s._sgRefined = {key:want.key, sg:ns, cmap:cm, image:sgramImage(ns, scale.dbMax, scale.dbMin, off, cm)};
         s._sgRefinePending = null;
         drawAll();
       }).catch(()=>{ s._sgRefinePending = null; });
@@ -4860,6 +4982,7 @@ function sgramModelFor(i,scale){
     name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
     dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(), comb, clusters,
     a4:state.a4, scrim:state.sgScrim, focus:state.sgFocus, dim:state.sgDim,
+    cmap:cm, track:state.sgTrack, dash:(SG_DASHES[state.sgDash]||SG_DASHES.fine).pat,
     statusText:sgToUse.win+"-pt Hann · max per log cell"
       +(off?" · level-match "+fmtDb(off,1):"")
       +(state.sgAlign!=="off"&&bothSgLoaded()
@@ -4982,6 +5105,11 @@ function drawAll(){
     sgHits[i].length=0;
     const nLabels=drawSpectrogramScene(c.ctx,c.w,c.h,model,sgHits[i]);
     sgramCanvases[i].setAttribute("data-sgwin", String(model.sg.win));
+    // The look this pane actually painted (colormap always; track style only when
+    // there is a track). Same reason as data-sgwin: node cannot read the canvas.
+    sgramCanvases[i].setAttribute("data-sgcmap", model.cmap||"magma");
+    if(model.comb) sgramCanvases[i].setAttribute("data-sgtrack", model.track||"string");
+    else sgramCanvases[i].removeAttribute("data-sgtrack");
     // R5.1: pane reports its own overlay track count — the canvas is unreachable from node.
     if(model.comb) sgramCanvases[i].setAttribute("data-sgcomb", String(model.comb.length));
     else sgramCanvases[i].removeAttribute("data-sgcomb");
@@ -4998,6 +5126,7 @@ function drawAll(){
   } else {
     for(let i=0;i<2;i++){ sgHits[i].length=0;
       sgramCanvases[i].removeAttribute("data-sgwin"); sgramCanvases[i].removeAttribute("data-sgcomb");
+      sgramCanvases[i].removeAttribute("data-sgcmap"); sgramCanvases[i].removeAttribute("data-sgtrack");
       sgramCanvases[i].removeAttribute("data-sglabels"); sgramCanvases[i].removeAttribute("data-sgfocus");
       sgramCanvases[i].removeAttribute("data-sgclusters"); }
   }
@@ -5834,10 +5963,11 @@ function updateDiffSub(){
 function updateSgramSub(){
   const align=state.sgAlign==="file"?" · shared time axis"
     :state.sgAlign==="onset"?" · time axes aligned at each file's first onset":"";
+  const cm=" · "+(state.sgCmap||"magma")+" colormap";
   sgramSub.textContent=bothLoaded()
     ? "time–frequency energy, shared color scale across A and B"+
-      (sgLmDb()?" · level-match applied to B":"")+align+" · magma colormap"
-    : "time–frequency energy · magma colormap";
+      (sgLmDb()?" · level-match applied to B":"")+align+cm
+    : "time–frequency energy"+cm;
 }
 function updateEqSub(){
   if(!bothLoaded()){
@@ -6268,6 +6398,35 @@ function _trackColor(si, alpha){
   const [r,g,b]=liftForDark(_hexRgb(STRING_COLORS[si%6]), 0.62);
   return `rgba(${r},${g},${b},${alpha})`;
 }
+// Track look (user request, 2026-08-26). Two axes, both deliberately small tables:
+//   SG_TRACKS — what color a partial is drawn in. "String hues" is the R5.1 default:
+//     six data colors that say which string a track belongs to, at the cost of a black
+//     halo under each (they live inside the colormap's own gamut). A fixed color is a
+//     hue no perceptual colormap produces, so it needs no halo and no widening — one
+//     thin stroke. Black reads on parula/viridis, white on magma/inferno's dark floor.
+//     Fixed colors lose the string identity; that is the trade the selector offers.
+//   SG_DASHES — the pattern for harmonics above the fundamental (which stays solid).
+//     Finer than R5.1's [6,4] by default: with six combs interleaved the dash length
+//     was reading as line weight rather than as pattern.
+const SG_TRACKS={
+  string:{label:"String hues"},
+  black:{label:"Black", rgb:[0,0,0], halo:"rgba(255,255,255,0.85)"},
+  white:{label:"White", rgb:[255,255,255], halo:"rgba(0,0,0,0.85)"},
+  cyan:{label:"Cyan", rgb:[0,255,255], halo:"rgba(0,0,0,0.85)"},
+  magenta:{label:"Magenta", rgb:[255,0,255], halo:"rgba(0,0,0,0.85)"}
+};
+const SG_TRACK_NAMES=["string","black","white","cyan","magenta"];
+const SG_DASHES={
+  fine:{label:"Fine dots", pat:[1,3]},
+  dot:{label:"Dots", pat:[2,4]},
+  dash:{label:"Dashes", pat:[6,4]},
+  solid:{label:"Solid", pat:[]}
+};
+const SG_DASH_NAMES=["fine","dot","dash","solid"];
+function _fixedTrackColor(tk, alpha){
+  const [r,g,b]=tk.rgb; return `rgba(${r},${g},${b},${alpha})`;
+}
+function _trackHaloColor(tk){ return tk.halo||"rgba(0,0,0,0.85)"; }
 // Eight open chords — the user's case (b) (ROADMAP R5.2). Frets are per-string
 // offsets from the current open tuning; null = muted. Order is the stocked table.
 const SG_CHORDS=[
@@ -6312,6 +6471,18 @@ function syncSgHarmSel(){
   // focus held on a string that is no longer overlaid would dim everything forever.
   if(sgScrimRange) sgScrimRange.disabled=!on;
   if(sgDimRange) sgDimRange.disabled=!on;
+  // Same rule for the track look: color and dash describe lines that only exist
+  // under an overlay. The colormap select is never disabled — it paints the picture.
+  if(sgTrackSel) sgTrackSel.disabled=!on;
+  if(sgDashSel) sgDashSel.disabled=!on;
+}
+function fillSgLookSels(){
+  if(sgCmapSel) sgCmapSel.innerHTML=CMAP_NAMES
+    .map(n=>'<option value="'+n+'"'+(n===state.sgCmap?" selected":"")+'>'+esc(n[0].toUpperCase()+n.slice(1))+'</option>').join("");
+  if(sgTrackSel) sgTrackSel.innerHTML=SG_TRACK_NAMES
+    .map(n=>'<option value="'+n+'"'+(n===state.sgTrack?" selected":"")+'>'+esc(SG_TRACKS[n].label)+'</option>').join("");
+  if(sgDashSel) sgDashSel.innerHTML=SG_DASH_NAMES
+    .map(n=>'<option value="'+n+'"'+(n===state.sgDash?" selected":"")+'>'+esc(SG_DASHES[n].label)+'</option>').join("");
 }
 function stringContentHtml(si){
   const midi=tuningMidi(state.tuning,state.customOffset)[si];
@@ -7543,6 +7714,20 @@ function boot(){
   }
   _sgRange(sgScrimRange,sgScrimOut,v=>{ state.sgScrim=v; });
   _sgRange(sgDimRange,sgDimOut,v=>{ state.sgDim=v; });
+  // The look of the picture and of the lines on it (user request, 2026-08-26).
+  // A colormap change repaints from the cached analysis — see sgramModelFor().
+  if(sgCmapSel) sgCmapSel.addEventListener("change",()=>{
+    state.sgCmap=CMAP_HEX[sgCmapSel.value]?sgCmapSel.value:"magma";
+    updateSgramSub(); requestDraw();
+  });
+  if(sgTrackSel) sgTrackSel.addEventListener("change",()=>{
+    state.sgTrack=SG_TRACKS[sgTrackSel.value]?sgTrackSel.value:"string";
+    requestDraw();
+  });
+  if(sgDashSel) sgDashSel.addEventListener("change",()=>{
+    state.sgDash=SG_DASHES[sgDashSel.value]?sgDashSel.value:"fine";
+    requestDraw();
+  });
   lmToggle.addEventListener("change",()=>{
     state.lm=lmToggle.checked; compareTouched.lm=true;
     stopPlayback(); // the applied gain would no longer match what's printed
@@ -7851,7 +8036,7 @@ function boot(){
   applyCollapse();
   renderCard(0); renderCard(1);
   buildGlossList("");
-  fillSgNoteSel();
+  fillSgNoteSel(); fillSgLookSels();
   updateVisibility();
   renderFooter();
   requestDraw();
@@ -7944,6 +8129,15 @@ function boot(){
     state.sgDim=v/100; if(sgDimRange) sgDimRange.value=String(v); if(sgDimOut) sgDimOut.textContent=v+"%"; requestDraw(); }
   const sgfc=location.search.match(/[?&]sgfocus=([0-5])(?:&|$)/i);                 // test hook — holds a comb without a mouse
   if(sgfc){ const k=parseInt(sgfc[1],10); if(state.sgFrets[k]!=null){ state.sgFocus=k; requestDraw(); } }
+  const sgcm=location.search.match(/[?&]sgcmap=([a-z]+)(?:&|$)/i);                 // test hook — an unstocked name keeps magma
+  if(sgcm&&CMAP_HEX[sgcm[1].toLowerCase()]){ state.sgCmap=sgcm[1].toLowerCase();
+    if(sgCmapSel) sgCmapSel.value=state.sgCmap; updateSgramSub(); requestDraw(); }
+  const sgtk=location.search.match(/[?&]sgtrack=([a-z]+)(?:&|$)/i);                // test hook
+  if(sgtk&&SG_TRACKS[sgtk[1].toLowerCase()]){ state.sgTrack=sgtk[1].toLowerCase();
+    if(sgTrackSel) sgTrackSel.value=state.sgTrack; requestDraw(); }
+  const sgds=location.search.match(/[?&]sgdash=([a-z]+)(?:&|$)/i);                 // test hook
+  if(sgds&&SG_DASHES[sgds[1].toLowerCase()]){ state.sgDash=sgds[1].toLowerCase();
+    if(sgDashSel) sgDashSel.value=state.sgDash; requestDraw(); }
   const dbg=location.search.match(/[?&]debug(?:=1)?(?:&|$)/i);                     // reveals the hidden "Load test files" button
   if(dbg&&debugLoadBtn) debugLoadBtn.style.display="";
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook

@@ -61,7 +61,9 @@ fs.writeFileSync(tmp, blocks[0] +
   "notePartials:(typeof notePartials==='undefined'?null:notePartials)," +
   "partialClusters:(typeof partialClusters==='undefined'?null:partialClusters)," +
   "partialLabel:(typeof partialLabel==='undefined'?null:partialLabel)," +
-  "clusterRatio:(typeof clusterRatio==='undefined'?null:clusterRatio)};\n");
+  "clusterRatio:(typeof clusterRatio==='undefined'?null:clusterRatio)," +
+  "CMAP_NAMES:(typeof CMAP_NAMES==='undefined'?null:CMAP_NAMES)," +
+  "cmapTable:(typeof cmapTable==='undefined'?null:cmapTable)};\n");
 const D = require(tmp);
 
 const TUNING_KEYS = ["estd", "eb", "dstd", "dropd", "dadgad"];
@@ -329,10 +331,14 @@ section("R5.1 — the tracks are drawn, under the colorbar, with no text");
   ok(/model\.comb/.test(pass), "…and it reads model.comb");
   ok(/yOfF\s*\(/.test(pass), "each partial is placed by the pane's own frequency mapping");
   ok(/rgba\(0,\s*0,\s*0,\s*"?\s*\+?\s*\(?0?\.75/.test(pass),
-    "a black halo carries the line over the magma — the colormap never themes");
+    "a black halo carries the line when the hue sits inside the colormap's own gamut");
   ok(/_trackColor\s*\(/.test(pass), "the hue is the string's own data color, lifted for this surface");
-  ok(/setLineDash\(\s*\[\s*6\s*,\s*4\s*\]\s*\)/.test(pass),
-    "harmonics are dashed — long enough to read as a dash at the track's width");
+  // 2026-08-26: the pattern is no longer written into the draw pass. It comes from
+  // model.dash, so the selector can offer more than one — and the halo comes with it,
+  // because a fixed color the colormap never produces needs no black under it.
+  ok(/model\.dash/.test(pass), "the dash pattern comes from the model, not from a literal here");
+  ok(/setLineDash\(\s*\[\s*\]\s*\)/.test(pass) && /harm\s*===\s*1/.test(pass),
+    "…and the fundamental is drawn solid whatever the pattern is");
   // The first legibility complaint (user, 2026-08-25) was that the tracks vanished
   // into the image: at DPR 2 a 3 px halo under a 1.5 px line leaves 0.75 CSS px of
   // black per side. Both widths are asserted, and their order with them.
@@ -341,7 +347,7 @@ section("R5.1 — the tracks are drawn, under the colorbar, with no text");
     "the halo is stroked wider than the track it carries");
   ok(widths.length >= 2 && widths[1] >= 2 && widths[0] - widths[1] >= 2,
     "…and both survive a device-pixel-ratio 2 downscale");
-  ok(/harm\s*===\s*1/.test(pass), "…and the fundamental is not");
+  ok(/harm\s*===\s*1/.test(pass), "the fundamental is told apart from the harmonics above it");
   // R5.6b supersedes R5.1's "no labels": hue and order named the string but never the
   // harmonic, which is the thing the overlay is for. The rule that replaced it lives in
   // the R5.6b section below; what survives here is that the track itself is still a line.
@@ -963,6 +969,80 @@ section("R5.3 — the door, and what a node gate can count");
     "…and clears the count both when a pane finds nothing and when the card is folded");
   ok(/sgHits\s*\[\s*i\s*\]\.filter\([\s\S]{0,40}cluster/.test(d),
     "the count is the marks actually drawn, not the clusters found");
+}
+
+// The look pass (user request, 2026-08-26): the picture gets a choice of perceptual
+// colormap, and the lines drawn on it get a color that can sit outside every one of
+// them — which is what lets the halo go away. Kept deliberately light: this was asked
+// for as an experiment, so the gate holds the contracts that would silently rot
+// (a colormap that isn't perceptual, a halo that comes back, a dash that isn't finer).
+section("Look — five perceptual colormaps, magma still the default");
+{
+  const s = decomment(blocks[0]);
+  const names = /const CMAP_NAMES\s*=\s*\[([^\]]*)\]/.exec(s);
+  ok(names, "the colormaps are a named list, so the selector cannot drift from the tables");
+  const list = names ? names[1].split(",").map(x => x.trim().replace(/["']/g, "")) : [];
+  ok(list[0] === "magma", "magma is first — the R5.1a look is still the default");
+  ok(list.length >= 4 && list.includes("parula") && list.includes("viridis"),
+    "…and parula and viridis are stocked beside it");
+  for (const n of list) {
+    const tab = D.cmapTable(n);
+    ok(tab.length === 768, n + ": 256 entries, packed flat");
+    // Perceptual means lightness rises with level. Sampled, not eyeballed: the CIE L*
+    // of the last entry must clear the first by a wide margin and never turn back far.
+    const L = i => {
+      const [r, g, b] = [tab[i * 3], tab[i * 3 + 1], tab[i * 3 + 2]].map(v => {
+        const c = v / 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      });
+      const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      return y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y;
+    };
+    ok(L(255) - L(0) > 55, n + ": lightness rises from floor to ceiling");
+    let back = 0;
+    for (let i = 1; i < 256; i++) back = Math.min(back, L(i) - L(i - 1));
+    ok(back > -2.5, n + ": and never doubles back — no rainbow");
+  }
+  ok(/MAGMA_HEX/.test(s) && /function magmaColor/.test(s),
+    "magmaColor survives by name — tests/dsp.test.js and every old caller still read it");
+}
+
+section("Look — a fixed track color drops the halo; the default dash is finer");
+{
+  const s = decomment(b4);
+  const tks = /const SG_TRACKS\s*=\s*\{[\s\S]*?\n\};/.exec(s);
+  ok(tks && /string\s*:/.test(tks[0]), "String hues is stocked — the R5.1 look is still offered");
+  ok(tks && !/string\s*:\s*\{\s*label\s*:[^}]*rgb/.test(tks[0]),
+    "…and it alone carries no rgb: the six data colors are per string, not one color");
+  ok(tks && (tks[0].match(/rgb\s*:/g) || []).length >= 2,
+    "at least two fixed colors, so a colormap that swallows one has an alternative");
+  ok(tks && /black\s*:\s*\{[^}]*rgb\s*:\s*\[\s*0\s*,\s*0\s*,\s*0\s*\]/.test(tks[0]) &&
+     /white\s*:\s*\{[^}]*rgb\s*:\s*\[\s*255\s*,\s*255\s*,\s*255\s*\]/.test(tks[0]),
+    "black and white — the two hues no perceptual colormap produces at its own extremes");
+
+  const dsh = /const SG_DASHES\s*=\s*\{[\s\S]*?\n\};/.exec(s);
+  ok(dsh, "the dash patterns are a table too");
+  const fine = dsh && /fine\s*:\s*\{[^}]*pat\s*:\s*\[\s*(\d+)\s*,\s*(\d+)\s*\]/.exec(dsh[0]);
+  ok(fine, "…with a 'fine' entry");
+  ok(fine && Number(fine[1]) + Number(fine[2]) < 10,
+    "…whose period is finer than R5.1's [6,4] — the dash was reading as line weight");
+  ok(/sgDash\s*:\s*["']fine["']/.test(s), "and fine dots are what the app starts with");
+
+  // The halo is the thing the user asked to be able to switch off. It must stay tied to
+  // the absence of an rgb, never become unconditional again.
+  const dss = decomment(b3);
+  const i = dss.indexOf("function drawSpectrogramScene");
+  const body = dss.slice(i, dss.indexOf("\nfunction ", i + 10));
+  ok(/\bhalo\s*=\s*!\s*\w+\.rgb/.test(body),
+    "the halo is exactly 'this color lives inside the colormap' — nothing else");
+  ok(/if\s*\(\s*halo\s*\)/.test(body), "…and the wide stroke is behind that test");
+
+  ok(!/gsSgCmap|gsSgTrack|gsSgDash/.test(s) && !/["'](sgCmap|sgTrack|sgDash)["']\s*:/.test(
+      (/function _cardStateFor[\s\S]*?\n\}/.exec(s) || [""])[0]),
+    "none of the three is persisted or exported — view state, like the rest of R5.6");
+  const mf = /function sgramModelFor[\s\S]*?\n\}/.exec(s);
+  const keyLines = mf ? mf[0].split("\n").filter(l => /key\s*=/.test(l)) : [];
+  ok(keyLines.length >= 2 && !/sgTrack|sgDash/.test(keyLines.join("\n")),
+    "…and no line style reaches the refine cache key: restyling must not re-run an FFT");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

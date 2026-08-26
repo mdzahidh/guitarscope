@@ -1239,3 +1239,42 @@ a new function answering a different question, sharing the same `centsBetween` /
 `octaveFold` / `HARMONIC_INTERVALS` primitives — one set of primitives, never a second
 copy — and `tests/r5.test.js` carries a consistency assertion binding the two: every
 landing `findCoincidences()` reports must appear inside some `partialClusters()` group.
+
+## 2026-08-25 — R5.1: the overlay is a prediction, and it is checked against the picture
+
+**Decision: the spectrogram overlay carries its own note state, separate from the frequency
+plots'.** The user asked for the separation and it is right: the frequency plots answer
+"where do these strings sit against the spectrum", the spectrogram answers "which string
+and which of its harmonics are sounding, when". `state.sgFrets` / `state.sgHarm` are
+therefore new state, not a reuse of `state.strings` / `state.stringHarmonics`. Neither is
+persisted, neither enters `gsSettings` (a v4 decision to take once the shape has been used),
+and neither reaches any export — they are UI state, and exports are data-only.
+
+**Decision: the app never detects which notes were played.** Which notes sounded is
+*intent*, so the user picks them; the overlay then draws what theory predicts and the user
+judges whether the measurement agrees. This is the existing house rule ("facts come from the
+data, intent comes from the user") pointed at a new surface, and it is what makes the
+feature honest: an auto-detector would be answering the question the overlay exists to let
+the user ask.
+
+**Decision: the tracks are drawn in `STRING_COLORS`, unthemed, unlabelled.** The overlay is
+a data colormap in the same sense the magma spectrogram is, so it is pixel-identical in
+Bright and Dark (verified by census, not by eye). Halo is black at 0.55 — the only stroke
+that survives both the magma floor and its ridges. No text: the right-edge string markers
+are already the reference and the plot has no room.
+
+**Verification, recorded because it is what makes the claim "generative model" more than a
+metaphor.** The demo pair is exactly the six open strings, so the overlay's prediction has a
+right answer. With `?sgnote=0` the six track rows were located in the rendered pane, then
+luminance was read at those rows in the overlay-**off** image against ±10/±14 px neighbours:
+all six rows are local maxima. The prediction sits on the measured energy. Separately, a
+pixel census proved each string paints only its own hue — which caught a real defect: the
+builder passed `notePartials()` the single selected note, giving every partial `key === 0`
+and therefore one colour for every string. `sgramModelFor()` now hands it a six-slot array,
+and `tests/r5.test.js` grew a 76th assertion (mutation-checked against two spellings of the
+bug) so the gap that allowed it is closed.
+
+**Open taste call, raised rather than settled.** `exportSgramPNG()` blanks `state.sgFrets`
+in a `finally`, so an exported spectrogram carries no tracks — consistent with every other
+export (no strings axis, no harmonics, data only). The counter-argument is real: a picture
+of an overlay is arguably the point of exporting it. Left to the user.

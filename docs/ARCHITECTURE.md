@@ -865,6 +865,61 @@ Two details that look like bugs and are not:
   and `stringAxisMarkers()` returns `[]` with the strings axis off. Exports are data;
   the ✦ is an invitation to click.
 
+## R5.0–R5.1 (session 19): harmonic tracks on the spectrogram
+
+R3 marks where two strings meet on the *frequency* axis; R5 puts the same knowledge on the
+**time** axis. The overlay is a **generative model**: theory says which partials a note
+should produce, the overlay draws that prediction across the measured image, and the user
+sees whether the energy is really there. Which notes were played is **intent**, so the user
+picks them — the app never detects, never guesses.
+
+Four pieces, in three blocks:
+
+- **Block 0, pure and node-tested.** `notePartials(midis, nHarm, a4)` returns a flat array
+  of `{key, midi, harm, f}` — `key` is the **index into the `midis` array it was handed**,
+  and nothing else. `partialClusters(parts, tolCents = TEMPERED_CENTS)` walks the partials
+  in ascending frequency, absorbing while within `tolCents` of the group's **first** member,
+  and keeps groups with ≥ 2 distinct `key`s; `f` is the geometric mean, `tier` is `"locked"`
+  at ≤ `COINCIDENCE_CENTS` (6 ¢) else `"tempered"` (≤ 20 ¢). It is **direction-free**, unlike
+  R3's `findCoincidences()`, which asks a directional question ("does a harmonic land on
+  another string's *open* fundamental") because R3's frozen copy is phrased that way. Both
+  exist on purpose; R5.3 will use the clusterer, and R3/R4 stay byte-identical.
+  There is **no frequency clipping in block 0** — the draw pass clips, as everywhere else.
+- **Block 4, state and model.** `state.sgFrets` (six slots, `null` = not sounding) and
+  `state.sgHarm` (1–N, default 6) are the overlay's own state, deliberately separate from
+  the frequency plots' strings/harmonics — the user asked for that separation, and the two
+  surfaces answer different questions. Neither is persisted, neither enters `gsSettings`,
+  neither reaches an export. `sgramModelFor()` gains `comb`, the flat partial array or
+  `null`, and **must not perturb M2.7's refine key** — the two cache-key lines mention
+  neither `sgFrets` nor `sgHarm`, so changing the overlay never re-runs an STFT.
+- **Block 3, the draw pass.** A fourth pass in `drawSpectrogramScene()`, after
+  `drawStringMarkers()` and before the colorbar, clipped to the plot rect: per partial a
+  full-width horizontal at `yOfF(f)` — a 3 px `rgba(0,0,0,0.55)` halo first, then 1.5 px in
+  `_stringColor(key)`, solid for the fundamental and dashed above it. **Black is the only
+  halo that survives both the magma floor and its ridges**, and the track hues are
+  `STRING_COLORS`, a **data** palette: the overlay is pixel-identical in Bright and Dark.
+  No labels — the right-edge string markers are the reference and the plot has no room.
+- **Hooks, because the canvas is unreachable from node.** `?sgnote=<0-5>` and `?sgharm=<n>`
+  (unpersisted, gate-only), and each pane canvas publishes `data-sgcomb="<count>"`, absent
+  when the overlay is off — the same reasoning as M2.7's `data-sgwin`.
+
+**The trap this milestone set, and the assertion that now guards it.** `key` is both the
+index into the array handed to `notePartials()` *and* the thing that picks the track's hue
+via `_stringColor(key)`. Hand it the one selected note (`[midi]`) and every partial comes
+back `key === 0`, so every string paints in `STRING_COLORS[0]` — red — and the bug is
+invisible whenever the low E is the string under test. `sgramModelFor()` therefore builds a
+**six-slot** `sgMidis` array with the unsounded slots left `null`. `tests/r5.test.js`'s 76th
+assertion parses the first argument of every `notePartials(…, state.sgHarm` call and counts
+**top-level** commas inside the brackets — an earlier form using a character class was
+satisfied by `[sgMidis[sgSi]]` and failed its own mutation check.
+
+**PNG exports carry no tracks.** `exportSgramPNG()` does *not* inherit the
+`state.strings=false` dance the other card exports use — the strings axis is a
+frequency-plot thing, and the spectrogram draws its own always-on right-edge markers — so
+it saves `state.sgFrets`, blanks it, and restores in a `finally`. Stripping follows the
+shipped data-only precedent; whether a *picture of a prediction* should be the exception is
+a taste call raised with the user at the milestone boundary rather than settled silently.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

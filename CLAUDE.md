@@ -247,19 +247,41 @@ build educational copy from it, never re-derive from scratch.
   had been satisfied by a decoy string). **No third frozen copy block** — M2.7 ships no
   educational prose. Known gap: nothing in the gate asserts the *magnify overlay's* window
   (≈1 headless launch in 6 races the refine); the by-hand check is recorded in ROADMAP M2.7.
-- **NEXT — R5** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
+- **R5.0 + R5.1 BUILT (session 19) — gate 7 passed; awaiting the user's visual test.**
+  Same delegate-and-gate order as R3/R4/M2.7: gate first (`61e3918`, written red), handoff
+  (`docs/handoff/spark-r5.md`), builder, reviewer merges and fixes. The **spectrogram
+  overlay is a generative model** — the user names the note, the app draws the partials
+  theory predicts across the measured image, and the user sees whether the energy is there.
+  It never detects: which notes sounded is *intent*. **R5.0** (`3befbfc`) adds block 0's
+  direction-free `notePartials()` / `partialClusters()` and a second tolerance tier
+  `TEMPERED_CENTS = 20` (R3's `findCoincidences()` and `COINCIDENCE_CENTS = 6` are
+  untouched and byte-identical — two questions, one set of primitives; the reasoning and
+  the measured 17–50 ¢ dead zone are in SPEC.md). **R5.1** (`154eec9` + `0da9427`) adds
+  `state.sgFrets`/`state.sgHarm` — the overlay's **own** state, separate from the frequency
+  plots', unpersisted, never exported — an `Overlay` control pair in the sgram card head,
+  `comb` on `sgramModelFor()`, a fourth draw pass in `drawSpectrogramScene()` (black halo,
+  then `_stringColor(key)`; solid fundamental, dashed above; no labels; clipped to the
+  plot rect), and the gate hooks `?sgnote=<0-5>` / `?sgharm=<n>` plus `data-sgcomb`.
+  **Reviewer fix, and the trap to remember:** `key` is the index into the array handed to
+  `notePartials()` *and* the thing that picks the hue, so the builder's one-note call
+  painted every string red — `sgramModelFor()` now hands it a six-slot array, and the 76th
+  r5 assertion (mutation-checked against two spellings) closes the gap. Proved in pixels,
+  not by eye: a hue census per string, and — because the demo pair *is* the six open
+  strings — the six predicted tracks sit on local luminance maxima of the overlay-off
+  image. sgram PNGs strip the overlay (`state.sgFrets` blanked in a `finally`); **that is
+  an open taste call for the user.**
+- **NEXT — R5.2** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
-  **R5** harmonic tracks on the spectrogram (shown harmonics drawn as horizontal tracks,
-  inheriting R3's `findCoincidences()` and R4's `stringAncestry()` — one detector, never a
-  second copy; it wanted M2.7's sharper picture underneath it, which is why M2.7 ran first).
-  **R5's task split is deliberately unwritten**: two product questions are the user's to
-  answer (one string at a time vs free-form overlay; whether "audition a single harmonic"
-  jumps the queue as R5.0). **R6** is the old R5 — interval consonance explainers (joint
-  period, comb alignment, Plomp–Levelt roughness) — still blocked until the user resolves
-  the two docs/THEORY.md §2.5 numeric caveats. Educational tone: measure first, never
-  lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3 and 4: write the physics copy myself, freeze it
-  by sentinel + SHA, hand the builder only the plumbing.**
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, headless 34, plus
+  eight open chords from a picker (the user's case (b) — where collisions become visible),
+  then **R5.3** one ✦ per `partialClusters()` cluster, tiers drawn distinguishably, spread
+  along the *time* axis (**reviewer writes and freezes the copy, builder wires it**), then
+  **R5.4** bounding the overlay in time. **R6** is the old R5 — interval consonance
+  explainers (joint period, comb alignment, Plomp–Levelt roughness) — still blocked until
+  the user resolves the two docs/THEORY.md §2.5 numeric caveats. Educational tone: measure
+  first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
+  and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
+  the plumbing.**
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 76, headless 40, plus
   all three tamper guards (`tests/` untouched, both frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -280,8 +302,8 @@ build educational copy from it, never re-derive from scratch.
   + popovers, **3** canvas rendering, **4** app state/UI/synth/exports.
 - `tests/dsp.test.js` — extracts script block 0 from index.html, runs it under node.
   No framework; prints `N passed, M failed`, exit code 1 on failure.
-- `tests/verify.sh` — **the Rameau gate** (R3, then R4, then M2.7); the one command a delegated
-  builder must get to exit 0 before opening a PR. Runs the four node suites plus
+- `tests/verify.sh` — **the Rameau gate** (R3, then R4, then M2.7, then R5); the one command a delegated
+  builder must get to exit 0 before opening a PR. Runs the five node suites plus
   `tests/headless.js` and the untouched-`tests/` and frozen-copy guards; `BASE=<ref>` picks the comparison base (default `master`).
 - `tests/r3.test.js` — the R3 suite: `findCoincidences()` math and the R3.2–R3.4 wiring
   contracts, all read out of `index.html`. `tests/r4.test.js` — the same shape for R4:
@@ -289,6 +311,10 @@ build educational copy from it, never re-derive from scratch.
   ancestry-copy SHA. `tests/m27.test.js` — the M2.7 suite: `sgramWindowFor()` math, the
   M2.7.1–M2.7.4 wiring contracts, and the guard that ARCHITECTURE.md's "zoom is a crop"
   bullet was rewritten and SPEC.md appended (docs the code contradicts are a gate failure).
+  `tests/r5.test.js` — the R5 suite: `notePartials()`/`partialClusters()` math, the
+  consistency assertion binding every `findCoincidences()` landing to some cluster, and the
+  R5.1 wiring contracts — including the one that the note set handed to `notePartials()` is
+  **string-indexed, not the single selected note** (`key` picks the hue).
 - `tests/headless.js` — differential pixel + DOM checks through real Chrome. Note two
   traps recorded in ARCHITECTURE: `--user-data-dir` makes headless Chrome hang forever
   in first-run setup, and `index.html` carries its own source inline, so `--dump-dom`
@@ -333,14 +359,18 @@ build educational copy from it, never re-derive from scratch.
   **gate hook only**, unpersisted, no UI; each sgram pane canvas also carries
   `data-sgwin="<window>"`, the window that pane actually rendered, for the same reason:
   the canvas is unreachable from node),
+  `?sgnote=<0-5>` (spectrogram harmonic overlay: pick one open string; out of range selects
+  nothing) and `?sgharm=<n>` (harmonics 1–N, clamped 1–16) — **gate hooks only**,
+  unpersisted; each sgram pane canvas carries `data-sgcomb="<count>"`, the number of partial
+  tracks in that pane's overlay, absent when the overlay is off,
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
   "Load test files" button).
 - `node tests/dsp.test.js` — full DSP suite. `node tests/make_samples.js` — regenerate WAVs.
-- `./tests/verify.sh` — the Rameau gate (all suites + tamper guards; six steps as of M2.7).
-  **Green as of gate 6**; keep it that way, and reuse its shape (frozen copy + read-only
-  `tests/`) for R5.
+- `./tests/verify.sh` — the Rameau gate (all suites + tamper guards; seven steps as of R5).
+  **Green as of gate 7**; keep it that way, and reuse its shape (frozen copy + read-only
+  `tests/`) for R5.2 on.
   **It must not run inside a shell sandbox** — Chrome aborts at startup in
   `_RegisterApplication` (exit 134) when it cannot reach `launchservicesd`, and macOS
   pops a crash dialog per launch. `tests/headless.js` recognises that abort, prints the
@@ -445,6 +475,18 @@ build educational copy from it, never re-derive from scratch.
   so the magnify overlay inherits it; an **unzoomed** pane still crops the base 2048-pt image
   and is pixel-identical to v1.0.0. A frequency-only zoom is still a crop — the window follows
   the **time** span. `drawAll()` stays synchronous; the finer pass swaps in when it lands.
+  **Harmonic-track overlay (R5.1):** the sgram card's `Overlay` controls pick one open
+  string and a harmonic limit into `state.sgFrets`/`state.sgHarm` — the spectrogram's **own**
+  note state, deliberately separate from the frequency plots' Strings/harmonics, unpersisted,
+  never exported, and **not part of the refine cache key**. `sgramModelFor()` publishes the
+  flat `notePartials()` array as `comb` (unclipped — the draw pass clips); a fourth pass in
+  `drawSpectrogramScene()` draws each partial full-width at `yOfF(f)`: black halo, then
+  `_stringColor(key)`, solid fundamental / dashed above, no labels. Hand `notePartials()` the
+  **six-slot** note array, never the one selected note — `key` is the index it was given and
+  `key` picks the hue. The tracks are a **data** palette: identical in both themes. The app
+  never detects which notes were played; the user names them (intent), the overlay predicts,
+  the measurement judges. sgram PNGs strip the overlay (`state.sgFrets` blanked in a
+  `finally`) — an open taste call.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

@@ -873,7 +873,7 @@ for R5.0.**
 R5.0–R5.1 is the first visually testable deliverable and is what this session builds.
 R5.2 is where the user's case (b) — a chord, with collisions — becomes visible.
 
-### R5.0 — partial clustering in block 0 (node-testable, no UI)
+### R5.0 — partial clustering in block 0 (node-testable, no UI) — **BUILT** (`3befbfc`)
 
 `findCoincidences()` answers a **directional** question ("does a harmonic of one string
 land on another's open fundamental") because R3's frozen popover copy is phrased that way.
@@ -918,7 +918,7 @@ on (`key === c.onto.si`, `harm === 1`). Measured here before it was specified: 9
 0 missing. This is what stops the greedy walk from splitting a real landing across a group
 boundary without anyone noticing.
 
-### R5.1 — one note, drawn (the first thing the user can look at)
+### R5.1 — one note, drawn (the first thing the user can look at) — **BUILT** (`154eec9` state/control/model/hooks, `0da9427` draw + reviewer `key` fix)
 
 **State** (block 4, beside the other spectrogram state):
 
@@ -967,6 +967,34 @@ instead. So the overlay does not get stripped for free: `exportSgramPNG()` must 
 the strings axis or the harmonics), and it is what the gate asserts. It is also a taste
 call the user may want to reverse — a picture of an overlay is arguably the point of
 exporting it — so raise it at the milestone boundary rather than deciding silently.
+
+**Verified here (reviewer), not taken from the builder's report** — five node suites green
+(dsp 171, r3 42, r4 60, m27 51, **r5 76**) and headless **40/0**. Beyond the gate:
+
+- **The `key` defect, found and fixed in review.** The builder handed `notePartials()` the
+  one selected note (`[midi]`), so every partial came back `key === 0` and every string
+  would have painted in `STRING_COLORS[0]`. `sgramModelFor()` now builds a **six-slot**
+  `sgMidis` array (nulls skipped) — `key` is the index into the array `notePartials()` was
+  handed, and `key` is what picks the hue. The 76th r5 assertion closes the gap that let it
+  through; it was mutation-checked against two spellings of the bug (`[midi]` and
+  `[sgMidis[sgSi]]`) before landing.
+- **Proved in pixels, not by eye.** A census of the magnify screenshots (ΔRGB ≤ 24) gives
+  low E → red 4158 / pink 2986, high E → red 0 / pink 7062, overlay off → red 0: each
+  string paints only its own hue, 8 harmonics mark more than 6, and Bright is identical to
+  Dark (the overlay is **data** color, never themed).
+- **Proved the model lands on the measurement.** The demo pair is exactly the six open
+  strings (`tests/make_samples.js:38`), so at `?zoom=sga:0.05,0.6,70,700` the six track
+  rows were located with the overlay on, then luminance was read at those rows in the
+  overlay-**off** image against ±10/±14 px neighbours: all six (y = 222, 278, 345, 433,
+  555, 766) are local maxima. The prediction sits on the energy.
+- **Clip checked** at `?zoom=sga:0.6,1.4,150,700` in Bright: tracks stop at the plot rect,
+  no halo bleed into the axes or the right-edge markers, and the chip reads
+  `8192-pt Hann … E2 · harmonics 1–6` — the overlay composes with M2.7's refine.
+
+**Taste call raised with the user at this boundary, as this task said to:** sgram PNG
+exports strip the overlay (`exportSgramPNG()` blanks `state.sgFrets` in a `finally`),
+following the shipped data-only precedent. Reversing it — exporting the picture *with* its
+prediction drawn on — is the user's call, not a silent one.
 
 ### R5.2 — a chord, from a picker
 

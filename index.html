@@ -1505,6 +1505,68 @@ function findCoincidences(marks, tolCents){
   return out;
 }
 
+// ---------- partial clustering (R5.0) ----------
+// findCoincidences() answers a directional question — a harmonic landing ON an open
+// fundamental — because R3's frozen popover is phrased that way. A chord needs the
+// direction-free question instead: which partials of the user's note set share a
+// frequency, with no fundamental required on either side. Wider tolerance than R3's
+// ±6¢ (the tempered major third sits 14¢ off just, §5 — a real chord tone, not a
+// tuning slop) but a separate constant, so R3's tier is untouched.
+const TEMPERED_CENTS = 20;
+
+// midis: one entry per string (or chord voice), a MIDI number or null (not sounding).
+// Expands each into its harmonic series 1..nHarm. Returns a flat array of
+// {key, midi, harm, f}, key = the index into midis, in midis order then ascending
+// harm. No frequency clipping — FMIN/FMAX live in script block 3.
+function notePartials(midis, nHarm, a4){
+  const out = [];
+  for(let key = 0; key < midis.length; key++){
+    const midi = midis[key];
+    if(midi == null) continue;
+    for(let harm = 1; harm <= nHarm; harm++){
+      out.push({ key, midi, harm, f: midiToFreq(midi, a4) * harm });
+    }
+  }
+  return out;
+}
+
+// parts: a notePartials() array. Sorts by frequency and walks upward, opening a
+// group at the lowest partial not yet claimed and absorbing the next partial while
+// it stays within tolCents of the group's FIRST member — so tolCents caps the
+// group's total spread, never a chained neighbour gap. Only groups holding two or
+// more distinct keys are collisions; a note colliding with its own harmonics is not
+// one. tolCents defaults to TEMPERED_CENTS.
+function partialClusters(parts, tolCents){
+  const tol = (tolCents == null) ? TEMPERED_CENTS : Math.abs(tolCents);
+  const sorted = parts.slice().sort((a, b) => a.f - b.f);
+  const out = [];
+  let i = 0;
+  while(i < sorted.length){
+    const group = [sorted[i]];
+    const base = sorted[i].f;
+    let j = i + 1;
+    while(j < sorted.length && Math.abs(centsBetween(base, sorted[j].f)) <= tol){
+      group.push(sorted[j]);
+      j++;
+    }
+    i = j;
+    const keys = new Set(group.map(p => p.key));
+    if(keys.size < 2) continue;
+    let spreadCents = centsBetween(group[0].f, group[group.length - 1].f);
+    if(Math.abs(spreadCents) < 1e-9) spreadCents = 0;
+    const logMean = group.reduce((s, p) => s + Math.log(p.f), 0) / group.length;
+    out.push({
+      f: Math.exp(logMean),
+      members: group,
+      notes: keys.size,
+      spreadCents,
+      tier: spreadCents <= COINCIDENCE_CENTS ? "locked" : "tempered",
+    });
+  }
+  out.sort((a, b) => a.f - b.f);
+  return out;
+}
+
 // ---------- harmonic ancestry between two strings (R4.1) ----------
 // Just ratios for the interval classes docs/THEORY.md actually fixes: §3 for the
 // major-side intervals, §4 for the minor-side ones. Classes 1 (minor second) and 6

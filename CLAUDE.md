@@ -545,12 +545,12 @@ build educational copy from it, never re-derive from scratch.
   `(`. Both verdict paths proved through real Chrome against a scratch page with
   `NEARFLOOR_ABS_DB` at −47 (lowering `NEARFLOOR_REL_DB` cannot work: the floor is the *looser*
   of the two). No new suite, no new `verify.sh` step, no new Chrome launch.
-- **NEXT — the user's visual test.** R5 is closed; nothing is queued. (Tasks + gates in
+- **NEXT — the user’s visual test.** R5 is closed. One task is **recorded, not started**: **Q4 — the expanded view, truly expanded** (2026-08-26 user request, scheduled before R6) — collision-mark clicks and Hold-Fade must work in the spectrogram’s magnify overlay, which today gets `attachZoom` but neither `attachHitClicks` nor `attachSgFocus`, and the overlay should carry the sgram card head’s controls. Spec and traps: docs/ROADMAP.md `### Q4`. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
   in docs/THEORY.md.) M3/M4 remain gated on explicit user go-ahead.
   **R5.4 (bound the overlay in time) is no longer part of R5** — the user moved it into R6 as
   **R6.4** on 2026-08-26, so R5 closed with R5.5.
-  R5.1/R5.2/R5.6/R5.3/R5.7/Q1/Q2/R5.5 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
+  R5.1/R5.2/R5.6/R5.3/R5.7/Q1/Q2/R5.5/Q3 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
   explainers (joint period, comb alignment, Plomp–Levelt roughness) — still blocked until
   the user resolves the two docs/THEORY.md §2.5 numeric caveats (R6.4 is not blocked: it is
   plumbing, not physics). Educational tone: measure

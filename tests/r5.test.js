@@ -290,6 +290,24 @@ section("R5.1 — the model carries the comb, and does not disturb M2.7's refine
     return /state\.sgFrets/.test(w) && /state\.sgHarm/.test(w);
   });
   ok(fed, "the comb is notePartials() over state.sgFrets at state.sgHarm — the user's note set");
+  // …and it is the whole six-slot set, not the one note that happens to be picked:
+  // key is the index into the array notePartials() was handed, and key is what
+  // chooses the track's hue, so a one-note array paints every string STRING_COLORS[0].
+  const combArgs = [...s.matchAll(/notePartials\s*\(([\s\S]{0,300}?),\s*state\.sgHarm/g)]
+    .map(m => m[1].trim());
+  const topCommas = t => {
+    let d = 0, n = 0;
+    for (const ch of t) {
+      if ("([{".includes(ch)) d++;
+      else if (")]}".includes(ch)) d--;
+      else if (ch === "," && d === 0) n++;
+    }
+    return n;
+  };
+  const oneNote = a => /^\[[\s\S]*\]$/.test(a) && topCommas(a.slice(1, -1)) === 0;
+  ok(combArgs.length > 0 && !combArgs.some(oneNote),
+    "the note set is string-indexed, not the one selected note — key picks the hue",
+    combArgs.join(" | "));
   const keyLines = body.split("\n").filter(l => /(const\s+key\s*=|want\s*=\s*\{\s*key\s*:)/.test(l));
   ok(keyLines.length >= 2, "both cache keys are still built here", String(keyLines.length));
   ok(keyLines.length >= 2 && !/sgFrets|sgHarm/.test(keyLines.join("\n")),

@@ -3732,6 +3732,27 @@ function drawSpectrogramScene(ctx, w, h, model){
   // open-string fundamentals for the selected tuning (M2.5)
   drawStringMarkers(ctx, pW, pH, model.markers, yOfF);
 
+  // harmonic-track overlay (R5.1): the note set the user picked, projected as a
+  // generative model across the measured image — theory predicts, the user sees
+  // whether the energy is really there. Halo first (data colormaps never theme;
+  // black is the only stroke that survives both the magma floor and its ridges),
+  // then the string's own hue; solid for the fundamental, dashed above it. No text.
+  if(model.comb && model.comb.length){
+    ctx.save();
+    ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
+    for(const p of model.comb){
+      if(p.f<fw.F0||p.f>fw.F1) continue;
+      const y=Math.round(yOfF(p.f))+0.5;
+      if(p.harm===1) ctx.setLineDash([]); else ctx.setLineDash([3,3]);
+      ctx.strokeStyle="rgba(0,0,0,0.55)"; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
+      ctx.strokeStyle=_stringColor(p.key,1); ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   // colorbar: the exact magma → dB mapping the image used (pinned at the card
   // edge — the margin between plot and colorbar belongs to the string labels)
   const cbX=w-50, cbW=10;
@@ -4807,11 +4828,15 @@ function sgramModelFor(i,scale){
   // (state.sgFrets all null). Not part of the refine cache key: the overlay is
   // display-only and never invalidates the STFT.
   let comb=null, combNote=null;
-  const sgSi=state.sgFrets.findIndex(f=>f!=null);
+  // notePartials() keys each partial by its index in the array it is handed, and
+  // that key is what picks the track's hue — so hand it a SIX-slot array (nulls
+  // skipped), never the one selected note, or every string would draw in red.
+  const sgOpen=tuningMidi(state.tuning,state.customOffset);
+  const sgMidis=state.sgFrets.map((fr,si)=>(fr==null||sgOpen[si]==null)?null:sgOpen[si]+fr);
+  const sgSi=sgMidis.findIndex(m=>m!=null);
   if(sgSi>=0){
-    const midi=tuningMidi(state.tuning,state.customOffset)[sgSi]+state.sgFrets[sgSi];
-    comb=notePartials([midi],state.sgHarm,state.a4);
-    combNote=noteInfo(midiToFreq(midi,state.a4),state.a4).name;
+    comb=notePartials(sgMidis,state.sgHarm,state.a4);
+    combNote=noteInfo(midiToFreq(sgMidis[sgSi],state.a4),state.a4).name;
   }
   return { sg:sgToUse, image:imageToUse,
     view:{T0:zw.T0,T1:zw.T1,d0:view.d0}, fWin:{F0:zw.F0,F1:zw.F1},

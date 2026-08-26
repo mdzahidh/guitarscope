@@ -147,6 +147,10 @@ select:focus, input:focus{ border-color:var(--hair2); }
 /* Same disabled idiom as .seg button — a greyed control is how a select says
    "not yet" (the overlay's harmonic limit means nothing until a note is picked). */
 select:disabled{ opacity:.4; cursor:default; }
+input[type=range]:disabled{ opacity:.4; cursor:default; }
+.rangelbl{ display:flex; align-items:center; gap:6px; font-size:11px; color:var(--dim); }
+.rangelbl input[type=range]{ width:74px; accent-color:var(--switch-on); }
+.rangelbl output{ width:30px; text-align:right; font-variant-numeric:tabular-nums; color:var(--mut); }
 input[type=number]{ width:64px; }
 input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .btn{
@@ -959,6 +963,19 @@ kbd{
             </select>
           </div>
           <div class="ctlgroup">
+            <span>Legibility</span>
+            <label class="rangelbl" title="How far the spectrogram is dimmed under the tracks. The sheet is drawn between the measurement and the prediction, so the lines read as an overlay.">Sheet
+              <input type="range" id="sgScrimRange" min="0" max="90" step="5" value="45" disabled
+                     aria-label="Spectrogram overlay sheet opacity">
+              <output id="sgScrimOut">45%</output>
+            </label>
+            <label class="rangelbl" title="How far the other combs recede while one is held. Press and hold a track to follow it.">Hold fade
+              <input type="range" id="sgDimRange" min="0" max="95" step="5" value="85" disabled
+                     aria-label="Spectrogram held-comb fade">
+              <output id="sgDimOut">85%</output>
+            </label>
+          </div>
+          <div class="ctlgroup">
             <span>Time axis</span>
             <div class="seg" id="sgAlignSeg" role="group" aria-label="Spectrogram time alignment">
               <button data-al="off" class="on">Free</button>
@@ -1539,6 +1556,19 @@ function notePartials(midis, nHarm, a4){
     }
   }
   return out;
+}
+
+// The label a harmonic track carries: which string, which harmonic, and the note
+// that partial lands on. Only the fundamental is named alone — "E2 x1 = E2" would
+// be arithmetic, not information. The relation is "=" only inside R3's locked tier
+// (COINCIDENCE_CENTS), "≈" beyond it: the 5th harmonic sits 14 cents below the
+// tempered note it is named after, and a label that hid that would be teaching the
+// wrong lesson (docs/THEORY.md §1, §5).
+function partialLabel(p, a4){
+  const root = noteInfo(midiToFreq(p.midi, a4), a4).name;
+  if(p.harm === 1) return root;
+  const land = noteInfo(p.f, a4);
+  return root + " \u00d7" + p.harm + (Math.abs(land.cents) <= COINCIDENCE_CENTS ? " = " : " \u2248 ") + land.name;
 }
 
 // parts: a notePartials() array. Sorts by frequency and walks upward, opening a
@@ -3660,6 +3690,7 @@ function drawSpectrogramScene(ctx, w, h, model){
   const fSpan=Math.log(fw.F1/fw.F0);
   const xOfT=td=>SGPLOT.mL+((td-view.T0)/span)*pW;
   const yOfF=f=>SGPLOT.mT+(1-Math.log(f/fw.F0)/fSpan)*pH;
+  let nLabels=0;   // R5.6b: reported out, because the canvas is unreachable from node
   ctx.clearRect(0,0,w,h);
   if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
   ctx.save();
@@ -3673,6 +3704,17 @@ function drawSpectrogramScene(ctx, w, h, model){
   const t0 = sg.t0 || 0;
   ctx.drawImage(image, xOfT(view.d0 + t0), iy, (dur/span)*pW, yOfF(FMIN)-iy);
   ctx.restore();
+
+  // the sheet (R5.6a): when tracks are drawn over the image, a translucent black
+  // layer sits between the measurement and the prediction, so the lines read as
+  // an overlay rather than as part of the colormap. No comb, no sheet — the
+  // spectrogram is never dimmed for its own sake.
+  if(model.scrim>0 && model.comb && model.comb.length){
+    ctx.save();
+    ctx.fillStyle="rgba(0,0,0,"+model.scrim+")";
+    ctx.fillRect(SGPLOT.mL,SGPLOT.mT,pW,pH);
+    ctx.restore();
+  }
   ctx.strokeStyle=cssColor("hair"); ctx.lineWidth=1;
   ctx.strokeRect(SGPLOT.mL+0.5, SGPLOT.mT+0.5, pW-1, pH-1);
 
@@ -3742,18 +3784,41 @@ function drawSpectrogramScene(ctx, w, h, model){
   // one stroke that survives both ends of the colormap, and data colormaps never
   // theme. Solid for the fundamental, dashed above. No text.
   if(model.comb && model.comb.length){
+    const foc=(model.focus==null?null:model.focus), dim=model.dim||0;
     ctx.save();
     ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
     for(const p of model.comb){
       if(p.f<fw.F0||p.f>fw.F1) continue;
+      const a=(foc==null||p.key===foc)?1:(1-dim);   // R5.6c: the held comb keeps its weight, the rest recede
       const y=Math.round(yOfF(p.f))+0.5;
       if(p.harm===1) ctx.setLineDash([]); else ctx.setLineDash([6,4]);
-      ctx.strokeStyle="rgba(0,0,0,0.75)"; ctx.lineWidth=5;
+      ctx.strokeStyle="rgba(0,0,0,"+(0.75*a).toFixed(3)+")"; ctx.lineWidth=5;
       ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
-      ctx.strokeStyle=_trackColor(p.key,1); ctx.lineWidth=2.5;
+      ctx.strokeStyle=_trackColor(p.key,a); ctx.lineWidth=2.5;
       ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
     }
     ctx.setLineDash([]);
+    // labels (R5.6b): a line that doesn't say which harmonic it is teaches nothing.
+    // Highest first for a stable order, then M2.6c's rule — a label that would touch
+    // the one above it is SKIPPED, never smeared. Under a held comb only that comb
+    // is named, which is most of what holding it buys.
+    ctx.font=FONT_XS; ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+    const used=[];
+    const rows=model.comb.filter(p=>p.f>=fw.F0&&p.f<=fw.F1&&(foc==null||p.key===foc))
+      .slice().sort((a,b)=>b.f-a.f);
+    for(const p of rows){
+      const y=Math.round(yOfF(p.f))+0.5;
+      let clash=false;
+      for(const u of used){ if(Math.abs(u-y)<12){ clash=true; break; } }
+      if(clash) continue;
+      used.push(y);
+      const txt=partialLabel(p, model.a4);
+      ctx.lineWidth=3; ctx.strokeStyle="rgba(0,0,0,0.85)";
+      ctx.strokeText(txt, SGPLOT.mL+6, y-4);
+      ctx.fillStyle=_trackColor(p.key,1);
+      ctx.fillText(txt, SGPLOT.mL+6, y-4);
+      nLabels++;
+    }
     ctx.restore();
   }
 
@@ -3788,6 +3853,7 @@ function drawSpectrogramScene(ctx, w, h, model){
     ctx.fillText(model.zoomNote, SGPLOT.mL+pW, SGPLOT.mT+pH+19);
   }
   ctx.restore();
+  return nLabels;
 }
 
 // ---------- envelope overlay scene (M2) ----------
@@ -4112,7 +4178,11 @@ const state={ slots:[null,null], tuning:"estd", customOffset:0,
               tolCents: COINCIDENCE_CENTS,
               stringHarmonics:_defaultHarmonics(),
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix",
-              sgFrets:[null,null,null,null,null,null], sgHarm:6 };
+              sgFrets:[null,null,null,null,null,null], sgHarm:6,
+              // R5.6 legibility: the sheet under the tracks, how far an unheld comb
+              // recedes, and which comb is being held right now. Debugging aids and a
+              // transient gesture — never persisted, never exported (see saveSettings).
+              sgScrim:0.45, sgDim:0.85, sgFocus:null };
 // M2.7: gate hook — ?refine=0 disables the zoom refine (never persisted, no UI)
 const _refineEnabled = !/[?&]refine=0(?:&|$)/i.test(location.search);
 // A pan or a wheel writes ZOOMS and redraws on every event, so the refine waits
@@ -4161,6 +4231,8 @@ const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"), sgramSub=el("sgramSu
       sgramReadouts=[el("sgramReadoutA"),el("sgramReadoutB")];
 const sgAlignSeg=el("sgAlignSeg");
 const sgNoteSel=el("sgNoteSel"), sgHarmSel=el("sgHarmSel");
+const sgScrimRange=el("sgScrimRange"), sgScrimOut=el("sgScrimOut"),
+      sgDimRange=el("sgDimRange"), sgDimOut=el("sgDimOut");
 const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
 const eqCard=el("eqCard"), eqSub=el("eqSub"), eqDirSeg=el("eqDirSeg"), eqDevSel=el("eqDevSel"),
@@ -4681,11 +4753,13 @@ function sgramModelFor(i,scale){
     zoomNote:zoomNoteFor(zKey),
     name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
     dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(), comb,
+    a4:state.a4, scrim:state.sgScrim, focus:state.sgFocus, dim:state.sgDim,
     statusText:sgToUse.win+"-pt Hann · max per log cell"
       +(off?" · level-match "+fmtDb(off,1):"")
       +(state.sgAlign!=="off"&&bothSgLoaded()
         ?(state.sgAlign==="onset"?" · t = 0 at first onset":" · shared time axis"):"")
-      +(comb?" · "+combNote+" · harmonics 1–"+state.sgHarm:"") };
+      +(comb?" · "+combNote+" · harmonics 1–"+state.sgHarm:"")
+      +(comb&&state.sgFocus==null?" · hold a track to follow it":"") };
 }
 function buildEnvModel(){
   const curves=[]; let tMin=0, tMax=0;
@@ -4798,13 +4872,19 @@ function drawAll(){
     const model=sgramModelFor(i,scale);
     if(!model) continue;
     const c=setupCanvas(sgramCanvases[i]);
-    drawSpectrogramScene(c.ctx,c.w,c.h,model);
+    const nLabels=drawSpectrogramScene(c.ctx,c.w,c.h,model);
     sgramCanvases[i].setAttribute("data-sgwin", String(model.sg.win));
     // R5.1: pane reports its own overlay track count — the canvas is unreachable from node.
     if(model.comb) sgramCanvases[i].setAttribute("data-sgcomb", String(model.comb.length));
     else sgramCanvases[i].removeAttribute("data-sgcomb");
+    // R5.6: …and how many of those tracks it could name, and which comb it is holding.
+    if(model.comb) sgramCanvases[i].setAttribute("data-sglabels", String(nLabels));
+    else sgramCanvases[i].removeAttribute("data-sglabels");
+    if(model.comb && model.focus!=null) sgramCanvases[i].setAttribute("data-sgfocus", String(model.focus));
+    else sgramCanvases[i].removeAttribute("data-sgfocus");
   } else {
-    for(let i=0;i<2;i++){ sgramCanvases[i].removeAttribute("data-sgwin"); sgramCanvases[i].removeAttribute("data-sgcomb"); }
+    for(let i=0;i<2;i++){ sgramCanvases[i].removeAttribute("data-sgwin"); sgramCanvases[i].removeAttribute("data-sgcomb");
+      sgramCanvases[i].removeAttribute("data-sglabels"); sgramCanvases[i].removeAttribute("data-sgfocus"); }
   }
   const em=collState.env?null:buildEnvModel();
   if(em){
@@ -4955,6 +5035,49 @@ function attachSgramCrosshair(i){
     readout.style.top="12px";
   });
   wrap.addEventListener("mouseleave",hide);
+}
+// R5.6c: which track is under the cursor. It asks notePartials() the same question
+// sgramModelFor() asks — one source for the pixels and for the target — and maps
+// through the pane's own zoom window, so a zoomed pane's targets follow what it drew.
+function _sgTrackAt(i,x,y,w,h){
+  if(!state.sgFrets.some(f=>f!=null)) return null;
+  if(x<SGPLOT.mL||x>w-SGPLOT.mR||y<SGPLOT.mT||y>h-SGPLOT.mB) return null;
+  const pH=h-SGPLOT.mT-SGPLOT.mB;
+  const view=sgramView(i);
+  const zw=sgramZoomWin(i===0?"sga":"sgb",view.T0,view.T1);
+  const open=tuningMidi(state.tuning,state.customOffset);
+  const midis=state.sgFrets.map((fr,si)=>(fr==null||open[si]==null)?null:open[si]+fr);
+  const parts=notePartials(midis,state.sgHarm,state.a4);
+  const span=Math.log(zw.F1/zw.F0);
+  let best=null, bestD=8;   // 8 px — the track is 2.5 px inside a 5 px halo
+  for(const p of parts){
+    if(p.f<zw.F0||p.f>zw.F1) continue;
+    const d=Math.abs(SGPLOT.mT+(1-Math.log(p.f/zw.F0)/span)*pH - y);
+    if(d<bestD){ bestD=d; best=p.key; }
+  }
+  return best;
+}
+// Press a track and its whole comb stays lit while the rest recede; let go and the
+// pane comes back. A press that turns into a drag belongs to the zoom box instead —
+// attachZoom() ignores a press until it has moved more than 3 px, so the two gestures
+// hand off at the same threshold rather than both firing.
+function attachSgFocus(i){
+  const wrap=sgramWraps[i], canvas=sgramCanvases[i];
+  let down=null;
+  const clear=()=>{ down=null; if(state.sgFocus!=null){ state.sgFocus=null; requestDraw(); } };
+  wrap.addEventListener("mousedown",e=>{
+    const rect=canvas.getBoundingClientRect();
+    const k=_sgTrackAt(i,e.clientX-rect.left,e.clientY-rect.top,rect.width,rect.height);
+    if(k==null) return;
+    down={x:e.clientX,y:e.clientY};
+    state.sgFocus=k; requestDraw();
+  });
+  wrap.addEventListener("mousemove",e=>{
+    if(!down) return;
+    if(Math.abs(e.clientX-down.x)>3||Math.abs(e.clientY-down.y)>3) clear();
+  });
+  wrap.addEventListener("mouseup",clear);
+  wrap.addEventListener("mouseleave",clear);
 }
 function attachEnvCrosshair(){
   const hide=()=>{ envXline.style.display="none"; envReadout.style.display="none"; };
@@ -6063,8 +6186,13 @@ function fillSgNoteSel(){
 // The harmonic limit only means something once a note is overlaid; greying it out
 // while the overlay is Off is what says so without a sentence of help text.
 function syncSgHarmSel(){
-  if(!sgHarmSel) return;
-  sgHarmSel.disabled=!state.sgFrets.some(f=>f!=null);
+  const on=state.sgFrets.some(f=>f!=null);
+  if(!on||state.sgFrets[state.sgFocus]==null) state.sgFocus=null;
+  if(sgHarmSel) sgHarmSel.disabled=!on;
+  // R5.6: the two legibility tunables only mean something under an overlay, and a
+  // focus held on a string that is no longer overlaid would dim everything forever.
+  if(sgScrimRange) sgScrimRange.disabled=!on;
+  if(sgDimRange) sgDimRange.disabled=!on;
 }
 function stringContentHtml(si){
   const midi=tuningMidi(state.tuning,state.customOffset)[si];
@@ -7177,6 +7305,19 @@ function boot(){
     state.sgHarm=parseInt(sgHarmSel.value,10)||6;
     requestDraw();
   });
+  // R5.6a/c: the two legibility tunables. Live while dragging, printed beside the
+  // slider, and deliberately session-only — how hard the sheet is pressed is a
+  // reading aid for this pane right now, not a setting worth remembering.
+  function _sgRange(input,out,set){
+    if(!input) return;
+    input.addEventListener("input",()=>{
+      const v=Math.round(parseFloat(input.value)||0);
+      if(out) out.textContent=v+"%";
+      set(v/100); requestDraw();
+    });
+  }
+  _sgRange(sgScrimRange,sgScrimOut,v=>{ state.sgScrim=v; });
+  _sgRange(sgDimRange,sgDimOut,v=>{ state.sgDim=v; });
   lmToggle.addEventListener("change",()=>{
     state.lm=lmToggle.checked; compareTouched.lm=true;
     stopPlayback(); // the applied gain would no longer match what's printed
@@ -7396,6 +7537,7 @@ function boot(){
   attachCrosshair(specWrap,specCanvas,specXline,specReadout,false);
   attachCrosshair(diffWrap,diffCanvas,diffXline,diffReadout,true);
   attachSgramCrosshair(0); attachSgramCrosshair(1);
+  attachSgFocus(0); attachSgFocus(1);
   attachEnvCrosshair();
 
   attachZoom(specWrap, specCanvas, ()=>"spec");
@@ -7557,6 +7699,14 @@ function boot(){
   }
   const sgh=location.search.match(/[?&]sgharm=([0-9]+)(?:&|$)/i);                  // test hook
   if(sgh){ state.sgHarm=Math.max(1,Math.min(16,parseInt(sgh[1],10)||6)); sgHarmSel.value=String(state.sgHarm); requestDraw(); }
+  const sgsc=location.search.match(/[?&]sgscrim=([0-9]+)(?:&|$)/i);                // test hook
+  if(sgsc){ const v=Math.max(0,Math.min(90,parseInt(sgsc[1],10)||0));
+    state.sgScrim=v/100; if(sgScrimRange) sgScrimRange.value=String(v); if(sgScrimOut) sgScrimOut.textContent=v+"%"; requestDraw(); }
+  const sgdm=location.search.match(/[?&]sgdim=([0-9]+)(?:&|$)/i);                  // test hook
+  if(sgdm){ const v=Math.max(0,Math.min(95,parseInt(sgdm[1],10)||0));
+    state.sgDim=v/100; if(sgDimRange) sgDimRange.value=String(v); if(sgDimOut) sgDimOut.textContent=v+"%"; requestDraw(); }
+  const sgfc=location.search.match(/[?&]sgfocus=([0-5])(?:&|$)/i);                 // test hook — holds a comb without a mouse
+  if(sgfc){ const k=parseInt(sgfc[1],10); if(state.sgFrets[k]!=null){ state.sgFocus=k; requestDraw(); } }
   const dbg=location.search.match(/[?&]debug(?:=1)?(?:&|$)/i);                     // reveals the hidden "Load test files" button
   if(dbg&&debugLoadBtn) debugLoadBtn.style.display="";
   const ca=location.search.match(/[?&]ca=([0-9a-f]{6})(?:&|$)/i);                   // test hook

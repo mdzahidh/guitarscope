@@ -299,7 +299,12 @@ function sgwin(page, id) {
 // so the budget runs out in real-time terms while the decode is still pending.
 // Measured identical at 30 s and 90 s of budget — the fix is a retry, not a bigger
 // number. Rate is load-dependent: ~1 launch in 6 on an idle machine, 3 in 8 when a
-// second Chrome is running alongside. Both helpers below check that the page really
+// second Chrome is running alongside, and 7 in 8 with a runaway background process
+// (measured against an unmodified checkout while spotlightknowledged held 99 % CPU at
+// load average 5.7 — the same checkout missed 0 of 8 once it settled). At that rate no
+// sane retry budget helps, so the harness names the condition rather than hiding it:
+// see drawReport() below. Never answer a loaded machine by weakening a check.
+// Both helpers below check that the page really
 // drew and try again if it did not; after six tries they hand back what they have,
 // so the assertion fails loudly rather than passing against a blank page. Six because
 // 0.375^6 is ~0.3 %, where three tries left ~5 % per site and both `[null]` failure
@@ -330,9 +335,22 @@ function drew(page) {
 // runs against the last page and reports the wrong number, exactly as before.
 function domDrawn(query, ready) {
   const done = ready || drew;
-  let page = dom(query);
-  for (let i = 0; i < 5 && !done(page); i++) page = dom(query);
+  let page = dom(query), tries = 1;
+  for (let i = 0; i < 5 && !done(page); i++) { page = dom(query); tries++; }
+  drawReport(query, tries, done(page));
   return page;
+}
+
+// The retries used to be silent, which made a loaded machine look like a broken build:
+// six launches that all landed blank produce the same `[null]` an unwired attribute
+// would. Say when a site needed more than one launch, and say loudly when it used the
+// whole budget without ever drawing — that run's failures are about the machine, not
+// the code. Purely a diagnostic: it never changes what is asserted.
+function drawReport(query, tries, drewOk) {
+  if (!drewOk) {
+    console.log("  !!   " + query + " never drew in " + tries + " launches — heavy CPU load?");
+    console.log("       (assertions below run against an undrawn page and will read null)");
+  } else if (tries > 1) console.log("  ..   " + query + " drew on launch " + tries + "/6");
 }
 // A screenshot cannot be asked whether a canvas has a width, so ask it against the
 // app carrying no files at all: an undrawn ?demo page looks like that empty app,
@@ -344,9 +362,11 @@ function notBlank(img) { return diffPixels(img, BLANK, 8).length >= 100000; }
 // on top of "the app drew at all", for pixels that only appear once the refine has
 // landed.
 function shotDrawn(query, size, ready) {
-  let img = shot(query, size);
-  for (let i = 0; i < 5 && !(notBlank(img) && (!ready || ready(img))); i++)
-    img = shot(query + "&_r" + (i + 1), size);
+  let img = shot(query, size), tries = 1;
+  for (let i = 0; i < 5 && !(notBlank(img) && (!ready || ready(img))); i++) {
+    img = shot(query + "&_r" + (i + 1), size); tries++;
+  }
+  drawReport(query, tries, notBlank(img) && (!ready || ready(img)));
   return img;
 }
 
@@ -503,6 +523,106 @@ section("…and a chord marks more of the picture than one string does");
     dCh.length + " px vs " + dOne.length + " px");
 }
 
+
+// ------------------------------------------- overlay legibility (R5.6) -----
+// Same anchoring rule as sgcomb(): the page carries its own source inline.
+function sgattr(page, id, name) {
+  const m = page.match(new RegExp('<canvas[^>]*id="' + id + '"[^>]*>'));
+  if (!m) return null;
+  const c = m[0].match(new RegExp(name + '="(\\d+)"'));
+  return c ? Number(c[1]) : null;
+}
+
+// The bounding box of a difference. A control that moves is a handful of pixels in
+// one place; the spectrogram is a thousand px wide — the two can't be confused.
+function bbox(pts) {
+  if (!pts.length) return { w: 0, h: 0 };
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const p of pts) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; }
+  return { w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+// The label count is what these assertions read, so it is also what "drawn" means
+// here — an attribute-less dump is a page caught mid-draw, not a missing feature.
+const labelled = id => p => sgattr(p, id, "data-sglabels") !== null;
+
+section("R5.6 — the tracks say which harmonic they are");
+{
+  const off = domDrawn(SG);
+  ok(sgattr(off, "sgramCanvasA", "data-sglabels") === null,
+    "no overlay, no labels", String(sgattr(off, "sgramCanvasA", "data-sglabels")));
+
+  const one = domDrawn(SG + "&sgnote=0", labelled("sgramCanvasA"));
+  const n1 = sgattr(one, "sgramCanvasA", "data-sglabels");
+  ok(n1 !== null && n1 >= 1 && n1 <= 6,
+    "one open string at six harmonics labels its tracks", String(n1));
+
+  // 36 tracks cannot carry 36 labels on a 372 px log axis — the upper partials of
+  // six strings interleave to a few pixels apart. The guard has to drop them, and
+  // dropping them is the difference between a legible plot and a smear.
+  const e = domDrawn(SG + "&sgchord=E", labelled("sgramCanvasA"));
+  const nE = sgattr(e, "sgramCanvasA", "data-sglabels");
+  ok(nE !== null && nE > 0 && nE < 36,
+    "a chord labels what it can and skips the rest", String(nE) + " of 36 tracks");
+
+  // Under focus only one comb is lit, so only one comb is named.
+  const f = domDrawn(SG + "&sgchord=E&sgfocus=0", labelled("sgramCanvasA"));
+  const nF = sgattr(f, "sgramCanvasA", "data-sglabels");
+  ok(nF !== null && nF <= nE, "holding one comb quiets the other labels",
+    String(nF) + " vs " + String(nE));
+}
+
+section("R5.6a — the sheet is real, and only under an overlay");
+{
+  const bare = shotDrawn(SG, TALL);
+  const bareSheet = shotDrawn(SG + "&sgscrim=90", TALL);
+  // The sheet belongs to the overlay, not to the spectrogram: with nothing overlaid,
+  // pressing the slider must not touch the picture. It does move the slider's own
+  // thumb and readout — honest feedback, and the reason this bounds a box rather
+  // than asserting zero. One control is ~110 px wide; the plot is over a thousand.
+  const d0 = diffPixels(bare, bareSheet, 1);
+  const bb = bbox(d0);
+  ok(bb.w <= 160 && bb.h <= 24, "a scrim with nothing overlaid never touches the picture",
+    d0.length + " px differ, bbox " + bb.w + "x" + bb.h);
+
+  const flat = shotDrawn(SG + "&sgnote=0&sgscrim=0", TALL);
+  const sheet = shotDrawn(SG + "&sgnote=0&sgscrim=90", TALL);
+  const d = diffPixels(flat, sheet, 8);
+  ok(d.length > 500, "…and with tracks on it dims the spectrogram under them",
+    d.length + " px differ — a state key without a draw would be ~0");
+}
+
+section("R5.6c — holding a comb dims the others");
+{
+  const all = shotDrawn(SG + "&sgchord=E", TALL);
+  const held = shotDrawn(SG + "&sgchord=E&sgfocus=0", TALL);
+  const d = diffPixels(all, held, 8);
+  ok(d.length > 500, "holding a comb changes the picture", d.length + " px differ");
+
+  // …but so would the labels alone — a held comb is the only one named — and an
+  // assertion satisfied by the wrong half of the feature is no assertion. The fade
+  // is isolated by holding the SAME comb at two depths: same labels, same tracks,
+  // only the weight of the five unheld combs differs.
+  const soft = shotDrawn(SG + "&sgchord=E&sgfocus=0&sgdim=0", TALL);
+  const deep = shotDrawn(SG + "&sgchord=E&sgfocus=0&sgdim=95", TALL);
+  const dd = diffPixels(soft, deep, 8);
+  ok(dd.length > 20000, "…and the unheld combs really do recede",
+    dd.length + " px differ — the readout alone is a few hundred");
+
+  const page = domDrawn(SG + "&sgchord=E&sgfocus=3");
+  ok(sgattr(page, "sgramCanvasA", "data-sgfocus") === 3,
+    "…and the pane says which one it is holding",
+    String(sgattr(page, "sgramCanvasA", "data-sgfocus")));
+
+  // Out of range is not a string. Nothing is held, and nothing moves.
+  const bogus = domDrawn(SG + "&sgchord=E&sgfocus=9");
+  ok(sgattr(bogus, "sgramCanvasA", "data-sgfocus") === null,
+    "an index that is not a string holds nothing",
+    String(sgattr(bogus, "sgramCanvasA", "data-sgfocus")));
+  const bimg = shotDrawn(SG + "&sgchord=E&sgfocus=9", TALL);
+  const db = diffPixels(bimg, all, 1);
+  ok(db.length === 0, "…and leaves the picture exactly as it was",
+    db.length + " px differ");
+}
 console.log("\n" + passed + " passed, " + failed + " failed");
 console.log("artifacts: " + OUT);
 process.exit(failed ? 1 : 0);

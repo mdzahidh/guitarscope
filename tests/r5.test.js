@@ -59,7 +59,8 @@ fs.writeFileSync(tmp, blocks[0] +
   "findCoincidences,COINCIDENCE_CENTS," +
   "TEMPERED_CENTS:(typeof TEMPERED_CENTS==='undefined'?null:TEMPERED_CENTS)," +
   "notePartials:(typeof notePartials==='undefined'?null:notePartials)," +
-  "partialClusters:(typeof partialClusters==='undefined'?null:partialClusters)};\n");
+  "partialClusters:(typeof partialClusters==='undefined'?null:partialClusters)," +
+  "partialLabel:(typeof partialLabel==='undefined'?null:partialLabel)};\n");
 const D = require(tmp);
 
 const TUNING_KEYS = ["estd", "eb", "dstd", "dropd", "dadgad"];
@@ -326,7 +327,7 @@ section("R5.1 — the tracks are drawn, under the colorbar, with no text");
   ok(pass !== "", "there is a pass between the string markers and the colorbar");
   ok(/model\.comb/.test(pass), "…and it reads model.comb");
   ok(/yOfF\s*\(/.test(pass), "each partial is placed by the pane's own frequency mapping");
-  ok(/rgba\(0,\s*0,\s*0,\s*0?\.75\)/.test(pass),
+  ok(/rgba\(0,\s*0,\s*0,\s*"?\s*\+?\s*\(?0?\.75/.test(pass),
     "a black halo carries the line over the magma — the colormap never themes");
   ok(/_trackColor\s*\(/.test(pass), "the hue is the string's own data color, lifted for this surface");
   ok(/setLineDash\(\s*\[\s*6\s*,\s*4\s*\]\s*\)/.test(pass),
@@ -340,7 +341,10 @@ section("R5.1 — the tracks are drawn, under the colorbar, with no text");
   ok(widths.length >= 2 && widths[1] >= 2 && widths[0] - widths[1] >= 2,
     "…and both survive a device-pixel-ratio 2 downscale");
   ok(/harm\s*===\s*1/.test(pass), "…and the fundamental is not");
-  ok(!/fillText/.test(pass), "no labels on the tracks — hue and order say it (R3 precedent)");
+  // R5.6b supersedes R5.1's "no labels": hue and order named the string but never the
+  // harmonic, which is the thing the overlay is for. The rule that replaced it lives in
+  // the R5.6b section below; what survives here is that the track itself is still a line.
+  ok(/fillText/.test(pass), "…and each track is named (R5.6b — this reverses R5.1's no-text rule)");
 }
 
 section("R5.1 — the hooks the gate needs, and nothing persisted through them");
@@ -571,5 +575,155 @@ section("R5.2 — the chord hook, for a gate that cannot see a canvas");
     "…and nothing about it is remembered — no localStorage key, no settings field");
 }
 
+
+// ------------------------------------------------------------- R5.6 -------
+// Legibility of the overlay itself: what each track is called, a sheet between
+// the measurement and the tracks, and press-and-hold to follow one comb.
+section("R5.6 — partialLabel(): which harmonic, and where it lands");
+{
+  const L = (midi, harm, f) => D.partialLabel({ key: 0, midi, harm, f }, 440);
+  const F = (midi, harm) => D.midiToFreq(midi, 440) * harm;
+  okf("the fundamental is named, not multiplied — 'E2', never 'E2 ×1 = E2'",
+    () => L(40, 1, F(40, 1)) === "E2", () => L(40, 1, F(40, 1)));
+  okf("the octave reads E2 ×2 = E3 — a doubling is one octave, not two",
+    () => L(40, 2, F(40, 2)) === "E2 ×2 = E3", () => L(40, 2, F(40, 2)));
+  okf("…×3 lands a twelfth up: E2 ×3 = B3 (+2 ¢, inside the locked tier)",
+    () => L(40, 3, F(40, 3)) === "E2 ×3 = B3", () => L(40, 3, F(40, 3)));
+  okf("…×4 = E4", () => L(40, 4, F(40, 4)) === "E2 ×4 = E4", () => L(40, 4, F(40, 4)));
+  okf("…but ×5 is 14 ¢ flat of G♯4, so the label says ≈ and does not lie",
+    () => L(40, 5, F(40, 5)) === "E2 ×5 ≈ G♯4", () => L(40, 5, F(40, 5)));
+  okf("…and ×7 is 31 ¢ flat of D5 — ≈ again",
+    () => L(40, 7, F(40, 7)) === "E2 ×7 ≈ D5", () => L(40, 7, F(40, 7)));
+  // The = / ≈ boundary is R3's locked tier, not a number invented for a label.
+  okf("exactly COINCIDENCE_CENTS off still reads = ",
+    () => / = /.test(L(40, 2, D.midiToFreq(52, 440) * Math.pow(2, D.COINCIDENCE_CENTS / 1200))),
+    () => L(40, 2, D.midiToFreq(52, 440) * Math.pow(2, D.COINCIDENCE_CENTS / 1200)));
+  okf("one cent past it reads ≈",
+    () => / ≈ /.test(L(40, 2, D.midiToFreq(52, 440) * Math.pow(2, (D.COINCIDENCE_CENTS + 1) / 1200))),
+    () => L(40, 2, D.midiToFreq(52, 440) * Math.pow(2, (D.COINCIDENCE_CENTS + 1) / 1200)));
+}
+
+section("R5.6a — the sheet, between the measurement and the tracks");
+{
+  const s = decomment(b3);
+  const m = /function drawSpectrogramScene[\s\S]*?\n\}/.exec(s);
+  const sc = m ? m[0] : "";
+  ok(sc !== "", "drawSpectrogramScene() is in block 3");
+  const iImg = sc.indexOf("drawImage");
+  const iScrim = sc.search(/if\s*\(\s*model\.scrim\s*>\s*0/);
+  const iComb = sc.search(/if\s*\(\s*model\.comb\s*&&\s*model\.comb\.length\s*\)/);
+  ok(iScrim > 0, "there is a scrim pass gated on model.scrim");
+  ok(iImg > 0 && iScrim > iImg, "…drawn after the spectrogram image, not under it");
+  ok(iComb > 0 && iScrim < iComb, "…and before the tracks, which have to read against it");
+  const blk = iScrim > 0 ? sc.slice(iScrim, iScrim + 400) : "";
+  ok(/model\.comb/.test(blk),
+    "…and only when there IS an overlay — a sheet over a bare spectrogram costs contrast and buys nothing");
+  ok(/rgba\(0,\s*0,\s*0,\s*"\s*\+\s*model\.scrim/.test(blk.replace(/\s+/g, m => m.includes("\n") ? "\n" : " ")),
+    "…black at the model's own opacity — the sheet is a data-side dimmer, not a themed surface");
+  ok(/fillRect\s*\(\s*SGPLOT\.mL\s*,\s*SGPLOT\.mT\s*,\s*pW\s*,\s*pH\s*\)/.test(blk),
+    "…covering the plot rect exactly, so the axes and margins stay bright");
+  const mf = /function sgramModelFor[\s\S]*?\n\}/.exec(decomment(b4));
+  const mb = mf ? mf[0] : "";
+  ok(/scrim\s*:\s*state\.sgScrim/.test(mb), "sgramModelFor() publishes state.sgScrim as model.scrim");
+}
+
+section("R5.6b — every track says which harmonic it is");
+{
+  const s = decomment(b3);
+  const m = /function drawSpectrogramScene[\s\S]*?\n\}/.exec(s);
+  const sc = m ? m[0] : "";
+  const cm = /if\s*\(\s*model\.comb\s*&&\s*model\.comb\.length\s*\)\s*\{[\s\S]*?\n  \}/.exec(sc);
+  const cp = cm ? cm[0] : "";
+  ok(cp !== "", "the comb pass is one block — tracks and their labels together");
+  ok(/partialLabel\s*\(/.test(cp),
+    "…and the text comes from block 0's partialLabel(), not a second spelling of the same arithmetic");
+  ok(/fillText\s*\(/.test(cp) && /strokeText\s*\(/.test(cp),
+    "…drawn with a halo, like the tracks: the magma runs from black to white");
+  ok(/_trackColor\s*\(\s*p\.key/.test(cp),
+    "…in the string's own hue, so a label belongs to a comb at a glance");
+  ok(/sort\s*\(/.test(cp),
+    "…placed in a deterministic order, or the guard below would keep a different label each redraw");
+  ok(/continue\s*;/.test(cp) && /Math\.abs\s*\([^)]*\)\s*<\s*\d/.test(cp),
+    "…and a label that would touch its neighbour is SKIPPED, never smeared (M2.6c's rule)");
+  ok(/return\s+nLabels\s*;/.test(sc),
+    "…and the scene reports how many it drew — the canvas is unreachable from node");
+}
+
+section("R5.6c — press and hold to follow one comb");
+{
+  const s3 = decomment(b3);
+  const m = /function drawSpectrogramScene[\s\S]*?\n\}/.exec(s3);
+  const cm = /if\s*\(\s*model\.comb\s*&&\s*model\.comb\.length\s*\)\s*\{[\s\S]*?\n  \}/.exec(m ? m[0] : "");
+  const cp = cm ? cm[0] : "";
+  ok(/model\.focus/.test(cp), "the comb pass reads model.focus");
+  ok(/model\.dim/.test(cp), "…and model.dim — the fade is tunable, not baked in");
+  ok(/p\.key\s*===?\s*(foc|model\.focus)/.test(cp),
+    "…dimming by key, so the whole comb of the held track stays lit, not just that one partial");
+  ok(/_trackColor\s*\(\s*p\.key\s*,\s*[a-z]/i.test(cp),
+    "…and the fade goes through the track colour's alpha, not a second overlay");
+
+  const s4 = decomment(b4);
+  const fm = /function attachSgFocus[\s\S]*?\n\}/.exec(s4);
+  const fb = fm ? fm[0] : "";
+  ok(fb !== "", "attachSgFocus() exists");
+  ok(/mousedown/.test(fb) && /mouseup/.test(fb) && /mouseleave/.test(fb),
+    "…it is a press and a release — hold, look, let go");
+  ok(/mousemove/.test(fb),
+    "…and a drag cancels it, handing the gesture back to the zoom box");
+  ok(/state\.sgFocus\s*=\s*null/.test(fb), "…leaving no focus behind");
+  const hm = /function _sgTrackAt[\s\S]*?\n\}/.exec(s4);
+  const hb = hm ? hm[0] : "";
+  ok(hb !== "" && /notePartials\s*\(/.test(hb),
+    "the hit test asks notePartials() where the tracks are — one source for the pixels and the target");
+  ok(hb !== "" && /sgramZoomWin\s*\(/.test(hb),
+    "…through the pane's own zoom window, so a zoomed pane's targets follow its pixels");
+  ok(/syncSgHarmSel[\s\S]{0,200}?state\.sgFocus\s*=\s*null/.test(s4),
+    "…and changing what is overlaid drops a stale focus, at the same door every sgFrets write goes through");
+}
+
+section("R5.6 — the two tunables, and what they must not touch");
+{
+  const s = decomment(b4);
+  ok(/sgScrim\s*:\s*0\.45/.test(s), "state.sgScrim defaults to 0.45");
+  ok(/sgDim\s*:\s*0\.85/.test(s), "state.sgDim defaults to 0.85");
+  ok(/sgFocus\s*:\s*null/.test(s), "state.sgFocus starts empty — nothing is held");
+  ok(/id="sgScrimRange"[^>]*type="range"|type="range"[^>]*id="sgScrimRange"/.test(html),
+    "the sheet has a slider in the Overlay controls");
+  ok(/id="sgDimRange"[^>]*type="range"|type="range"[^>]*id="sgDimRange"/.test(html),
+    "…and so does the focus fade");
+  const sy = /function syncSgHarmSel[\s\S]*?\n\}/.exec(s);
+  const sb = sy ? sy[0] : "";
+  ok(/sgScrimRange\.disabled/.test(sb) && /sgDimRange\.disabled/.test(sb),
+    "…both greyed out until something is overlaid, at the same door the harmonic select uses");
+  ok(/input\[type=range\]:disabled/.test(html),
+    "…and the greying is visible — a disabled range that looks live is a lie");
+  // Debug tunables and a transient gesture: none of the three is analysis state.
+  const sv = /function saveSettings[\s\S]*?\n\}/.exec(s);
+  ok(sv && !/sgScrim|sgDim|sgFocus/.test(sv[0]),
+    "none of the three is remembered — they are a debugging aid, not a preference");
+  for (const fn of ["exportSgramPNG", "_cardPng", "exportPNG"]) {
+    const i = s.indexOf("function " + fn);
+    const body = i < 0 ? "" : s.slice(i, s.indexOf("\nfunction ", i + 10));
+    ok(body !== "" && !/state\.(sgScrim|sgDim|sgFocus)\s*=/.test(body),
+      fn + "() still renders the view as it stands, blanking nothing");
+  }
+}
+
+section("R5.6 — the hooks, and the pane attributes a node gate can read");
+{
+  const s = decomment(b4);
+  ok(/sgscrim=/.test(s), "?sgscrim= exists");
+  ok(/sgdim=/.test(s), "?sgdim= exists");
+  ok(/sgfocus=\(\[0-5\]\)/.test(s),
+    "?sgfocus= takes a string index only — out of range holds nothing");
+  ok(!/gsScrim|gsDim|gsFocus|["'](sgscrim|sgdim|sgfocus)["']\s*:/.test(s),
+    "…and nothing about them is remembered, like every other gate hook");
+  const da = /function drawAll[\s\S]*?\n\}/.exec(s);
+  const d = da ? da[0] : "";
+  ok(/data-sglabels/.test(d), "each pane reports how many labels it drew");
+  ok(/data-sgfocus/.test(d), "…and which comb it is holding, if any");
+  ok(/removeAttribute\s*\(\s*"data-sglabels"\s*\)/.test(d) && /removeAttribute\s*\(\s*"data-sgfocus"\s*\)/.test(d),
+    "…and clears both when there is nothing to report");
+}
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

@@ -639,6 +639,93 @@ section("R5.6c — holding a comb dims the others");
   ok(db.length === 0, "…and leaves the picture exactly as it was",
     db.length + " px differ");
 }
+// ------------------------------------------------ where combs meet (R5.3) ---
+// Last rather than in number order: these read data-sgclusters through sgattr(),
+// which R5.6 defines above, and the marks obey R5.6c's focus fade.
+//
+// A mark is a filled or hollow star in rgba(247,242,232) — a fixed cream that is
+// not a guitar accent, not a theme color, and (grep says) the only place in the
+// app that literal is drawn. Inside the dark spectrogram nothing else is that
+// pale, so a census of near-cream pixels, kept to star-sized blobs, counts the
+// marks and nothing else. The page's own paper is that cream too in the default
+// theme, which is why the size window matters: the background is one blob of five
+// million px, and a chip glyph run is wide and short (62x11) where a mark is
+// square (13x13 filled, 17x17 hollow).
+function markBlobs(img) {
+  const W = img.w, H = img.h, D = img.rgba, pts = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4;
+    if (Math.abs(D[i] - 247) < 14 && Math.abs(D[i + 1] - 242) < 14 && Math.abs(D[i + 2] - 232) < 14)
+      pts.push({ x, y });
+  }
+  return clusters(pts, 3).filter(b => {
+    const w = b.x1 - b.x0 + 1, h = b.y1 - b.y0 + 1;
+    return b.n >= 25 && b.n <= 200 && w >= 10 && w <= 20 && h >= 10 && h <= 20;
+  });
+}
+const combed = id => p => sgcomb(p, id) !== null;
+// Both panes, because the assertion below reads both: pane B decodes on its own
+// schedule, and a predicate that only waits for A lets a launch through with B still
+// blank — a [null] that looks like an unwired attribute. Still strictly weaker than
+// the assertion (the overlay drew at all, not that it found 11).
+const bothCombed = p => combed("sgramCanvasA")(p) && combed("sgramCanvasB")(p);
+
+section("R5.3 — the marks say where two strings meet");
+{
+  const off = domDrawn(SG);
+  ok(sgattr(off, "sgramCanvasA", "data-sgclusters") === null,
+    "no overlay, nothing to meet, no marks",
+    String(sgattr(off, "sgramCanvasA", "data-sgclusters")));
+
+  // Six fundamentals and nothing above them: a chord's open strings are a fourth
+  // or a third apart, so no two of them are the same pitch. The marks are a fact
+  // about the harmonics, and with no harmonics there is nothing to mark.
+  const flat = domDrawn(SG + "&sgchord=E&sgharm=1", combed("sgramCanvasA"));
+  ok(sgcomb(flat, "sgramCanvasA") === 6 &&
+     sgattr(flat, "sgramCanvasA", "data-sgclusters") === null,
+    "fundamentals alone never meet",
+    sgcomb(flat, "sgramCanvasA") + " partials, " +
+    String(sgattr(flat, "sgramCanvasA", "data-sgclusters")) + " marks");
+
+  const e = domDrawn(SG + "&sgchord=E", bothCombed);
+  ok(sgattr(e, "sgramCanvasA", "data-sgclusters") === 11,
+    "E major's 36 partials land on each other in 11 places",
+    String(sgattr(e, "sgramCanvasA", "data-sgclusters")));
+  ok(sgattr(e, "sgramCanvasB", "data-sgclusters") === 11, "…on both panes",
+    String(sgattr(e, "sgramCanvasB", "data-sgclusters")));
+
+  // A different shape is a different set of coincidences. A build that marked a
+  // constant — every landing of the tuning, say, rather than of what is sounding —
+  // would print the same number here.
+  const c = domDrawn(SG + "&sgchord=C", combed("sgramCanvasA"));
+  ok(sgattr(c, "sgramCanvasA", "data-sgclusters") === 8,
+    "C's shape meets in 8, not E's 11 — the count follows the chord",
+    String(sgattr(c, "sgramCanvasA", "data-sgclusters")));
+}
+
+section("…and the marks are pixels, not an attribute");
+{
+  const bare = shotDrawn(SG + "&sgchord=E&sgharm=1", TALL);
+  ok(markBlobs(bare).length === 0, "nothing meets, nothing is drawn",
+    markBlobs(bare).length + " star-sized cream blobs");
+
+  const img = shotDrawn(SG + "&sgchord=E", TALL);
+  const drawn = markBlobs(img).length;
+  const counted = sgattr(domDrawn(SG + "&sgchord=E", combed("sgramCanvasA")),
+    "sgramCanvasA", "data-sgclusters");
+  ok(counted === 11 && drawn === 2 * counted,
+    "every mark a pane counted is a mark on the picture, on both panes",
+    drawn + " drawn vs 2 x " + String(counted) + " counted");
+
+  // The marks belong to the combs, so they fade with them. Same shot R5.6c takes,
+  // so this costs no launch: one comb held, the other five pushed to the floor.
+  const deep = shotDrawn(SG + "&sgchord=E&sgfocus=0&sgdim=95", TALL);
+  const lit = markBlobs(deep).length;
+  ok(lit > 0 && lit < drawn,
+    "holding one comb leaves only its own meetings at full strength",
+    lit + " of " + drawn + " marks still cream");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 console.log("artifacts: " + OUT);
 process.exit(failed ? 1 : 0);

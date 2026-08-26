@@ -11,7 +11,7 @@
 #   4. tests/m27.test.js is green              - the M2.7 wiring contracts are met
 #   5. tests/r5.test.js is green               - the R5 wiring contracts are met
 #   6. tests/headless.js is green              - it really renders and opens
-#   7. the gate itself was not edited          - tests/ untouched, both copies frozen
+#   7. the gate itself was not edited          - tests/ untouched, all three copies frozen
 #
 # (7) is what makes (1)-(6) mean anything: a builder who may edit the tests can
 # always make them pass. The frozen copy blocks are educational prose already
@@ -23,6 +23,7 @@ cd "$(dirname "$0")/.." || exit 1
 BASE=${BASE:-master}
 FROZEN_SHA=e4b277b2918a25367723636701fadb93a9520ef377c6c48f949cfdc2c789addf
 FROZEN_SHA_R4=c0c6c57eba876fa23f3e600efb4f471d6d5c033fbf34b025632b64cda127d799
+FROZEN_SHA_R5=1da64ae24f7201c825b0c3a7c5a4c8962e4996fb5c7af051bb31b539ba69cf7b
 fail=0
 
 step() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
@@ -108,6 +109,16 @@ got=$(awk '
   /---------- end ancestry copy ----------/ {if(on) exit}
 ' index.html | shasum -a 256 | cut -d' ' -f1)
 frozen "$got" "$FROZEN_SHA_R4" "ancestry copy unchanged"
+
+# R5.3's collision-cluster prose. Third block, same rule. Note that all three awk
+# programs here are written inline on purpose: awk -v eats backslashes, so a pattern passed
+# that way matches nothing and cheerfully hashes the empty string.
+got=$(awk '
+  /---------- collision clusters: the .* popover \(R5\.3\) ----------/ {on=1}
+  on {print}
+  /---------- end collision copy ----------/ {if(on) exit}
+' index.html | shasum -a 256 | cut -d' ' -f1)
+frozen "$got" "$FROZEN_SHA_R5" "collision copy unchanged"
 
 printf '\n'
 if [ "$fail" -eq 0 ]; then

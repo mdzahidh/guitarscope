@@ -60,7 +60,8 @@ fs.writeFileSync(tmp, blocks[0] +
   "TEMPERED_CENTS:(typeof TEMPERED_CENTS==='undefined'?null:TEMPERED_CENTS)," +
   "notePartials:(typeof notePartials==='undefined'?null:notePartials)," +
   "partialClusters:(typeof partialClusters==='undefined'?null:partialClusters)," +
-  "partialLabel:(typeof partialLabel==='undefined'?null:partialLabel)};\n");
+  "partialLabel:(typeof partialLabel==='undefined'?null:partialLabel)," +
+  "clusterRatio:(typeof clusterRatio==='undefined'?null:clusterRatio)};\n");
 const D = require(tmp);
 
 const TUNING_KEYS = ["estd", "eb", "dstd", "dropd", "dadgad"];
@@ -725,5 +726,244 @@ section("R5.6 — the hooks, and the pane attributes a node gate can read");
   ok(/removeAttribute\s*\(\s*"data-sglabels"\s*\)/.test(d) && /removeAttribute\s*\(\s*"data-sgfocus"\s*\)/.test(d),
     "…and clears both when there is nothing to report");
 }
+// ---------------------------------------------------------- R5.3 wiring ----
+// A chord's tracks cross; R5.3 marks where they land on the same pitch and says
+// what that landing is, as a ratio. The math half is clusterRatio(); the copy half
+// is the third frozen block; the wiring half is one draw pass and one door.
+const crypto = require("crypto");
+
+section("R5.3 — clusterRatio(): a landing read back as whole numbers");
+{
+  // A hand-built member: key picks the string, harm the partial, midi its fundamental.
+  const M = (key, midi, harm, f) => ({ key, midi, harm, f: f === undefined ? 100 : f });
+  const CL = (members, tier) => ({ f: members[0].f, tier: tier || "locked",
+    spreadCents: 0, members });
+
+  okf("one string is not a collision — null, not a one-term ratio",
+    () => D.clusterRatio(CL([M(0, 40, 2), M(0, 40, 4)])) === null);
+  okf("a member with no harmonic number refuses to be named",
+    () => D.clusterRatio(CL([M(0, 40, 2), M(1, 45, 0)])) === null);
+  okf("an octave pair reads 1 : 2, and has a name",
+    () => { const r = D.clusterRatio(CL([M(0, 40, 2), M(1, 52, 1)]));
+            return r.text === "1 : 2" && r.name === "octave"; });
+  okf("a string reaches the meeting by its LOWEST colliding harmonic",
+    () => { const r = D.clusterRatio(CL([M(0, 40, 4), M(0, 40, 2), M(1, 47, 3)]));
+            return r.terms.length === 2 && r.terms.some(t => t.key === 0 && t.harm === 2); });
+  okf("the ratio comes out in lowest terms — harmonics 6 and 4 give 2 : 3, not 6 : 4",
+    () => D.clusterRatio(CL([M(0, 40, 6), M(1, 47, 4)])).text === "2 : 3");
+  okf("…and sorted ascending, so the lowest fundamental is written first",
+    () => { const n = D.clusterRatio(CL([M(0, 40, 3), M(1, 47, 2), M(2, 52, 1)])).nums;
+            return n.join(",") === "2,3,6"; });
+  okf("a ratio the app has no name for stays unnamed rather than guessed at",
+    () => { const r = D.clusterRatio(CL([M(0, 40, 5), M(1, 47, 2)]));
+            return r.text === "2 : 5" && r.name === null; });
+
+  // The fold: a string an octave above another contributes the same pitch class, so
+  // its term is a power-of-two multiple. Setting those aside is what lets a four-string
+  // landing still be recognised as the triad it is.
+  okf("octave doublings fold away before naming — 4 : 5 : 6 : 10 is still a major triad",
+    () => { const r = D.clusterRatio(CL([M(0, 40, 15), M(1, 45, 12), M(2, 50, 10), M(3, 57, 6)]));
+            return r.text === "4 : 5 : 6 : 10" && r.foldText === "4 : 5 : 6" && r.name === "major triad"; });
+  okf("…and only EXACT octaves fold: 5 : 8 keeps both terms and stays unnamed",
+    () => { const r = D.clusterRatio(CL([M(0, 40, 8), M(1, 49, 5)]));
+            return r.foldText === null && r.name === null; });
+  okf("a ratio that needs no fold reports none",
+    () => D.clusterRatio(CL([M(0, 40, 3), M(1, 47, 2)])).foldText === null);
+}
+
+section("R5.3 — measured against the stocked chords, so the copy cannot drift");
+{
+  const open = D.tuningMidi("estd", 0);
+  const clustersOf = (frets, n) => {
+    const midis = frets.map((fr, si) => fr == null ? null : open[si] + fr);
+    return PC(NP(midis, n), D.TEMPERED_CENTS);
+  };
+  const E = clustersOf([0, 2, 2, 1, 0, 0], 8);
+  const C16 = clustersOf([null, 3, 2, 0, 1, 0], 16);
+  const near = (cs, f) => cs.find(c => Math.abs(c.f - f) < 1);
+
+  okf("open E, harmonics 1–8: the landing at 247 Hz is three strings on 2 : 3 : 6",
+    () => { const r = D.clusterRatio(near(E, 247.0));
+            return r.text === "2 : 3 : 6" && r.foldText === "2 : 3" && r.name === "perfect fifth"; });
+  okf("…and the one at 414 Hz is 2 : 5 — a real landing the app declines to name",
+    () => { const r = D.clusterRatio(near(E, 413.7));
+            return r.text === "2 : 5" && r.name === null; });
+  okf("open C, harmonics 1–16: four strings meet at 1969 Hz as 4 : 5 : 6 : 10",
+    () => { const r = D.clusterRatio(near(C16, 1969.4));
+            return r.text === "4 : 5 : 6 : 10" && r.name === "major triad"; });
+  okf("…and that landing is tempered, not locked — the third pays for even keys",
+    () => near(C16, 1969.4).tier === "tempered");
+
+  // Nothing improvised: every name the app ever prints comes from the fixed table.
+  const NAMES = ["major triad", "minor triad", "octave", "perfect fifth",
+    "perfect fourth", "major third", "minor third"];
+  const CHORDS = { E: [0,2,2,1,0,0], Em: [0,2,2,0,0,0], A: [null,0,2,2,2,0],
+    Am: [null,0,2,2,1,0], C: [null,3,2,0,1,0], D: [null,null,0,2,3,2],
+    Dm: [null,null,0,2,3,1], G: [3,2,0,0,0,3] };
+  let total = 0, named = 0, bad = 0, nulls = 0;
+  for (const k of Object.keys(CHORDS)) for (const n of [8, 16]) {
+    for (const c of clustersOf(CHORDS[k], n)) {
+      total++;
+      const r = D.clusterRatio(c);
+      if (!r) { nulls++; continue; }
+      if (r.terms.length !== new Set(c.members.map(m => m.key)).size) bad++;
+      if (r.name) { named++; if (NAMES.indexOf(r.name) < 0) bad++; }
+    }
+  }
+  ok(total > 100 && nulls === 0,
+    "every cluster of every stocked chord names a ratio — a cluster is two keys by definition",
+    total + " clusters, " + nulls + " unnamed");
+  ok(named > 40 && bad === 0,
+    "…one term per string, and every name drawn from the fixed vocabulary",
+    named + " named, " + bad + " wrong");
+}
+
+// ------------------------------------------------------- the R5.3 copy ----
+const C_START = "// ---------- collision clusters: the ✦ popover (R5.3) ----------";
+const C_END = "// ---------- end collision copy ----------";
+
+section("R5.3 copy — frozen, and it renders on real math");
+{
+  const i = html.indexOf(C_START), j = html.indexOf(C_END);
+  ok(i > 0 && j > i, "both copy sentinels are present");
+  if (i > 0 && j > i) {
+    const block = html.slice(i, j + C_END.length) + "\n";
+    const sha = crypto.createHash("sha256").update(block).digest("hex");
+    ok(sha === process.env.R53_SHA_OVERRIDE ||
+       sha === "1da64ae24f7201c825b0c3a7c5a4c8962e4996fb5c7af051bb31b539ba69cf7b",
+      "the copy block is byte-identical to the reviewed text", sha.slice(0, 16));
+
+    const copy = decomment(block);
+    ok(!/§|\.md\b|THEORY|ROADMAP/.test(copy),
+      "the copy states the physics without citing its homework");
+    ok(/\+\s*TEMPERED_CENTS\s*\+/.test(copy) && /\+\s*COINCIDENCE_CENTS\s*\+/.test(copy),
+      "the two tolerances are read from the constants, never retyped as prose");
+    ok(!/["'][^"']*\b(20|6) ¢/.test(copy),
+      "…so no sentence can go stale when a tier moves");
+
+    // Execute it: block 0 supplies the math, block 4 the ordinals and formatters,
+    // and only `esc` and `state` are stubs — the same shape as the R4 copy test.
+    const need = b4.slice(b4.indexOf("const STRING_ORD="), j - html.indexOf(b4) + C_END.length);
+    const shim = 'const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",' +
+      '">":"&gt;","\\"":"&quot;"}[c]));\nconst state={a4:440,tuning:"estd",customOffset:0,' +
+      "tolCents:6,stringHarmonics:[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]};\n" +
+      "function fmtHz(f){return f.toFixed(2)+' Hz';}\n" +
+      "function getComputedStyle(){return {getPropertyValue:()=>'#888'};}\n";
+    let C = null, err = null;
+    try {
+      C = new Function(blocks[0] + "\n" + shim + "\n" + need +
+        "\nreturn {clusterContentHtml,clusterTermLine,notePartials,partialClusters," +
+        "tuningMidi,TEMPERED_CENTS};")();
+    } catch (e) { err = e; }
+    ok(!!C, "the copy block executes on top of real block-0 math", err && err.message);
+
+    if (C) {
+      const openM = C.tuningMidi("estd", 0);
+      const chord = f => C.partialClusters(
+        C.notePartials(f.map((fr, si) => fr == null ? null : openM[si] + fr), 16, 440),
+        C.TEMPERED_CENTS);
+      const E = chord([0, 2, 2, 1, 0, 0]);
+      const C16 = chord([null, 3, 2, 0, 1, 0]);
+      const at = (cs, f) => cs.find(c => Math.abs(c.f - f) < 1);
+      const txt = h => h.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+
+      ok(C.clusterContentHtml(null) === "", "no cluster, no copy");
+
+      const fifth = txt(C.clusterContentHtml(at(E, 247.0)));
+      ok(/Three strings meet at B3/.test(fifth),
+        "a three-string landing counts itself and names the pitch", fifth.slice(0, 60));
+      ok(/whole-number ratio 2 : 3 : 6/.test(fifth) && /that is 2 : 3 — the perfect fifth/.test(fifth),
+        "reads the ratio off the harmonics, then folds the octave to name it");
+      ok(/sounding the same pitch here/.test(fifth) && !/near miss/.test(fifth),
+        "a locked landing is described as one pitch, not as beating");
+
+      const third = txt(C.clusterContentHtml(at(C16, 1969.4)));
+      ok(/4 : 5 : 6 : 10/.test(third) && /4 : 5 : 6 — the major triad/.test(third),
+        "the four-string landing is folded back to the triad it is");
+      ok(/piece of one/.test(third),
+        "and the triad carries the note about being a segment of one series");
+      ok(/very nearly meet here/.test(third) && /major third sits about 14 ¢ sharp/.test(third),
+        "a tempered landing says what temperament did to it");
+
+      // Beating vs roughness: the copy switches on the measured Hz difference, and
+      // both branches must be reachable from the stocked chords.
+      const all = [].concat(E, C16, chord([3, 2, 0, 0, 0, 3])).map(c => txt(C.clusterContentHtml(c)));
+      ok(all.some(t => /that slow wah is the sound of a near miss/.test(t)),
+        "a slow near miss is called beating");
+      ok(all.some(t => /too fast to count/.test(t)),
+        "…and a fast one is called roughness");
+      ok(all.every(t => t === "" || /How Claude Rameau places it/.test(t)),
+        "every landing shows its own arithmetic, not just its verdict");
+
+      const line = C.clusterTermLine({ midi: 40, harm: 3, f: 247.02 }, 440);
+      ok(/E2 ×3 = /.test(line), "each term prints as note × harmonic = frequency", line);
+    }
+  }
+}
+
+section("R5.3 — the marks: the model finds them, one draw pass places them");
+{
+  const s = decomment(b3);
+  const m = /function sgramModelFor[\s\S]*?\n\}/.exec(decomment(b4));
+  const mm = m ? m[0] : "";
+  ok(/partialClusters\s*\(\s*comb\s*,\s*TEMPERED_CENTS\s*\)/.test(mm),
+    "the model clusters its own comb at the tempered tier — one detector, never two");
+  const ret = /return\s*\{[\s\S]*?\n\}/.exec(mm);
+  ok(ret && /[{,]\s*clusters\s*[,}]/.test(ret[0]),
+    "…and publishes them on the model, so the draw pass reads the model and not the state");
+
+  const d = /function drawSpectrogramScene[\s\S]*?\n\}/.exec(s);
+  const body = d ? d[0] : "";
+  const pass = /if\s*\(\s*model\.clusters[\s\S]*?\n  \}/.exec(body);
+  const p = pass ? pass[0] : "";
+  ok(p !== "", "there is a pass over model.clusters");
+  ok(/starPath\s*\(/.test(p) && !/fillText\s*\(\s*["']✦/.test(body),
+    "the mark is a drawn path, never the ✦ glyph — R3's lesson, kept");
+  ok(!/_trackColor|_stringColor|cssColor|cssRGBA/.test(p),
+    "the landing belongs to neither string, so it takes no guitar accent and no themed ink");
+  ok(/tier\s*===\s*["']locked["']/.test(p) && /\.fill\(\)/.test(p) && /\.stroke\(\)/.test(p),
+    "locked is filled, tempered is hollow — the tier is visible before the click");
+  ok(/hits\.push\s*\(\s*\{[^}]*cluster/.test(p),
+    "each mark registers a click target carrying its own cluster");
+  ok(/model\.focus/.test(p) && /model\.dim/.test(p),
+    "…and a held comb dims the marks that are not in it, like the tracks");
+  ok(/f\s*<\s*fw\.F0\s*\|\|[\s\S]{0,20}fw\.F1/.test(p),
+    "a landing outside the pane's frequency window is not drawn");
+  ok(/stride/.test(p) && !/18/.test(p),
+    "the thinning is by x spacing, the axis the marks actually spread along");
+}
+
+section("R5.3 — the door, and what a node gate can count");
+{
+  const s = decomment(b4);
+  const ocp = /function openClusterPopover[\s\S]*?\n\}/.exec(s);
+  ok(ocp && /clusterContentHtml\s*\(/.test(ocp[0]),
+    "a cluster opens the frozen copy through its own door");
+  const ah = /function attachHitClicks[\s\S]*?\n\}/.exec(s);
+  ok(ah && /hh\.cluster/.test(ah[0]) && /openClusterPopover\s*\(/.test(ah[0]),
+    "the shared hit dispatcher recognises a cluster hit");
+  ok(/attachHitClicks\s*\(\s*sgramCanvases\s*\[\s*0\s*\]/.test(s) &&
+     /attachHitClicks\s*\(\s*sgramCanvases\s*\[\s*1\s*\]/.test(s),
+    "…and both spectrogram panes are wired to it");
+  const cross = /function attachSgramCrosshair[\s\S]*?\n\}/.exec(s);
+  ok(cross && /["']help["']/.test(cross[0]),
+    "a mark hovers the help cursor, like every other canvas doc target");
+
+  const tryOpen = /const tryOpen[\s\S]*?\n    \};/.exec(s);
+  ok(tryOpen && /\^clu/.test(tryOpen[0]) && /openClusterPopover\s*\(/.test(tryOpen[0]),
+    "?pop=clu<N> pins the Nth cluster's popover — the canvas is unreachable from node");
+  ok(!/gsClusters|["']sgclusters["']\s*:/.test(s),
+    "nothing about the marks is remembered — they are a reading of the overlay");
+  const da = /function drawAll[\s\S]*?\n\}/.exec(s);
+  const d = da ? da[0] : "";
+  ok(/setAttribute\s*\(\s*"data-sgclusters"/.test(d), "each pane reports how many marks it drew");
+  // Twice: once when a pane drew no marks, once when the card is folded and neither pane
+  // drew at all. A stale count is worse than none — it would read as marks a reader can click.
+  ok((d.match(/removeAttribute\s*\(\s*"data-sgclusters"\s*\)/g) || []).length === 2,
+    "…and clears the count both when a pane finds nothing and when the card is folded");
+  ok(/sgHits\s*\[\s*i\s*\]\.filter\([\s\S]{0,40}cluster/.test(d),
+    "the count is the marks actually drawn, not the clusters found");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

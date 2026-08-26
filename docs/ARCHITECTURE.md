@@ -1080,6 +1080,69 @@ scheme wins, and marking a picture you cannot yet read would be marking the wron
   succeeded and shout when the entire retry budget passed undrawn, so the next loaded machine
   reads as a loaded machine instead of an unwired attribute.
 
+## R5.3 (session 22): where two strings meet, marked and clickable
+
+R5.1 predicted one comb, R5.2 six, R5.6 made six readable. R5.3 answers the user's first
+item from that same message: mark the places where the combs **collide**. A chord's
+character is not that six notes sound at once — it is which of their partials arrive at the
+same pitch, and how nearly.
+
+- **No new detector and no new tolerance.** `sgramModelFor()` calls
+  `partialClusters(comb, TEMPERED_CENTS)` — the R5.0 primitive, at the R5.0 tempered tier —
+  and publishes the result as `model.clusters`. R3's `findCoincidences()` and its locked
+  `COINCIDENCE_CENTS = 6` are still the only other caller of the same idea, still untouched.
+  `partialClusters()` already drops any group whose members come from fewer than two keys,
+  so "a string with itself" is not a collision, and each cluster already carries the `tier`
+  that says whether the meeting is inside ±6 ¢ or only inside ±20 ¢.
+- **The chord reads itself backwards out of the landing.** `clusterRatio()` (block 0) is the
+  R5.3 maths. Every member reaches the same pitch, so `f = f_i × h_i` holds for all of them,
+  and the fundamentals therefore go as `1/h_i`: take one member per key at its **lowest**
+  colliding harmonic, set `L = lcm(h_i)`, and each string's term is `L / h_i`. Those terms
+  are already in lowest terms — `gcd(L/h_i) = L/lcm(h_i) = 1` — so no second reduction is
+  needed there. The **folded** set does need one: a string an octave above another
+  contributes the same pitch class, so exact power-of-two duplicates are dropped
+  (`isPow2`, R4's) before naming, which is how an open C still names itself `4:5:6` with its
+  doubling folded away, and the survivors are then divided by their gcd. Names come from
+  `CHORD_RATIO_NAMES` and cover only the ratios docs/THEORY.md fixes — `4:5:6` major
+  (§1: a segment of one harmonic series), `10:12:15` minor (§4: a stack, not a segment),
+  and the five two-term intervals. Anything else returns `name: null` and the copy says the
+  ratio and stops, rather than improvising a chord name.
+- **The mark takes no side.** `starPath()` again — a drawn path, never the ✦ glyph (the
+  session-15 chevron trap, restated at R3). The landing belongs to neither string, so it
+  gets neither guitar accent nor themed ink: a fixed light neutral `rgba(247,242,232,·)`
+  over a 4 px black halo, because it sits on the magma, which is dark in **both** themes.
+  Tier is drawn, not written: **filled** when the pitches agree inside R3's ±6 ¢,
+  **hollow** when only temperament's ±20 ¢ holds them together and the ear hears the
+  difference as beating. The mark obeys R5.6c — a held focus fades every cluster none of
+  whose members is the focused string, by the same `1 − state.sgDim`.
+- **Spread along time, thinned on the axis that smears.** The user asked for the marks to be
+  spread rather than stacked, and x on this pane is time, which a *predicted* landing does
+  not have — so the marks are laid out evenly across the plot's inner width and the status
+  chip says "click a mark where strings meet" rather than naming a moment. That layout also
+  changes which guard is correct: the string labels' vertical 18 px rule would drop marks
+  that never touch (two landings a quarter-octave apart sit half a pane apart
+  horizontally), so R5.3 thins by **x stride** instead — keep every mark while the spacing
+  clears a mark's own width, stride past some once a dense chord would pack them tighter.
+  Same house rule as everywhere else, skip rather than smear, measured on the axis that
+  actually smears.
+- **The click is the existing door.** The mark pass pushes `{x,y,w,h,cluster}` into
+  `sgHits[i]`, which `drawAll()` clears per pane and `attachHitClicks()` reads — the same
+  hit-rect machinery the spectrum's ✦ and every glossary term use, so the `help` cursor
+  (M2.6d) and the popover lifecycle come for free. `attachSgramCrosshair()` only offers that
+  cursor when no button is down, so following a comb never fights it.
+  `openClusterPopover()` opens the third **frozen** copy block
+  (`// ---------- collision clusters: the ✦ popover (R5.3) ----------`, SHA `1da64ae2…` in
+  `tests/verify.sh`): *Musician's ear* / *The physics* / *Equal temperament* / *How Claude
+  Rameau places it* / *Current values*, with each term printed as `E2 ×3 = 247.5 Hz`, the
+  mistuning in cents **and** in Hz of beating, and the ±1/6-octave audition button.
+- **What a node gate can count.** `?pop=clu<N>` pins the Nth cluster's popover (canvas is
+  unreachable from node), and each pane publishes `data-sgclusters` — deliberately the
+  number of marks **drawn**, not clusters found, so the stride is observable. The mark's
+  cream is a literal that appears nowhere else on the pane, which is what lets
+  `tests/headless.js` census the marks as pixels: near-`rgba(247,242,232)` blobs of the
+  right size, `22 = 2 × 11` across the two panes for an open E, and strictly fewer lit once
+  `?sgfocus=0&sgdim=95` fades the rest.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never
@@ -1160,7 +1223,10 @@ metrics) are carried as stored values and labeled as such.
   supplies for free. And it must be strictly **weaker** than the assertion — "the refine
   landed at all" (`sgwin !== 2048`, "differs from the refine-off build at all"), never "the
   refine landed on 4096" — so a build that never refines still fails every try and reports
-  the wrong number.
+  the wrong number. R5.3 hit the same rule from the other side: a predicate that waited only
+  for **pane A**'s overlay let a launch through with pane B still decoding, and the pane-B
+  assertion read `[null]` — which looks exactly like an unwired attribute. The fix is a
+  predicate that waits for both (`bothCombed`), not a looser assertion.
 - **Chrome headless does not exit when given `--user-data-dir`.** With a throwaway
   profile it renders and writes the PNG on time (~3 s), then sits there. Two runs left
   going overnight both finally returned **after 23 h 20 m**, and the last lines of each

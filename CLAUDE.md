@@ -347,19 +347,44 @@ build educational copy from it, never re-derive from scratch.
   launches in 8 on an *unmodified* checkout under 99 % background CPU, 0 in 8 once idle;
   `domDrawn`/`shotDrawn` now report the launch they succeeded on and shout when the whole
   budget passed undrawn, and no assertion was weakened.
-- **NEXT — R5.3** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
+- **R5.3 collisions marked and clickable BUILT (session 22, reviewer).** The user's first
+  item from the same message: mark where the combs **collide**. `sgramModelFor()` calls
+  `partialClusters(comb, TEMPERED_CENTS)` — the R5.0 primitive at the R5.0 tier, **no new
+  detector and no new tolerance** (R3's `findCoincidences()`/`COINCIDENCE_CENTS = 6` are
+  byte-identical). `clusterRatio()` in block 0 reads the chord backwards out of the landing:
+  every member meets at `f = f_i × h_i`, so the fundamentals go as `1/h_i` — one member per
+  key at its **lowest** colliding harmonic, `L = lcm(h_i)`, term `L/h_i` (already lowest
+  terms, `gcd(L/h_i) = 1`), exact octave duplicates folded away with `isPow2` and the
+  survivors reduced. `CHORD_RATIO_NAMES` names only what THEORY fixes — `4:5:6` major (§1,
+  a segment of one series), `10:12:15` minor (§4, a stack), five two-term intervals;
+  anything else prints the ratio and stops rather than guessing a chord name. A fourth draw
+  pass places one `starPath()` per in-range cluster — **path, never the ✦ glyph** — in fixed
+  cream over a black halo (the landing belongs to neither string, and the magma is dark in
+  both themes), **filled** inside ±6 ¢ and **hollow** in the tempered tier, fading with
+  R5.6c's focus. Marks spread evenly along **x**, which carries no meaning here (a predicted
+  landing has no time), so the thinning is by **x stride**, not the labels' vertical 18 px
+  guard — skip rather than smear, measured on the axis that smears. Clicks reuse
+  `sgHits[i]`/`attachHitClicks` (so the M2.6d `help` cursor comes free) into
+  `openClusterPopover()` and the **third frozen copy block** (SHA `1da64ae2…`): musician's
+  ear / physics / equal temperament / how Rameau places it / current values, each term as
+  `E2 ×3 = 247.5 Hz`, the mistuning in cents *and* Hz of beating, ±1/6-oct audition. Gate:
+  `?pop=clu<N>` and `data-sgclusters` (marks **drawn**, not clusters found — the stride is
+  observable), `tests/r5.test.js` 180 → **232**, `tests/headless.js` 56 → **64**, including a
+  pixel census of the marks' cream (E → 11 per pane of 36 partials, 22 drawn; C → 8; fewer
+  lit at `?sgfocus=0&sgdim=95`). All new assertions mutation-checked the day they were
+  written — one pairing had to be re-run because a mutation that removed the write path
+  **masked** a second mutation under test.
+- **NEXT — R5.4** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
-  one ✦ per `partialClusters()` cluster, tiers drawn distinguishably, spread
-  along the *time* axis (**reviewer writes and freezes the copy, builder wires it**), then
-  **R5.4** bounding the overlay in time, and **R5.5** near-floor disclosure on the LTAS
-  Difference. **R6** is the old R5 — interval consonance
+  bound the overlay in time, then **R5.5** near-floor disclosure on the LTAS
+  Difference. R5.1/R5.2/R5.6/R5.3 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
   explainers (joint period, comb alignment, Plomp–Levelt roughness) — still blocked until
   the user resolves the two docs/THEORY.md §2.5 numeric caveats. Educational tone: measure
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 180, headless 56, plus
-  all three tamper guards (`tests/` untouched, both frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 232, headless 64, plus
+  all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
@@ -430,7 +455,8 @@ build educational copy from it, never re-derive from scratch.
   env — **full-page screenshots need `?open=all`** now that eq/sgram/env start
   folded), `?pop=<glosskey>` (pin a glossary/region popover open for capture; `?pop=coin<N>` pins
   the Nth ✦ coincidence popover, N indexing the sorted `findCoincidences()` result;
-  `?pop=str<N>` pins the open-string popover for string N = 0–5, low E first),
+  `?pop=str<N>` pins the open-string popover for string N = 0–5, low E first;
+  `?pop=clu<N>` pins the Nth collision-cluster popover of the current overlay),
   `?tol=<0-50>` (coincidence tolerance in cents — **gate hook only**, unpersisted, no UI),
   `?refine=0` (disable M2.7's zoom refinement, restoring the crop-only spectrogram —
   **gate hook only**, unpersisted, no UI; each sgram pane canvas also carries
@@ -447,8 +473,10 @@ build educational copy from it, never re-derive from scratch.
   percentages — these *do* have UI ranges in the sgram card head; the hooks exist so the gate
   can set them) and `?sgfocus=<0-5>` (hold one string's comb without a mouse; out of range
   holds nothing) — unpersisted, never exported; panes also carry `data-sglabels="<count>"`
-  (harmonic labels actually drawn, after the 12 px overlap guard) and `data-sgfocus="<si>"`
-  (the comb being held), both absent when there is nothing to report,
+  (harmonic labels actually drawn, after the 12 px overlap guard), `data-sgfocus="<si>"`
+  (the comb being held) and `data-sgclusters="<count>"` (R5.3 collision marks actually
+  **drawn**, after the x-stride thinner — not the number of clusters found), all absent
+  when there is nothing to report,
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
@@ -592,6 +620,14 @@ build educational copy from it, never re-derive from scratch.
   `?sgdim=`); a >3 px drag hands off to the zoom box. `sgScrim`/`sgDim`/`sgFocus` are view
   state like `sgFrets` — unpersisted, unexported, not in the refine cache key — and their
   ranges ship disabled until something is overlaid.
+  **Collision marks (R5.3):** `partialClusters(comb, TEMPERED_CENTS)` — the R5.0 primitive,
+  no new detector, no new tolerance — puts one `starPath()` mark per cluster on the pane, in
+  fixed cream over a black halo (it belongs to neither string, and the magma is dark in both
+  themes), **filled** inside R3's ±6 ¢ and **hollow** in the tempered tier. Marks spread
+  along x, which carries no meaning here, so they thin by **x stride** rather than the
+  labels' vertical guard. Clicking one opens `clusterRatio()`'s reading of the chord —
+  fundamentals go as `1/h_i`, octave duplicates folded, named only where docs/THEORY.md
+  fixes the ratio (`4:5:6`, `10:12:15`, five intervals) and left as a bare ratio otherwise.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

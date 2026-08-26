@@ -1410,3 +1410,57 @@ headless decode/draw race missed 7 launches in 8 on an **unmodified** checkout, 
 once the machine settled. The fix was diagnostic, never a weakened check — `domDrawn` and
 `shotDrawn` now report which launch succeeded and shout when the whole retry budget passed
 undrawn. A loaded machine must read as a loaded machine, not as an unwired attribute.
+
+## R5.3 — the marks say where two strings meet (session 22)
+
+The user's first item from the R5.2 test message, built after R5.6 because the marks have to
+sit on top of whatever legibility scheme wins. A chord is several harmonic series interleaved;
+the ✦ says **where two of them arrive at the same pitch**. One mark per `partialClusters()`
+cluster, never one per pair — three strings landing on one frequency is one event.
+
+**The chord reads itself backwards out of the landing.** Every member of a cluster satisfies
+`f = f_i × h_i`, so the fundamentals go as `1/h_i`: invert the harmonic numbers, clear the
+fractions, and whole numbers fall out. `clusterRatio()` does exactly that, one member per
+string at its **lowest** colliding harmonic (the higher ones are that same arrival doubled).
+Octave duplicates fold before naming, so an open C whose top string doubles at 10 is still
+4:5:6 — but only exact power-of-two duplicates fold, and only the ratios docs/THEORY.md fixes
+get names (4:5:6 major §1, 10:12:15 minor §4, the five plain intervals). Anything else returns
+a null name and the copy **says nothing rather than improvising physics**.
+
+**One detector, two tiers, no new tolerance.** `sgramModelFor()` calls `partialClusters(comb,
+TEMPERED_CENTS)` — R5.0's primitive at the wider tier, because a fretted chord in equal
+temperament misses just intonation by up to ~16 ¢ and a meeting the ear fuses is still a
+meeting. The cluster carries its own `tier`, so the mark distinguishes a locked landing
+(filled) from a tempered near miss (hollow) without a second detector and without a control.
+
+**The mark takes no side.** The landing belongs to neither string, so it wears no guitar
+accent and no themed ink: a fixed light cream over a black halo, because it sits on the magma,
+which is dark in both themes. Drawn as a path (`starPath`, R = 8), never the ✦ glyph — the
+session-15 chevron lesson. That fixed literal appears nowhere else in the app, which is what
+makes a pixel census of the marks possible at all.
+
+**Spread along time, per the user's suggestion — and thinned on the right axis.** Frequency
+sets `y`; `x` is spread evenly across the pane and means nothing, which is why the status chip
+names the click rather than a time. The string labels' vertical 18 px guard would be the wrong
+guard here (two landings a quarter-octave apart sit half a pane apart horizontally), so the
+thinner is an **x-stride**: keep every mark while the spacing clears a mark's own width, stride
+past some once a dense chord packs them tighter. Skip rather than smear, measured on the axis
+that actually smears. The pane therefore publishes **marks drawn**, not clusters found.
+
+**Gate.** `tests/r5.test.js` 180 → **232**, `tests/headless.js` 56 → **64**, and a third frozen
+copy block (`collision clusters: the ✦ popover (R5.3)`, SHA `1da64ae2…`) — `verify.sh` now
+carries three. Through real Chrome: no overlay → no attribute and no marks; `sgharm=1` → 6
+partials and **no** marks, because a chord's open strings are never the same pitch; `sgchord=E`
+→ 11 marks per pane out of 36 partials; `sgchord=C` → **8**, so a build that marked a constant
+(every landing of the tuning, say) would print the same number twice and fail. A census of
+star-sized near-cream blobs binds the picture to the attribute — 22 drawn = 2 × 11 counted —
+and falls to 10 when one comb is held at `?sgdim=95`, because the marks fade with the combs
+they belong to. Every new assertion mutation-checked the day it was written; one pairing had to
+be re-run because a mutation that removed the write path **masked** a second mutation under
+test.
+
+One harness fix rode along, and it is the standing rule applied once more: the pane-B
+assertion above read `[null]` on a loaded machine because the launch predicate waited only for
+**pane A**'s overlay. A predicate must read what the assertion reads — so it now waits for
+both panes (`bothCombed`), still strictly weaker than the assertion it guards. No assertion was
+weakened.

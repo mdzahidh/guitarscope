@@ -1111,17 +1111,66 @@ while a runaway indexer held 99 % CPU, and 0 in 8 once it settled. `domDrawn`/`s
 say which launch they succeeded on and shout when the whole retry budget went by undrawn, so
 the next loaded machine is diagnosable instead of looking like an unwired attribute.
 
-### R5.3 — collisions marked and clickable
+### R5.3 — collisions marked and clickable — **BUILT** (session 22, reviewer)
 
-One ✦ per `partialClusters()` cluster, not per pair; the two tiers drawn distinguishably
-(the locked tier as R3 draws it, the tempered tier hollow); distributed along the **time**
-axis rather than stacked in frequency, per the user's suggestion — including the extreme
-left and right edges of the span when crowded. Click opens a frozen copy block explaining
-the cluster as a ratio in R4's ancestry vocabulary. Copy traces to docs/THEORY.md §1
-(4:5:6 is the major triad), §3.4 (the denominator rule), §4 (10:12:15 for the minor), §5
-(the tempered third is 14 ¢ sharp — which is *why* that tier exists and is drawn
-differently). **Reviewer writes that copy and freezes it by sentinel + SHA; the builder
-wires it.**
+The user's first item, held back until R5.6 settled how a crowded overlay reads: a chord is
+where several harmonic series interleave, and the marks say **where two of them arrive at the
+same pitch**. One ✦ per `partialClusters()` cluster, never one per pair — three strings meeting
+at one frequency is one event, not three.
+
+- **The maths.** `clusterRatio(cluster)` in block 0 reads a landing backwards. Every member
+  reaches the meeting at `f = f_i × h_i`, so the fundamentals go as `1/h_i`: invert the harmonic
+  numbers, clear the fractions with their lcm, and the chord states itself in whole numbers.
+  (The lcm construction is already in lowest terms — `gcd(L/h_i) = L/lcm(h_i) = 1` — so only the
+  *folded* set, after octave duplicates are dropped, needs a second reduction.) One member per
+  string, taken at its **lowest** colliding harmonic; the higher ones are that same arrival
+  doubled. `CHORD_RATIO_NAMES` names only the ratios THEORY fixes (4:5:6 major, 10:12:15 minor,
+  and the five plain intervals); anything else returns a null name and the copy **says nothing
+  rather than improvising**.
+- **The mark.** A fourth-and-a-half pass in `drawSpectrogramScene` (after the tracks, before the
+  colorbar), guarded on `model.clusters` and clipped to the plot rect. Drawn as a path — R3's
+  `starPath()`, R = 8 — never the ✦ glyph, for the session-15 chevron reason. The landing belongs
+  to neither string, so it takes **no guitar accent and no themed ink**: a 4 px black halo at
+  0.8 α under a fixed light cream `rgba(247,242,232)`, because the mark sits on the magma, which
+  is dark in both themes. **Filled** inside R3's locked tier, **hollow** (2 px stroke) when
+  temperament leaves a near miss. Marks obey R5.6c's focus fade — a held comb keeps its own
+  meetings at full strength and the rest go to `1 − sgDim`.
+- **Spread along time, per the user's suggestion.** Cluster frequency sets `y`; `x` is spread
+  evenly across the pane between 14 px insets and carries no meaning, which is why the status
+  chip names the click rather than a time. The string labels' vertical 18 px guard is the wrong
+  guard here — two landings a quarter-octave apart sit half a pane apart horizontally — so the
+  thinner runs on the axis that actually smears: an **x-stride** that keeps every mark while the
+  spacing clears a mark's own width and strides past some once a dense chord packs them tighter.
+  Same house rule, measured on the right axis: skip rather than smear.
+- **The click.** `sgHits[i]` per pane, fed by the draw pass and wired through the existing
+  `attachHitClicks`; the crosshair hover sets the `help` cursor on a mark (M2.6d's affordance
+  rule) except while a drag owns the cursor. `openClusterPopover()` is the same door as a
+  spectrum coincidence. The copy is the **third frozen block** (`// ---------- collision
+  clusters: the ✦ popover (R5.3) ----------` … `end collision copy`, SHA `1da64ae2…`): a
+  musician's-ear paragraph, the physics read backwards into the ratio, R4's ancestry vocabulary
+  for a two-string meeting (a power of two underneath means one string lives *inside* the other;
+  an odd factor means both are children of a note further down), an equal-temperament paragraph
+  that differs by tier, and the measured values. Beating is stated in Hz and called *beating*
+  under 15 Hz, *roughness* above it (THEORY §2).
+
+*As built.* `sgramModelFor()` calls `partialClusters(comb, TEMPERED_CENTS)` — the same primitive
+the R5.0 maths tests cover, at the wider tier, because a fretted chord in equal temperament misses
+just intonation by up to ~16 ¢ and a meeting the ear fuses is still a meeting. Clusters carry
+their own `tier`, so the mark says which kind it is **without a second detector**. Nothing new is
+persisted or exported. The status chip gains `· click a mark where strings meet`.
+
+*Done when* — met: the pane publishes `data-sgclusters`, and it reports **marks drawn**, not
+clusters found (the stride drops some), because the canvas is unreachable from node;
+`?pop=clu<N>` pins the Nth cluster's popover for capture. `tests/r5.test.js` 180 → **232** —
+`clusterRatio()` against hand-computed landings, the fold rule (an octave doubling folds, 2:5 is
+left unnamed), the tier split, the frozen copy rendering on real math, the draw pass's guard and
+order, and the inverted contracts. `tests/headless.js` 56 → **64**, through real Chrome: overlay
+off → no attribute and no marks; `sgharm=1` → 6 partials and **no** marks, because a chord's open
+strings are never the same pitch; `sgchord=E` → 11 marks per pane out of 36 partials; `sgchord=C`
+→ **8**, so the count follows the chord rather than the tuning; and a pixel census of star-sized
+near-cream blobs (the literal appears nowhere else in the app) confirms **22 drawn = 2 × 11
+counted**, falling to 10 when one comb is held at `sgdim=95`. All 52 + 8 new assertions
+mutation-checked the day they were written.
 
 ### R5.4 — bound it in time
 

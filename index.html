@@ -1673,6 +1673,56 @@ function stringAncestry(rootMidi, noteMidi, a4){
   };
 }
 
+// ---------- the chord under a collision (R5.3) ----------
+// Every member of a cluster meets at one pitch: f = f_i x h_i for each. So the
+// fundamentals go as 1/h_i — invert the harmonic numbers, clear the fractions, and
+// the chord states itself in whole numbers. 4:5:6 is the major triad (docs/THEORY.md
+// §1: it IS a segment of one harmonic series); 10:12:15 is the minor (§4: a stack,
+// not a segment). Names only for the ratios THEORY fixes; anything else returns a
+// null name and the copy says nothing rather than improvising.
+const CHORD_RATIO_NAMES = {
+  "4:5:6": "major triad", "10:12:15": "minor triad",
+  "1:2": "octave", "2:3": "perfect fifth", "3:4": "perfect fourth",
+  "4:5": "major third", "5:6": "minor third",
+};
+
+// cluster: one entry of partialClusters(). One member per key — a string reaches the
+// meeting point by its LOWEST colliding harmonic, and the higher ones are that same
+// arrival doubled. Returns null when fewer than two distinct keys survive (not a
+// collision) or when a harmonic number is missing.
+function clusterRatio(cluster){
+  if(!cluster || !cluster.members) return null;
+  const byKey = new Map();
+  for(const p of cluster.members){
+    if(!Number.isFinite(p.harm) || p.harm < 1) return null;
+    const cur = byKey.get(p.key);
+    if(!cur || p.harm < cur.harm) byKey.set(p.key, p);
+  }
+  const picked = Array.from(byKey.values());
+  if(picked.length < 2) return null;
+  let L = 1;
+  for(const p of picked) L = L * p.harm / gcdInt(L, p.harm);
+  // L is the lcm of the harmonics, so gcd(L/h_i) = L/lcm(h_i) = 1: the terms are already
+  // in lowest terms and need no second reduction. (The folded set below does need one —
+  // dropping octave duplicates can leave a common factor behind.)
+  const terms = picked.map(p => ({ key: p.key, harm: p.harm, midi: p.midi, f: p.f, term: L / p.harm }));
+  terms.sort((a, b) => a.term - b.term);   // ascending term = ascending fundamental
+  const nums = terms.map(t => t.term);
+  const text = nums.join(" : ");
+  // A string an octave above another contributes the same pitch class: its term is a
+  // power-of-two multiple of that string's. Drop those doublings before naming, so an
+  // open C (4:5:6 with the top string doubling at 10) is still a major triad. Only exact
+  // octave duplicates fold — 2:5 is left unnamed rather than guessed at.
+  const fold = nums.filter(x => !nums.some(y => y < x && isPow2(x / y)));
+  let fg = 0;
+  for(const x of fold) fg = gcdInt(fg, x);
+  const folded = fg > 1 ? fold.map(x => x / fg) : fold;
+  const foldText = folded.length >= 2 && folded.length < nums.length ? folded.join(" : ") : null;
+  const name = CHORD_RATIO_NAMES[nums.join(":")] ||
+    (folded.length >= 2 ? CHORD_RATIO_NAMES[folded.join(":")] : null) || null;
+  return { terms, nums, text, folded, foldText, name };
+}
+
 // ---------- STFT band envelopes (for onsets & decay) ----------
 // win 2048, hop 512. Returns per-frame power in given bands plus
 // full-band magnitude spectra flux for onset detection.
@@ -3677,7 +3727,7 @@ function sgramImage(sg, dbMax, dbMin, dbOffset){
 // ---------- spectrogram scene (M2) ----------
 const SGPLOT={mL:52, mR:98, mT:30, mB:34};   // right margin hosts string labels + colorbar
 
-function drawSpectrogramScene(ctx, w, h, model){
+function drawSpectrogramScene(ctx, w, h, model, hits){
   const {sg, image, name, color, onsets, dbMax, dbMin}=model;
   const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
   const dur=sg.duration;
@@ -3818,6 +3868,55 @@ function drawSpectrogramScene(ctx, w, h, model){
       ctx.fillStyle=_trackColor(p.key,1);
       ctx.fillText(txt, SGPLOT.mL+6, y-4);
       nLabels++;
+    }
+    ctx.restore();
+  }
+
+  // collision marks (R5.3): a mark wherever two strings' partials land on the same
+  // pitch — the moment a chord stops being several notes at once and starts sharing
+  // a harmonic. Drawn as a path (starPath), never the ✦ glyph: a glyph sits small
+  // inside its em box, so font size can never make it read. The landing belongs to
+  // neither string, so it takes no guitar accent and no themed ink — a fixed light
+  // neutral over a black halo, because it sits on the magma, which is dark in both
+  // themes. Filled when the two pitches agree inside R3's ±6 ¢, hollow when
+  // temperament leaves a near miss the ear hears as beating. The x position spreads
+  // the marks along the time axis so they don't stack in one column; it carries no
+  // meaning, which is why the status chip names the click rather than a time.
+  if(model.clusters && model.clusters.length){
+    const foc=(model.focus==null?null:model.focus), dim=model.dim||0;
+    const R=8, inset=14;
+    const inRange=[];
+    for(const cl of model.clusters){
+      if(cl.f<fw.F0||cl.f>fw.F1) continue;
+      inRange.push({cl, y:Math.round(yOfF(cl.f))+0.5});
+    }
+    const x0=SGPLOT.mL+inset, x1=SGPLOT.mL+pW-inset;
+    // The marks are spread along x, so the string labels' one-dimensional guard
+    // (skip anything within 18 px vertically) would drop marks that never touch —
+    // two landings a quarter-octave apart sit half a pane apart horizontally. What
+    // can actually collide is the x spacing, so thin by that instead: keep every
+    // mark while the spacing clears a mark's own width, and stride past some once a
+    // dense chord would pack them tighter than that. Same rule as everywhere else —
+    // skip rather than smear — measured on the axis that does the smearing.
+    const stride=Math.max(1, Math.ceil((2*R+6)/Math.max(1,(x1-x0)/Math.max(1,inRange.length-1))));
+    const keep=inRange.filter((_,k)=>k%stride===0);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
+    ctx.lineJoin="round"; ctx.setLineDash([]);
+    for(let k=0;k<keep.length;k++){
+      const y=keep[k].y, cl=keep[k].cl;
+      const x=(keep.length===1)?(x0+x1)/2:x0+k*(x1-x0)/(keep.length-1);
+      const a=(foc==null||cl.members.some(m=>m.key===foc))?1:(1-dim);
+      ctx.strokeStyle="rgba(0,0,0,"+(0.8*a).toFixed(3)+")"; ctx.lineWidth=4;
+      starPath(ctx,x,y,R); ctx.stroke();
+      if(cl.tier==="locked"){
+        ctx.fillStyle="rgba(247,242,232,"+(0.96*a).toFixed(3)+")";
+        starPath(ctx,x,y,R); ctx.fill();
+      }else{
+        ctx.strokeStyle="rgba(247,242,232,"+(0.96*a).toFixed(3)+")"; ctx.lineWidth=2;
+        starPath(ctx,x,y,R); ctx.stroke();
+      }
+      if(hits) hits.push({x:x-R-5, y:y-R-5, w:2*R+10, h:2*R+10, cluster:cl});
     }
     ctx.restore();
   }
@@ -4463,6 +4562,7 @@ const anim={from:[null,null],fromRange:null,toRange:yRange,buf:[null,null],start
 let rafId=0;
 const specHits=[];
 const diffHits=[];
+const sgHits=[[],[]];   // R5.3: per-pane collision-mark click targets
 
 function updateCurves(animate){
   const to=[displayedDb(0),displayedDb(1)];
@@ -4733,7 +4833,7 @@ function sgramModelFor(i,scale){
   // notePartials() at state.sgHarm harmonics. null when no string is selected
   // (state.sgFrets all null). Not part of the refine cache key: the overlay is
   // display-only and never invalidates the STFT.
-  let comb=null, combNote=null;
+  let comb=null, combNote=null, clusters=null;
   // notePartials() keys each partial by its index in the array it is handed, and
   // that key is what picks the track's hue — so hand it a SIX-slot array (nulls
   // skipped), never the one selected note, or every string would draw in red.
@@ -4747,19 +4847,26 @@ function sgramModelFor(i,scale){
       combNote=noteInfo(midiToFreq(sgMidis[sgSi],state.a4),state.a4).name;
       if(sgMidis.filter(m=>m!=null).length>1) combNote+=" · "+sgMidis.filter(m=>m!=null).length+" notes";
     }
+    // R5.3: where two strings' partials land on the same pitch. Same primitive the
+    // maths tests cover, at the wider tempered tier — a fretted chord in equal
+    // temperament misses just intonation by up to ~16 ¢, and a meeting the ear
+    // fuses is still a meeting. Clusters carry their own tier, so the mark can say
+    // which kind it is without a second detector.
+    clusters=partialClusters(comb,TEMPERED_CENTS);
   }
   return { sg:sgToUse, image:imageToUse,
     view:{T0:zw.T0,T1:zw.T1,d0:view.d0}, fWin:{F0:zw.F0,F1:zw.F1},
     zoomNote:zoomNoteFor(zKey),
     name:SLOT_LETTER[i]+" · "+s.name, color:COLORS[i], onsets:tv.onsets,
-    dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(), comb,
+    dbMax:scale.dbMax, dbMin:scale.dbMin, markers:tuningMarkers(), comb, clusters,
     a4:state.a4, scrim:state.sgScrim, focus:state.sgFocus, dim:state.sgDim,
     statusText:sgToUse.win+"-pt Hann · max per log cell"
       +(off?" · level-match "+fmtDb(off,1):"")
       +(state.sgAlign!=="off"&&bothSgLoaded()
         ?(state.sgAlign==="onset"?" · t = 0 at first onset":" · shared time axis"):"")
       +(comb?" · "+combNote+" · harmonics 1–"+state.sgHarm:"")
-      +(comb&&state.sgFocus==null?" · hold a track to follow it":"") };
+      +(comb&&state.sgFocus==null?" · hold a track to follow it":"")
+      +(clusters&&clusters.length?" · click a mark where strings meet":"") };
 }
 function buildEnvModel(){
   const curves=[]; let tMin=0, tMax=0;
@@ -4872,7 +4979,8 @@ function drawAll(){
     const model=sgramModelFor(i,scale);
     if(!model) continue;
     const c=setupCanvas(sgramCanvases[i]);
-    const nLabels=drawSpectrogramScene(c.ctx,c.w,c.h,model);
+    sgHits[i].length=0;
+    const nLabels=drawSpectrogramScene(c.ctx,c.w,c.h,model,sgHits[i]);
     sgramCanvases[i].setAttribute("data-sgwin", String(model.sg.win));
     // R5.1: pane reports its own overlay track count — the canvas is unreachable from node.
     if(model.comb) sgramCanvases[i].setAttribute("data-sgcomb", String(model.comb.length));
@@ -4882,9 +4990,16 @@ function drawAll(){
     else sgramCanvases[i].removeAttribute("data-sglabels");
     if(model.comb && model.focus!=null) sgramCanvases[i].setAttribute("data-sgfocus", String(model.focus));
     else sgramCanvases[i].removeAttribute("data-sgfocus");
+    // R5.3: marks actually drawn, which is not the cluster count — the overlap
+    // guard drops some — so the pane reports what a reader can click.
+    const nClu=sgHits[i].filter(hh=>hh.cluster).length;
+    if(nClu) sgramCanvases[i].setAttribute("data-sgclusters", String(nClu));
+    else sgramCanvases[i].removeAttribute("data-sgclusters");
   } else {
-    for(let i=0;i<2;i++){ sgramCanvases[i].removeAttribute("data-sgwin"); sgramCanvases[i].removeAttribute("data-sgcomb");
-      sgramCanvases[i].removeAttribute("data-sglabels"); sgramCanvases[i].removeAttribute("data-sgfocus"); }
+    for(let i=0;i<2;i++){ sgHits[i].length=0;
+      sgramCanvases[i].removeAttribute("data-sgwin"); sgramCanvases[i].removeAttribute("data-sgcomb");
+      sgramCanvases[i].removeAttribute("data-sglabels"); sgramCanvases[i].removeAttribute("data-sgfocus");
+      sgramCanvases[i].removeAttribute("data-sgclusters"); }
   }
   const em=collState.env?null:buildEnvModel();
   if(em){
@@ -5004,6 +5119,10 @@ function attachSgramCrosshair(i){
     const x=e.clientX-rect.left, y=e.clientY-rect.top;
     const w=rect.width, h=rect.height;
     const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
+    // R5.3: a collision mark is a doc target, so the cursor says so (M2.6d's
+    // affordance rule) — but never while a drag owns the cursor.
+    if(!(e.buttons&1))
+      canvas.style.cursor=sgHits[i].some(hh=>x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h)?"help":"";
     if(x<SGPLOT.mL||x>w-SGPLOT.mR||y<SGPLOT.mT||y>h-SGPLOT.mB){ hide(); return; }
     const view=sgramView(i);
     const zw=sgramZoomWin(i===0?"sga":"sgb",view.T0,view.T1);
@@ -6465,10 +6584,116 @@ function denominatorRuleHtml(){
     'The denominator says whose family; the numerator says which member.</p></details>';
 }
 // ---------- end ancestry copy ----------
+// ---------- collision clusters: the ✦ popover (R5.3) ----------
+// Copy discipline, as for the two blocks above: every claim traces to docs/THEORY.md
+// — §1 (the series; 4:5:6 is a segment of it, and the ear infers the shared
+// fundamental), §2 (consonance is shared partials, dissonance the beating of
+// near-misses; Δf under ~15 Hz counts as beating, above it as roughness), §3.4 (the
+// denominator rule), §4 (the minor triad as a 10:12:15 stack, with no single-series
+// home), §5 (12-TET errors: octave exact, fifth −2 ¢, major third +14 ¢, minor third
+// −16 ¢). No section symbols or file names appear in the copy itself: the app states
+// the physics, it does not cite its homework. Tone: measure first, never lecture.
+const CLUSTER_COUNT_WORD=["","one","two","three","four","five","six"];
+// What is worth saying about a ratio, once it has a name (THEORY §1 and §4).
+const CHORD_RATIO_NOTE={
+  "major triad":"A major triad does not merely resemble the harmonic series — it is a piece of one. Harmonics 4, 5 and 6 of a single note, lifted out and handed to three strings. That is why the ear fuses it into one object and supplies a root nobody played.",
+  "minor triad":"A minor triad is a stack rather than a segment: 10:12:15 sits nowhere consecutively in any one series. The intervals are just as simple, but there is no single note below that all three are early harmonics of — which is the arithmetic behind its darker, less settled colour.",
+};
+// One line per member of the meeting: "E2 ×3 = 247.5 Hz".
+function clusterTermLine(t, a4){
+  const root=midiToFreq(t.midi, a4), rn=noteInfo(root, a4);
+  return esc((rn?rn.name:fmtHzFine(root))+" ×"+t.harm+" = "+fmtHzFine(t.f));
+}
+function clusterContentHtml(cluster){
+  if(!cluster) return "";
+  const r=clusterRatio(cluster);
+  if(!r) return "";
+  const a4=state.a4, terms=r.terms, n=terms.length;
+  const countWord=CLUSTER_COUNT_WORD[n]||String(n);
+  const locked=(cluster.tier==="locked");
+  const spread=cluster.spreadCents<=0.05 ? "0 ¢" : cluster.spreadCents.toFixed(1)+" ¢";
+  const meet=noteInfo(cluster.f, a4);
+  const fs=cluster.members.map(m=>m.f);
+  const beat=Math.max.apply(null,fs)-Math.min.apply(null,fs);
+  const ords=terms.map(t=>STRING_ORD[t.key]);
+  const strList=ords.length===2 ? ords[0]+" and "+ords[1]
+    : ords.slice(0,-1).join(", ")+" and "+ords[ords.length-1];
+  // Every fundamental here is a whole multiple of one note below: f_i = root × term_i.
+  const rootHz=midiToFreq(terms[0].midi, a4)/terms[0].term, rootNote=noteInfo(rootHz, a4);
+
+  const ear=locked
+    ? "The "+strList+" strings are sounding the same pitch here — not neighbouring pitches, the same one, arriving "+countWord+" times over from "+countWord+" different strings. Chords that feel welded rather than piled up are doing this: the strings are not just agreeing, they are sharing partials."
+    : "The "+strList+" strings very nearly meet here — close enough to reinforce, far enough apart to interfere. "+(beat<=15
+        ? "The two are "+beat.toFixed(1)+" Hz apart, so the sum swells about "+beat.toFixed(1)+" times a second; that slow wah is the sound of a near miss."
+        : "They are "+beat.toFixed(1)+" Hz apart, which is too fast to count — the ear takes it as roughness rather than as beating.");
+
+  const arrivals=terms.map(t=>"harmonic "+t.harm+" of the "+STRING_ORD[t.key]+" string").join(", ");
+  let phys="Every plucked string sounds its fundamental and 2×, 3×, 4× that frequency at once — its "+
+    '<button class="term" data-term="harmonic-series">harmonic series</button>. This mark sits where '+
+    esc(arrivals)+" arrive together. Read it backwards and the chord names itself: a string that reaches this pitch as its harmonic h must have a fundamental of this pitch over h, so the "+
+    countWord+" fundamentals stand in the whole-number ratio "+esc(r.text)+".";
+  if(r.name) phys+=(r.foldText
+      ? " Set the octave doublings aside and that is "+esc(r.foldText)+" — the "+esc(r.name)+"."
+      : " That ratio is the "+esc(r.name)+".")+
+    (CHORD_RATIO_NOTE[r.name]?" "+esc(CHORD_RATIO_NOTE[r.name]):"");
+
+  // Two strings: say it in the ancestry vocabulary — whether one lives inside the other.
+  const rootPlayed=(terms[0].term===1);
+  let anc="";
+  if(n===2){
+    const a=stringAncestry(terms[0].midi, terms[1].midi, a4);
+    const drop=a&&a.drop ? (OCT_WORD[a.drop]||(a.drop+" octaves")) : "";
+    if(a) anc=isPow2(a.ratio.d)
+      ? "As an interval the pair is "+a.ratio.n+"/"+a.ratio.d+", and a power of two underneath is the sign that one already lives inside the other: the "+STRING_ORD[terms[1].key]+" string is harmonic "+a.ratio.n+" of the "+STRING_ORD[terms[0].key]+" string"+(drop?", dropped "+drop:"")+". Not near that string’s sound — in it."
+      : "As an interval the pair is "+a.ratio.n+"/"+a.ratio.d+", and the odd factor underneath means neither string lives inside the other. Both are harmonics of a note further down, near "+esc(fmtHzFine(a.ancestorHz))+" — the one the ear supplies for itself.";
+  }else if(rootNote){
+    anc=rootPlayed
+      ? "All "+countWord+" fundamentals are whole multiples of the lowest of them, "+esc(rootNote.name)+" at "+esc(fmtHzFine(rootHz))+". The chord is standing on its own root, and the meeting above is that root's own series showing through."
+      : "All "+countWord+" fundamentals are whole multiples of one note further down, near "+esc(fmtHzFine(rootHz))+" — "+esc(rootNote.name)+", which nothing here is playing. The simpler those multiples, the more readily the ear supplies that note for itself.";
+  }
+
+  const temper=(cluster.spreadCents<=0.05) ? ""
+    : (locked
+      ? "Equal temperament renders octaves exactly and its fifths about 2 ¢ narrow of a true 3:2, so that all twelve keys behave alike. Compromises that small are why this group still holds to within a few cents, and why the ear takes it as one pitch."
+      : "Equal temperament pays for its even keys in the thirds: its major third sits about 14 ¢ sharp of a true 5:4, its minor third about 16 ¢ flat of a true 6:5. Any meeting that passes through a third therefore lands near the note rather than on it. That is what the open mark records — and what you can hear.");
+
+  const lines=terms.map(t=>clusterTermLine(t, a4)).join("<br>");
+  const place="Marked wherever the whole group falls inside "+TEMPERED_CENTS+" ¢. Filled when it also fits inside "+
+    COINCIDENCE_CENTS+" ¢ — the width at which the ear stops hearing two pitches and hears one; open when it does not. The mark is placed at the group's average frequency, and its height on the plot is that frequency, nothing else.";
+
+  let vals="";
+  for(const t of terms){
+    const nm=noteInfo(t.f, a4);
+    vals+='<div class="pop-val"><span class="dot" style="background:'+_stringColor(t.key,0.9)+'"></span>'+
+      '<span class="l">'+esc(STRING_ORD[t.key]+" string · harmonic "+t.harm)+'</span>'+
+      '<span class="v">'+esc(fmtHzFine(t.f)+(nm?" · "+nm.name:""))+'</span></div>';
+  }
+  vals+='<div class="pop-val"><span class="dot" style="background:var(--dim)"></span><span class="l">Spread across the group</span><span class="v">'+esc(spread)+'</span></div>';
+  if(!locked&&beat>0.05) vals+='<div class="pop-val"><span class="dot" style="background:var(--dim)"></span><span class="l">'+(beat<=15?"Beating":"Difference")+'</span><span class="v">'+esc(beat.toFixed(1)+" Hz")+'</span></div>';
+  if(rootNote) vals+='<div class="pop-val"><span class="dot" style="background:var(--dim)"></span><span class="l">'+(rootPlayed?"Common fundamental (the lowest note here)":"Common fundamental (implied)")+'</span><span class="v">'+esc(fmtHzFine(rootHz)+" · "+rootNote.name)+'</span></div>';
+
+  return '<div class="pop-term">'+esc(countWord.charAt(0).toUpperCase()+countWord.slice(1)+" strings meet"+(meet?" at "+meet.name:""))+'</div>'+
+    '<div class="pop-cat">'+esc(fmtHzFine(cluster.f)+" · "+r.text+(r.name?" · "+r.name:"")+" · "+(locked?"one pitch":"a near miss"))+'</div>'+
+    '<div class="pop-sec"><div class="pop-label">Musician’s ear</div><p>'+esc(ear)+'</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">The physics</div><p>'+phys+'</p>'+(anc?'<p>'+anc+'</p>':"")+'</div>'+
+    (temper?'<div class="pop-sec"><div class="pop-label">Equal temperament</div><p>'+esc(temper)+'</p></div>':"")+
+    '<div class="pop-sec"><div class="pop-label">How Claude Rameau places it</div><div class="pop-formula">'+lines+'</div><p>'+esc(place)+'</p></div>'+
+    '<div class="pop-sec"><div class="pop-label">Current values</div><div class="pop-vals">'+vals+'</div></div>';
+}
+// ---------- end collision copy ----------
 function openCoincidencePopover(hit, anchor){
   if(!hit) return;
   stopPlayback();
   popover.innerHTML=coincidenceContentHtml(hit)+auditionBlock(hit.f*Math.pow(2,-1/6), hit.f*Math.pow(2,1/6));
+  popover.classList.add("open");
+  placePopover(anchor);
+}
+// R5.3: the same door as a spectrum coincidence, opened from a spectrogram mark.
+// The cluster carries its own members and tier, so the copy needs nothing else.
+function openClusterPopover(cluster, anchor){
+  if(!cluster) return;
+  stopPlayback();
+  popover.innerHTML=clusterContentHtml(cluster)+auditionBlock(cluster.f*Math.pow(2,-1/6), cluster.f*Math.pow(2,1/6));
   popover.classList.add("open");
   placePopover(anchor);
 }
@@ -7465,7 +7690,8 @@ function boot(){
           e._gsTermHandled=true;
           const anchor={left:rect.left+hh.x, right:rect.left+hh.x+hh.w,
                         top:rect.top+hh.y, bottom:rect.top+hh.y+hh.h};
-          if(hh.coincidence) openCoincidencePopover(hh.coincidence,anchor);
+          if(hh.cluster) openClusterPopover(hh.cluster,anchor);
+          else if(hh.coincidence) openCoincidencePopover(hh.coincidence,anchor);
           else if(hh.string!=null) openStringPopover(hh.string,anchor);
           else openPopover(hh.term,anchor);
           return;
@@ -7475,6 +7701,8 @@ function boot(){
   }
   attachHitClicks(specCanvas,specHits);
   attachHitClicks(diffCanvas,diffHits);
+  attachHitClicks(sgramCanvases[0],sgHits[0]);   // R5.3: collision marks
+  attachHitClicks(sgramCanvases[1],sgHits[1]);
   popover.addEventListener("click",e=>{
     const b=e.target.closest?e.target.closest(".popplay"):null;
     if(!b) return;
@@ -7657,6 +7885,7 @@ function boot(){
       const key=pp[1].toLowerCase();
       const sm=key.match(/^str(\d+)$/);
       const cm=key.match(/^coin(\d+)$/);
+      const km=key.match(/^clu(\d+)$/);
       if(sm){
         const n=parseInt(sm[1],10);
         if(n>=0&&n<6) openStringPopover(n,{left:c-40,right:c+40,top:80,bottom:100});
@@ -7665,6 +7894,14 @@ function boot(){
         const coins=findCoincidences(stringAxisMarkers(), state.tolCents);
         const hit=coins[idx];
         if(hit) openCoincidencePopover(hit,{left:c-40,right:c+40,top:80,bottom:100});
+      } else if(km){
+        // R5.3: the Nth collision cluster of the current overlay, indexing the
+        // sorted partialClusters() result — the canvas itself is unreachable from node.
+        const open=tuningMidi(state.tuning,state.customOffset);
+        const midis=state.sgFrets.map((fr,si)=>(fr==null||open[si]==null)?null:open[si]+fr);
+        const cl=midis.some(m=>m!=null)
+          ? partialClusters(notePartials(midis,state.sgHarm,state.a4),TEMPERED_CENTS)[parseInt(km[1],10)] : null;
+        if(cl) openClusterPopover(cl,{left:c-40,right:c+40,top:80,bottom:100});
       } else {
         openPopover(key,{left:c-40,right:c+40,top:80,bottom:100});
       }

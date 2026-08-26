@@ -347,7 +347,7 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .plotwrap canvas{ display:block; width:100%; }
 #specCanvas{ height:456px; }
 #diffCanvas{ height:232px; }
-#sgramCanvasA, #sgramCanvasB, #sgramCanvasD{ height:372px; }
+#sgramCanvasA, #sgramCanvasB, #sgramCanvasD{ height:372px; } /* D removed — rule kept inert until warped diff returns */
 #envCanvas{ height:280px; }
 #eqFaceCanvas{ height:216px; }
 #eqRespCanvas{ height:236px; }
@@ -674,7 +674,7 @@ kbd{
   .filerow{ grid-template-columns:1fr; }
   .tonerow{ grid-template-columns:150px 54px 1fr 54px; gap:8px; }
   #specCanvas{ height:356px; }
-  #sgramCanvasA, #sgramCanvasB, #sgramCanvasD{ height:288px; }
+  #sgramCanvasA, #sgramCanvasB, #sgramCanvasD{ height:288px; } /* D removed — inert */
 }
 @media (prefers-reduced-motion:reduce){
   *{ transition-duration:1ms !important; animation-duration:1ms !important; }
@@ -985,12 +985,6 @@ kbd{
             <canvas id="sgramCanvasB"></canvas>
             <div class="xline" id="sgramXlineB"></div>
             <div class="readout" id="sgramReadoutB"></div>
-          </div>
-          <div class="plotwrap" id="sgramWrapD" style="display:none">
-            <button class="magbtn" data-mag="sgd" title="Magnify" aria-label="Magnify spectrogram difference">⤢</button>
-            <canvas id="sgramCanvasD"></canvas>
-            <div class="xline" id="sgramXlineD"></div>
-            <div class="readout" id="sgramReadoutD"></div>
           </div>
           <div class="tablefoot" id="sgramNote" style="display:none"></div>
         </div>
@@ -3796,173 +3790,6 @@ function drawSpectrogramScene(ctx, w, h, model){
   ctx.restore();
 }
 
-// ---------- spectrogram difference scene (M2.5) ----------
-// Paints sgramDifference output: amber where A is louder, teal where B is
-// louder, near-background neutral at 0. Cells unmeasured on either side
-// (above a Nyquist, outside a file's aligned span, or silent) stay
-// transparent — no data must not look like equal level.
-function sgramDiffImage(dsg, S){
-  const {frames, nFrames, gridN}=dsg;
-  const cnv=document.createElement("canvas");
-  cnv.width=nFrames; cnv.height=gridN;
-  const c=cnv.getContext("2d");
-  const img=c.createImageData(nFrames, gridN);
-  const px=img.data;
-  for(let f=0; f<nFrames; f++){
-    const row=f*gridN;
-    for(let i=0;i<gridN;i++){
-      const v=frames[row+i];
-      const k=((gridN-1-i)*nFrames+f)*4;      // row 0 = top = highest frequency
-      if(!isFinite(v)){ px[k+3]=0; continue; }
-      const rgb=divergeColor(v/S);
-      px[k]=rgb[0]; px[k+1]=rgb[1]; px[k+2]=rgb[2]; px[k+3]=255;
-    }
-  }
-  c.putImageData(img,0,0);
-  return cnv;
-}
-
-function drawSgramDiffScene(ctx, w, h, model){
-  const {dsg, image, S}=model;
-  const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
-  const dur=dsg.duration, t0=dsg.t0;
-  const view=model.view||{T0:t0,T1:t0+dur};
-  const span=view.T1-view.T0;
-  const fw=model.fWin||{F0:FMIN,F1:FMAX};   // frequency window (zoom); full range by default
-  const fSpan=Math.log(fw.F1/fw.F0);
-  const xOfT=tau=>SGPLOT.mL+((tau-view.T0)/span)*pW;
-  const yOfF=f=>SGPLOT.mT+(1-Math.log(f/fw.F0)/fSpan)*pH;
-  ctx.clearRect(0,0,w,h);
-  if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
-  ctx.save();
-
-  ctx.save();
-  ctx.beginPath(); ctx.rect(SGPLOT.mL,SGPLOT.mT,pW,pH); ctx.clip();
-  ctx.imageSmoothingEnabled=true;
-  const iy=yOfF(FMAX);   // image always spans FMIN–FMAX; the clip crops the zoom window
-  ctx.drawImage(image, xOfT(t0), iy, (dur/span)*pW, yOfF(FMIN)-iy);
-  ctx.restore();
-  ctx.strokeStyle=cssColor("hair"); ctx.lineWidth=1;
-  ctx.strokeRect(SGPLOT.mL+0.5, SGPLOT.mT+0.5, pW-1, pH-1);
-
-  // frequency ticks (same axis as the A/B panes)
-  ctx.font=FONT_S; ctx.textAlign="right"; ctx.textBaseline="middle";
-  for(const f of xTicksFor(fw.F0,fw.F1).major){
-    const y=yOfF(f);
-    if(y<SGPLOT.mT-0.5||y>SGPLOT.mT+pH+0.5) continue;
-    ctx.strokeStyle=cssRGBA("grid-rgb",0.25);
-    ctx.beginPath(); ctx.moveTo(SGPLOT.mL-4,y); ctx.lineTo(SGPLOT.mL,y); ctx.stroke();
-    ctx.fillStyle=cssColor("dim");
-    ctx.fillText(fLabel(f), SGPLOT.mL-8, y);
-  }
-
-  // time ticks — t = 0 is each file's own first onset, so t can be negative
-  const step=timeTickStep(span);
-  ctx.textAlign="center"; ctx.textBaseline="top";
-  for(let k=Math.ceil((view.T0-1e-9)/step); k*step<=view.T1+1e-9; k++){
-    const t=k*step, x=xOfT(t);
-    ctx.strokeStyle=cssRGBA("grid-rgb",0.25);
-    ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT+pH); ctx.lineTo(x,SGPLOT.mT+pH+4); ctx.stroke();
-    ctx.fillStyle=cssColor("dim");
-    ctx.fillText(tTickLabel(t,step), x, SGPLOT.mT+pH+7);
-  }
-
-  // axis units
-  ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint");
-  ctx.textAlign="left"; ctx.textBaseline="bottom";
-  ctx.fillText("s", SGPLOT.mL+pW+3, SGPLOT.mT+pH+18);
-  ctx.save();
-  ctx.translate(12, SGPLOT.mT+2); ctx.rotate(-Math.PI/2);
-  ctx.textAlign="right"; ctx.textBaseline="middle";
-  ctx.fillText("Hz", 0, 0);
-  ctx.restore();
-
-  // t = 0, the alignment anchor (both files' first onset)
-  const x0=xOfT(0);
-  if(x0>SGPLOT.mL+1 && x0<SGPLOT.mL+pW-1){
-    ctx.strokeStyle=cssRGBA("ink-rgb",0.30); ctx.lineWidth=1; ctx.setLineDash([4,4]);
-    ctx.beginPath(); ctx.moveTo(x0,SGPLOT.mT); ctx.lineTo(x0,SGPLOT.mT+pH); ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  // each file's own onsets: A ticks down from the top edge, B up from the bottom
-  ctx.lineWidth=1.5;
-  if(model.onsetsA){
-    ctx.strokeStyle=model.colorA;
-    for(const t of model.onsetsA){
-      const x=xOfT(t);
-      if(x<SGPLOT.mL||x>SGPLOT.mL+pW) continue;
-      ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT); ctx.lineTo(x,SGPLOT.mT+7); ctx.stroke();
-    }
-  }
-  if(model.onsetsB){
-    ctx.strokeStyle=model.colorB;
-    for(const t of model.onsetsB){
-      const x=xOfT(t);
-      if(x<SGPLOT.mL||x>SGPLOT.mL+pW) continue;
-      ctx.beginPath(); ctx.moveTo(x,SGPLOT.mT+pH-7); ctx.lineTo(x,SGPLOT.mT+pH); ctx.stroke();
-    }
-  }
-
-  // honest boundary at the lower of the two Nyquists
-  if(model.nyquistMin<fw.F1&&model.nyquistMin>fw.F0){
-    const y=yOfF(model.nyquistMin);
-    ctx.strokeStyle=cssRGBA("ink-rgb",0.35); ctx.lineWidth=1; ctx.setLineDash([4,4]);
-    ctx.beginPath(); ctx.moveTo(SGPLOT.mL,y); ctx.lineTo(SGPLOT.mL+pW,y); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle=cssColor("dim"); ctx.font=FONT_XS;
-    ctx.textAlign="left"; ctx.textBaseline="bottom";
-    ctx.fillText("above min fs/2 = "+fLabel(Math.round(model.nyquistMin))+"Hz — not measured", SGPLOT.mL+8, y-4);
-  }
-
-  // open-string fundamentals for the selected tuning (M2.5)
-  drawStringMarkers(ctx, pW, pH, model.markers, yOfF);
-
-  // diverging colorbar: amber = A louder, teal = B louder, 0 = equal
-  // (pinned at the card edge, like the individual panes' magma bar)
-  const cbX=w-50, cbW=10;
-  for(let yy=0; yy<pH; yy++){
-    const rgb=divergeColor(1-2*yy/(pH-1));
-    ctx.fillStyle="rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")";
-    ctx.fillRect(cbX, SGPLOT.mT+yy, cbW, 1);
-  }
-  ctx.strokeStyle=cssColor("hair2");
-  ctx.strokeRect(cbX+0.5, SGPLOT.mT+0.5, cbW-1, pH-1);
-  ctx.font=FONT_XS; ctx.fillStyle=cssColor("dim"); ctx.textAlign="left";
-  ctx.textBaseline="bottom"; ctx.fillText("+"+S+" dB", cbX-2, SGPLOT.mT-4);
-  ctx.textBaseline="top";    ctx.fillText("-"+S+" dB", cbX-2, SGPLOT.mT+pH+4);
-  ctx.textBaseline="middle"; ctx.fillText("0", cbX+cbW+3, SGPLOT.mT+pH/2);
-  ctx.save();
-  ctx.translate(cbX+cbW+13, SGPLOT.mT+pH*0.25); ctx.rotate(-Math.PI/2);
-  ctx.textAlign="center"; ctx.textBaseline="middle";
-  ctx.fillStyle=withAlpha(model.colorA,0.85); ctx.fillText("A louder", 0, 0);
-  ctx.restore();
-  ctx.save();
-  ctx.translate(cbX+cbW+13, SGPLOT.mT+pH*0.75); ctx.rotate(-Math.PI/2);
-  ctx.textAlign="center"; ctx.textBaseline="middle";
-  ctx.fillStyle=withAlpha(model.colorB,0.85); ctx.fillText("B louder", 0, 0);
-  ctx.restore();
-
-  // header
-  ctx.font=FONT_S; ctx.textBaseline="middle";
-  ctx.fillStyle=model.colorA;
-  ctx.beginPath(); ctx.arc(SGPLOT.mL+4, 15, 3.5, 0, 2*Math.PI); ctx.fill();
-  ctx.fillStyle=model.colorB;
-  ctx.beginPath(); ctx.arc(SGPLOT.mL+13, 15, 3.5, 0, 2*Math.PI); ctx.fill();
-  ctx.fillStyle=cssColor("mut"); ctx.textAlign="left";
-  ctx.fillText("A − B · aligned at first onset (t = 0)"+(model.lmText?" · "+model.lmText:""), SGPLOT.mL+22, 15.5);
-  if(model.statusText){
-    ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint"); ctx.textAlign="right";
-    ctx.fillText(model.statusText, cbX-20, 15.5);
-  }
-  if(model.zoomNote){   // active window always printed (house rule); bottom margin — top is full
-    ctx.font=FONT_XS; ctx.fillStyle=cssColor("mut");
-    ctx.textAlign="right"; ctx.textBaseline="top";
-    ctx.fillText(model.zoomNote, SGPLOT.mL+pW, SGPLOT.mT+pH+19);
-  }
-  ctx.restore();
-}
-
 // ---------- envelope overlay scene (M2) ----------
 // Envelopes in dB re full scale (a 0 dBFS sine's envelope reads 0 dB), each
 // file shifted so t = 0 is its own first onset — the honest way to overlay
@@ -4332,9 +4159,7 @@ const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"), sgramSub=el("sgramSu
       sgramCanvases=[el("sgramCanvasA"),el("sgramCanvasB")],
       sgramXlines=[el("sgramXlineA"),el("sgramXlineB")],
       sgramReadouts=[el("sgramReadoutA"),el("sgramReadoutB")];
-const sgAlignSeg=el("sgAlignSeg"),
-      sgramWrapD=el("sgramWrapD"), sgramCanvasD=el("sgramCanvasD"),
-      sgramXlineD=el("sgramXlineD"), sgramReadoutD=el("sgramReadoutD");
+const sgAlignSeg=el("sgAlignSeg");
 const sgNoteSel=el("sgNoteSel"), sgHarmSel=el("sgHarmSel");
 const envCard=el("envCard"), envSub=el("envSub"), envWrap=el("envWrap"), envCanvas=el("envCanvas"),
       envXline=el("envXline"), envReadout=el("envReadout"), envNote=el("envNote");
@@ -4637,7 +4462,7 @@ function requestDraw(){
 // same model builders, so it shares each view's zoom. Metrics, band table and
 // tone panel never read this; the current window is printed on the plot so
 // exports stay defensible.
-const ZOOMS={spec:null, diff:null, env:null, eqresp:null, sga:null, sgb:null, sgd:null};
+const ZOOMS={spec:null, diff:null, env:null, eqresp:null, sga:null, sgb:null};
 function zoomXf(key){ const z=ZOOMS[key]; return z&&z.x0!=null?[z.x0,z.x1]:null; }
 function zoomNoteFor(key){
   const z=ZOOMS[key];
@@ -4730,7 +4555,6 @@ function bothSgLoaded(){
   return !!(state.slots[0]&&state.slots[0].tvis&&state.slots[0].tvis.sg&&
             state.slots[1]&&state.slots[1].tvis&&state.slots[1].tvis.sg);
 }
-function sgDiffVisible(){ return bothSgLoaded(); }
 function sgLmDb(){
   // the one global level-match switch, seen from the spectrogram: the same
   // broadband offset, applied to B's cells only (and to B's side of the difference)
@@ -4859,36 +4683,6 @@ function sgramModelFor(i,scale){
         ?(state.sgAlign==="onset"?" · t = 0 at first onset":" · shared time axis"):"")
       +(comb?" · "+combNote+" · harmonics 1–"+state.sgHarm:"") };
 }
-function sgramDiffData(){
-  // cached A−B cell difference + its rendered image; key = the only input
-  // that can change without a slot reload (the level-match offset)
-  if(!bothSgLoaded()) return null;
-  const off=sgLmDb(), key=off.toFixed(4);
-  if(!state._sgDiff||state._sgDiff.key!==key){
-    const t0=state.slots[0].tvis, t1=state.slots[1].tvis;
-    const dsg=sgramDifference(t0.sg,t0.firstOnset,t1.sg,t1.firstOnset,off);
-    // display scale from the 98th percentile of |Δ| so one hot cell can't
-    // wash the picture out; snapped to 3 dB steps, floor 6, cap 30
-    const S=Math.max(6,Math.min(30,Math.ceil(dsg.p98/3)*3));
-    state._sgDiff={key, dsg, S, image:sgramDiffImage(dsg,S)};
-  }
-  return state._sgDiff;
-}
-function buildSgramDiffModel(){
-  const d=sgramDiffData();
-  if(!d) return null;
-  const t0=state.slots[0].tvis, t1=state.slots[1].tvis, off=sgLmDb();
-  const zw=sgramZoomWin("sgd",d.dsg.t0,d.dsg.t0+d.dsg.duration);
-  return { dsg:d.dsg, image:d.image, S:d.S, win:t0.sg.win,   // the difference never refines: both base passes
-    view:{T0:zw.T0,T1:zw.T1}, fWin:{F0:zw.F0,F1:zw.F1},
-    zoomNote:zoomNoteFor("sgd"),
-    colorA:COLORS[0], colorB:COLORS[1], markers:tuningMarkers(),
-    onsetsA:t0.onsets.map(t=>t-t0.firstOnset),
-    onsetsB:t1.onsets.map(t=>t-t1.firstOnset),
-    nyquistMin:Math.min(t0.sg.nyquist,t1.sg.nyquist),
-    lmText:off?"level-match "+fmtDb(off,1)+" on B":null,
-    statusText:"scale = 98th percentile of |Δ|" };
-}
 function buildEnvModel(){
   const curves=[]; let tMin=0, tMax=0;
   for(let i=0;i<2;i++){
@@ -5008,18 +4802,6 @@ function drawAll(){
   } else {
     for(let i=0;i<2;i++){ sgramCanvases[i].removeAttribute("data-sgwin"); sgramCanvases[i].removeAttribute("data-sgcomb"); }
   }
-  if(!collState.sgram&&sgDiffVisible()){
-    const model=buildSgramDiffModel();
-    if(model){
-      const c=setupCanvas(sgramCanvasD);
-      drawSgramDiffScene(c.ctx,c.w,c.h,model);
-      sgramCanvasD.setAttribute("data-sgwin", String(model.win));
-    } else {
-      sgramCanvasD.removeAttribute("data-sgwin");
-    }
-  } else {
-    sgramCanvasD.removeAttribute("data-sgwin");
-  }
   const em=collState.env?null:buildEnvModel();
   if(em){
     const c=setupCanvas(envCanvas);
@@ -5055,8 +4837,6 @@ const MAG_VIEWS={
     draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(0,sc); if(m) drawSpectrogramScene(ctx,w,h,m); } },
   sgb:{ title:()=>sgMagTitle(1),
     draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(1,sc); if(m) drawSpectrogramScene(ctx,w,h,m); } },
-  sgd:{ title:()=>"Spectrogram — difference, A − B",
-    draw:(ctx,w,h)=>{ const m=sgDiffVisible()&&buildSgramDiffModel(); if(m) drawSgramDiffScene(ctx,w,h,m); } },
   env:{ title:()=>"Envelope — dB re full scale",
     draw:(ctx,w,h)=>{ const m=buildEnvModel(); if(m) drawEnvelopeScene(ctx,w,h,m); } },
   eqface:{ title:()=>{ const f=bothLoaded()&&eqFitData(); return "EQ match — "+(f?f.device.name+" settings":"device settings"); },
@@ -5172,47 +4952,6 @@ function attachSgramCrosshair(i){
   });
   wrap.addEventListener("mouseleave",hide);
 }
-function attachSgramDiffCrosshair(){
-  const hide=()=>{ sgramXlineD.style.display="none"; sgramReadoutD.style.display="none"; };
-  sgramWrapD.addEventListener("mousemove",e=>{
-    const d=sgDiffVisible()?sgramDiffData():null;
-    if(!d){ hide(); return; }
-    const dsg=d.dsg;
-    const rect=sgramCanvasD.getBoundingClientRect();
-    const x=e.clientX-rect.left, y=e.clientY-rect.top;
-    const w=rect.width, h=rect.height;
-    const pW=w-SGPLOT.mL-SGPLOT.mR, pH=h-SGPLOT.mT-SGPLOT.mB;
-    if(x<SGPLOT.mL||x>w-SGPLOT.mR||y<SGPLOT.mT||y>h-SGPLOT.mB){ hide(); return; }
-    const zw=sgramZoomWin("sgd",dsg.t0,dsg.t0+dsg.duration);
-    const t=zw.T0+(x-SGPLOT.mL)/pW*(zw.T1-zw.T0);
-    const fr=Math.exp((1-(y-SGPLOT.mT)/pH)*Math.log(zw.F1/zw.F0))*zw.F0;
-    const f=Math.max(0,Math.min(dsg.nFrames-1,Math.round((t-dsg.t0)*dsg.frameRate)));
-    const gi=Math.max(0,Math.min(dsg.gridN-1,
-      Math.round(Math.log(fr/FMIN)/LOGSPAN*(dsg.gridN-1))));
-    const v=dsg.frames[f*dsg.gridN+gi];
-    const measured=isFinite(v);
-    const wrapRect=sgramWrapD.getBoundingClientRect();
-    const wx=e.clientX-wrapRect.left;
-    sgramXlineD.style.display="block"; sgramXlineD.style.left=wx+"px";
-    let html='<div class="rf">'+(t>=0?"+":"")+t.toFixed(3)+' s</div>'+
-             '<div class="rn">'+fmtHz(fr)+' · '+esc(noteStr(fr,state.a4))+'</div>';
-    if(measured){
-      const ci=v>=0?0:1;
-      html+='<div class="row"><span class="dot" style="background:'+COLORS[ci]+'"></span>'+
-            '<span class="nm">'+SLOT_LETTER[ci]+' louder</span>'+
-            '<span class="db">'+Math.abs(v).toFixed(1)+' dB</span></div>';
-    }else{
-      html+='<div class="row"><span class="dot" style="background:'+cssColor("hair2")+'"></span>'+
-            '<span class="nm">not measured</span><span class="db">—</span></div>';
-    }
-    sgramReadoutD.innerHTML=html;
-    sgramReadoutD.style.display="block";
-    const rw=sgramReadoutD.offsetWidth;
-    sgramReadoutD.style.left=((wx+16+rw>wrapRect.width)?(wx-14-rw):(wx+14))+"px";
-    sgramReadoutD.style.top="12px";
-  });
-  sgramWrapD.addEventListener("mouseleave",hide);
-}
 function attachEnvCrosshair(){
   const hide=()=>{ envXline.style.display="none"; envReadout.style.display="none"; };
   envWrap.addEventListener("mousemove",e=>{
@@ -5250,7 +4989,7 @@ function attachEnvCrosshair(){
 // axis around the cursor, double-click resets. All coordinates convert to
 // DATA units at the gesture boundary, so the state survives resizes and is
 // shared with the magnified overlay through the model builders. The same
-// engine drives the spectrogram panes (sga/sgb/sgd: x = time s, y = log-Hz;
+// engine drives the spectrogram panes (sga/sgb: x = time s, y = log-Hz;
 // SGPLOT margins instead of PLOT, resolved per gesture via margins()).
 const MIN_XRATIO=1.05, MIN_TSPAN=0.05, MIN_YSPAN=1;
 const ZOOM_UIS=[];
@@ -5295,13 +5034,6 @@ function zoomAxes(key){
     const v=sgramView(i);
     return {logX:false, logY:true,
             x0:z&&z.x0!=null?z.x0:v.T0, x1:z&&z.x0!=null?z.x1:v.T1, xF0:v.T0, xF1:v.T1,
-            y0:z&&z.y0!=null?z.y0:FMIN, y1:z&&z.y0!=null?z.y1:FMAX, yF0:FMIN, yF1:FMAX};
-  }else if(key==="sgd"){
-    const d=sgDiffVisible()?sgramDiffData():null;
-    if(!d) return null;
-    const t0=d.dsg.t0, t1=t0+d.dsg.duration;
-    return {logX:false, logY:true,
-            x0:z&&z.x0!=null?z.x0:t0, x1:z&&z.x0!=null?z.x1:t1, xF0:t0, xF1:t1,
             y0:z&&z.y0!=null?z.y0:FMIN, y1:z&&z.y0!=null?z.y1:FMAX, yF0:FMIN, yF1:FMAX};
   }else return null;
   return ax;
@@ -6015,7 +5747,6 @@ function updateVisibility(){
   sgramWraps[1].style.display=hasT[1]?"":"none";
   const bothT=hasT[0]&&hasT[1];
   sgAlignSeg.querySelectorAll("button").forEach(b=>{ b.disabled=!bothT; });
-  sgramWrapD.style.display=bothT?"":"none";
   updateSgramSub();
   envWrap.style.display=(hasT[0]||hasT[1])?"":"none";
   sgramNote.style.display=missT.length?"":"none";
@@ -6053,7 +5784,6 @@ function afterDataChange(animate){
     state.lmOffset=10*Math.log10(Math.max(pa,1e-20)/Math.max(pb,1e-20));
   }else state.lmOffset=null;
   if(s1) s1._dispCache=null; // lmOffset may have moved
-  state._sgDiff=null; // diff image depends on both slots' spectrograms + lmOffset
   state._eqFit=null;  // fit depends on both slots' fixed 1/6-oct curves
   applyCompareDefaults();
   updateVisibility();
@@ -6804,8 +6534,7 @@ function exportSgramPNG(){
   // The overlay is part of the picture (user request, 2026-08-25): the predicted
   // partial tracks render into the PNG exactly as the pane draws them on screen.
   try{
-  const hasDiff=sgDiffVisible();
-  const W=1240,H=hasDiff?1320:900,SC=2; const cv=document.createElement("canvas");
+  const W=1240,H=900,SC=2; const cv=document.createElement("canvas");
   cv.width=W*SC; cv.height=H*SC; const ctx=cv.getContext("2d"); ctx.scale(SC,SC);
   ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,W,H);
   ctx.fillStyle=cssColor("ink"); ctx.font="600 15px -apple-system, sans-serif"; ctx.fillText(APP_NAME+" · Spectrogram",28,32);
@@ -6815,9 +6544,6 @@ function exportSgramPNG(){
     ctx.save(); ctx.translate(0,y);
     const hh=380; drawSpectrogramScene(ctx,W,hh,m); ctx.restore(); y+=hh+18;
     if(y>H-40) break;
-  }
-  if(hasDiff){
-    const m=buildSgramDiffModel(); if(m){ ctx.save(); ctx.translate(0,y); drawSgramDiffScene(ctx,W,380,m); ctx.restore(); }
   }
   // scoped to spectrogram only — never draws envelope
   ctx.fillStyle=cssColor("dim"); ctx.font="11.5px -apple-system, sans-serif";
@@ -7327,7 +7053,7 @@ function applyUserColors(){
   // defaults mirror block 0's DIVERGE_POS/NEG initial values — keep in sync
   const pos=ov[0]?liftForDark(hexToRgb(ov[0])):[240,161,62];
   const neg=ov[1]?liftForDark(hexToRgb(ov[1])):[68,194,212];
-  if(setDivergeEndpoints(pos,neg)) state._sgDiff=null; // image + colorbar bake the endpoints
+  setDivergeEndpoints(pos,neg);
   requestDraw();
   if(anyLoaded()) renderAnalysis(); // accent dots in the HTML tables embed COLORS
 }
@@ -7644,7 +7370,6 @@ function boot(){
   attachCrosshair(specWrap,specCanvas,specXline,specReadout,false);
   attachCrosshair(diffWrap,diffCanvas,diffXline,diffReadout,true);
   attachSgramCrosshair(0); attachSgramCrosshair(1);
-  attachSgramDiffCrosshair();
   attachEnvCrosshair();
 
   attachZoom(specWrap, specCanvas, ()=>"spec");
@@ -7654,7 +7379,6 @@ function boot(){
   attachZoom(magWrap, magCanvas, ()=>(magKey&&(magKey in ZOOMS))?magKey:null, magReset);
   attachZoom(sgramWraps[0], sgramCanvases[0], ()=>"sga");
   attachZoom(sgramWraps[1], sgramCanvases[1], ()=>"sgb");
-  attachZoom(sgramWrapD, sgramCanvasD, ()=>"sgd");
 
   cards.forEach((card,i)=>{
     card.addEventListener("click",e=>{

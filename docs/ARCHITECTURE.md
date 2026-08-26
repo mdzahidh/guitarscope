@@ -10,10 +10,10 @@ and their dates see SPEC.md's changelog; for the working brief see CLAUDE.md.
 
 | # | Role | Key contents |
 |---|------|-------------|
-| 0 | **DSP core** — pure functions, no DOM, node-safe | `welch`, `smoothOct`, `bandPower`, `spectralCentroid`, `spectralTilt`, `detectPeaks`, `makeLogGrid`, `resampleToGrid`, `noteInfo`, `TUNINGS`, `stftBands`, `detectOnsets`, `amplitudeEnvelope`, `attackTimes`, `bandDecays`, `autocorrF0`, `harmonicProfile`, `dynamicsMetrics`, `sniffAudioInfo`, `magmaColor`, `spectrogramLog`, `decimateEnvelope`; M2.5: `eqPeakingDb`/`eqLowShelfDb`/`eqHighShelfDb`/`eqShapeDb`, `EQ_DEVICES`/`EQ_DEVICE_BY_ID`, `lsqSolve`, `fitGraphicEq`, `fitParametricEq`, `eqSettingsResponseDb`, `sgramDifference`, `divergeColor` |
+| 0 | **DSP core** — pure functions, no DOM, node-safe | `welch`, `smoothOct`, `bandPower`, `spectralCentroid`, `spectralTilt`, `detectPeaks`, `makeLogGrid`, `resampleToGrid`, `noteInfo`, `TUNINGS`, `stftBands`, `detectOnsets`, `amplitudeEnvelope`, `attackTimes`, `bandDecays`, `autocorrF0`, `harmonicProfile`, `dynamicsMetrics`, `sniffAudioInfo`, `magmaColor`, `CMAP_HEX`/`CMAP_NAMES`/`cmapTable`/`cmapColor`, `spectrogramLog`, `decimateEnvelope`; M2.5: `eqPeakingDb`/`eqLowShelfDb`/`eqHighShelfDb`/`eqShapeDb`, `EQ_DEVICES`/`EQ_DEVICE_BY_ID`, `lsqSolve`, `fitGraphicEq`, `fitParametricEq`, `eqSettingsResponseDb`, `sgramDifference`, `divergeColor` |
 | 1 | **Audio ingestion** | File → ArrayBuffer → header sniff → `OfflineAudioContext` decode at the sniffed native rate → channel/mid selection |
 | 2 | **Glossary** | Term database (musician / scientific / formula registers), popover wiring, searchable panel |
-| 3 | **Rendering** | Canvas scenes (spectrum, difference, spectrogram, spectrogram-difference, envelope, EQ device face, EQ response), axes/bands/tuning markers, EQ-region lane, collision-aware peak labels, legend, status chip, hit-rects for glossary clicks, magma + diverging image renderers + colorbars, PNG export composition |
+| 3 | **Rendering** | Canvas scenes (spectrum, difference, spectrogram, spectrogram-difference, envelope, EQ device face, EQ response), axes/bands/tuning markers, EQ-region lane, collision-aware peak labels, legend, status chip, hit-rects for glossary clicks, colormapped + diverging image renderers + colorbars, PNG export composition |
 | 4 | **App** | State, drag-drop, toggles, tone-character panel, comparison prose generator, spectrogram/envelope/EQ model builders + crosshairs, EQ fit cache, demo synth, CSV/JSON snapshot exports, keyboard shortcuts |
 
 `tests/dsp.test.js` extracts block 0 with a regex and `require`s it under node — block 0
@@ -243,11 +243,13 @@ power with the same full-scale-sine convention as Welch → resample each frame 
   (`--ink-rgb`, `--grid-rgb`, `--chip-rgb`, …); CSS uses the same triplets in `rgba()`.
   `setTheme` flips the attribute, flushes the `CSS_COLORS` cache, re-derives `COLORS`,
   requests a redraw, and re-renders the HTML tables (their accent dots embed `COLORS`).
-- **Data colormaps deliberately do not theme.** The magma spectrogram and the diverging
+- **Data colormaps deliberately do not theme.** The spectrogram (magma by default, one
+  of **five** perceptual maps since the session-23 look pass) and the diverging
   difference images are perceptual encodings, not chrome — they render as dark
   scope-screens inside both themes. This keeps the palettes defensible (magma's
   uniformity claims assume the dark ground) and makes PNG exports identical across
-  themes. *(Session-7 refinement: the diverging endpoints default to amber/teal but
+  themes. The colormap is the *user's* choice, not the theme's: `state.sgCmap` is
+  view state, and flipping the theme never changes it. *(Session-7 refinement: the diverging endpoints default to amber/teal but
   follow user-picked guitar colors after a luminance lift — a user-identity change, not
   a theme change; `_sgDiff` is invalidated only when the endpoints actually change.
   See the session-7 section.)*
@@ -898,8 +900,11 @@ Four pieces, in three blocks:
   `_trackColor(key)`, solid for the fundamental and dashed `[6,4]` above it (the widths and
   the lift are the R5.1a legibility pass below; as first built it was 3 px / 1.5 px / 0.55
   and `_stringColor`). **Black is the only halo that survives both the magma floor and its
-  ridges**, and the track hues are `STRING_COLORS`, a **data** palette: the overlay is
-  pixel-identical in Bright and Dark.
+  ridges** — *true, but only of hues that live inside the colormap; the session-23 look
+  pass gives the user hues that don't, and those draw with no halo at all. Dash `[6,4]`
+  is likewise superseded by the finer `[1,3]` default. See "The look pass" below.* The
+  track hues are `STRING_COLORS`, a **data** palette: the overlay is pixel-identical in
+  Bright and Dark.
   No labels — the right-edge string markers are the reference and the plot has no room.
 - **Hooks, because the canvas is unreachable from node.** `?sgnote=<0-5>` and `?sgharm=<n>`
   (unpersisted, gate-only), and each pane canvas publishes `data-sgcomb="<count>"`, absent
@@ -1143,6 +1148,66 @@ same pitch, and how nearly.
   right size, `22 = 2 × 11` across the two panes for an open E, and strictly fewer lit once
   `?sgfocus=0&sgdim=95` fades the rest.
 
+## The look pass (session 23): five colormaps, and a line the colormap cannot make
+
+The user asked for a quick visual experiment — "*without too much rigorous testing … to
+nail the color before we do anything complicated*": selectable perceptual colormaps, track
+colors **outside** the colormap so the halo could go ("*makes the lines look much thicker
+and ugly*"), and a finer default dot pattern.
+
+**The premise that had quietly expired.** R5.1a's census was sound — 94.8 % of a track's
+pixels have both vertical neighbours below 0.18 L, so a track is read against *its own
+halo*, not the magma — but it assumed the track hue lives **inside** the colormap's gamut,
+which is exactly what makes a halo necessary. Give the user a hue the map never emits and
+the premise dissolves: black on parula, white on magma. So the halo is not a global rule,
+it is a **property of the color choice**, and the code says precisely that:
+`const tk = SG_TRACKS[model.track] || SG_TRACKS.string, halo = !tk.rgb;` — "no fixed RGB"
+means "this hue comes from the colormap's neighbourhood, so it needs separating."
+
+- **Block 0, the colormap layer.** `CMAP_HEX` holds five 256×3 tables as hex strings
+  (`magma` aliases the existing `MAGMA_HEX`; `inferno`/`viridis`/`cividis` verbatim from
+  matplotlib 3.10.1; `parula` from OpenCV's `COLORMAP_PARULA`). `cmapTable(name)` inflates
+  one lazily into a flat `Uint8Array(768)` and memoizes it in `_CMAPS`, which is pre-seeded
+  with the existing `MAGMA` — so **magma costs nothing new and `magmaColor`/`MAGMA` survive
+  byte-identical**, which matters because `tests/dsp.test.js` names them. `cmapColor(name,t)`
+  clamps, quantizes to 8 bits and indexes; an unknown name falls back to magma rather than
+  throwing. `sgramImage()` takes the map name as a fifth argument.
+- **Perceptual is measured, not asserted.** The gate computes CIE L* from each table's sRGB
+  in-test (linearize at 0.04045, Y = .2126R+.7152G+.0722B, cube-root branch at 0.008856) and
+  requires a rise of more than 55 L* end to end with no backward step worse than −2.5. All
+  five pass: magma 0.1→97.9, inferno 0.1→98.0, viridis 14.9→90.9 (worst step −0.03),
+  cividis 13.8→91.3 (−0.01), parula 24.2→95.6 (−0.17). A table pasted in wrong fails this;
+  eyeballing a strip would not.
+- **Block 4, three tables and three keys.** `SG_TRACKS` (String hues / Black / White / Cyan /
+  Magenta) and `SG_DASHES` (Fine dots `[1,3]` — the new default — / Dots `[2,4]` / Dashes
+  `[6,4]` — R5.1a's / Solid `[]`). `state.sgCmap`/`sgTrack`/`sgDash` join the sgram's other
+  view state: unpersisted, unexported, absent from `_cardStateFor`. Only `SG_TRACKS.string`
+  lacks `rgb`; `tk.halo` is the **label outline** color and never touches the line.
+- **Block 3, the draw pass.** With a fixed color: no halo, one 1.4 px stroke — a third of the
+  ink R5.1a laid down. With String hues: unchanged from R5.1a (5 px black at 0.75α, then
+  2.5 px lifted hue). The fundamental is always solid; `model.dash` styles the harmonics.
+  As always, block 3 reads only `model` — the model carries `cmap`, `track` and the resolved
+  `dash` array, never `state`.
+- **Recoloring must not re-run an FFT.** M2.7's refine cache key was split in two:
+  `gkey` is the analysis the refine asks for (dB scale + offset), and `key = gkey + "|" + cm`
+  is what the *image* is cached under. Changing colormap repaints; it never re-analyses.
+  A gate assertion pins the line-style keys out of both.
+- **Hooks and attributes.** `?sgcmap=`/`?sgtrack=`/`?sgdash=` (lowercased, validated against
+  their tables, unpersisted, gate-only), `data-sgcmap` on every drawn pane and `data-sgtrack`
+  only when a comb exists. The status chip prints the colormap by name, because *every visible
+  number is defensible* extends to "the reader can tell which map they are looking at."
+- **Affordance.** All three selects sit in one `Colors` group in the sgram card head;
+  `sgTrackSel`/`sgDashSel` ship `disabled` and `syncSgHarmSel()` enables them at every door
+  into `state.sgFrets`, exactly like the harmonic limit (R5.1a c).
+
+Gate: `tests/r5.test.js` 232 → **264**, every new assertion mutation-checked the day it was
+written. Two initially **missed** their mutation and were strengthened: the fixed-color
+assertion accepted any `rgb`, so it now demands the exact `[0,0,0]`/`[255,255,255]` triples;
+and a "parula is perceptual" check was satisfied by a renamed table because `cmapTable`'s
+magma fallback quietly absorbed it — the mutation now corrupts the real table instead.
+No new headless assertion: the user asked for a quick experiment, a launch costs 4–5 minutes,
+and the rot risk here is source-shaped, not pixel-shaped.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never
@@ -1287,7 +1352,8 @@ metrics) are carried as stored values and labeled as such.
   synthetic-signal metrics (band powers, centroid, tilt, decay slopes, dynamics),
   sniffer byte-fixtures for every container, tuning/note math, attack regression cases,
   spectrogram invariants (0 dB sine anywhere on the log grid, NaN above Nyquist, hop
-  bounding), magma colormap endpoints/monotonicity (within 8-bit quantization),
+  bounding), colormap endpoints/monotonicity (within 8-bit quantization; the look pass adds a
+  CIE L* check over all five tables),
   envelope decimation peak preservation, and (M2.5) RBJ identities (exact center gain,
   asymptotes, boost/cut reciprocity), EQ fitter recovery of in-model targets,
   spectrogram-difference alignment/NaN propagation, and diverging-colormap endpoints.

@@ -1172,6 +1172,35 @@ near-cream blobs (the literal appears nowhere else in the app) confirms **22 dra
 counted**, falling to 10 when one comb is held at `sgdim=95`. All 52 + 8 new assertions
 mutation-checked the day they were written.
 
+### Look pass — five colormaps, and a line the colormap cannot make ✅ BUILT (session 23, `555db8c`)
+
+Not a planned task. The user, after testing R5.2/R5.3/R5.6, asked for a **quick experiment**,
+explicitly light on rigour: "*lets make quick changes without too much rigorous testing to
+experiment with first to nail the color before we do anything complicated*" — (a) perceptual
+colormaps for the spectrogram, parula and viridis named; (b) track colors **outside** the
+colormap, "*e.g. "black" in the parula would work great and we wouldn't need any halo or other
+effects that makes the lines look much thicker and ugly*", plus dash options with a finer
+default.
+
+*As built.* Block 0 gains `CMAP_HEX`/`CMAP_NAMES`/`cmapTable()`/`cmapColor()` — five 256×3
+perceptual tables (magma default and byte-identical, inferno/viridis/cividis from matplotlib
+3.10.1, parula from OpenCV), inflated lazily and memoized, with `_CMAPS` pre-seeded from the
+existing `MAGMA` so `magmaColor` survives by name for `tests/dsp.test.js`. Block 4 gains
+`SG_TRACKS` (String hues / Black / White / Cyan / Magenta) and `SG_DASHES` (fine `[1,3]` default,
+dot, dash, solid), three selects in one `Colors` group, and `state.sgCmap`/`sgTrack`/`sgDash` —
+view state like `sgFrets`: unpersisted, unexported, and only the colormap enters the image cache
+key. **The halo became a property of the color choice** rather than a rule: `halo = !tk.rgb`,
+so a fixed hue draws one 1.4 px stroke and String hues keep R5.1a's halo. R5.1a's census stands;
+its unexamined premise (track hues inside the map's gamut) does not.
+
+*Done when* — met: `?sgcmap=`/`?sgtrack=`/`?sgdash=` hooks and `data-sgcmap`/`data-sgtrack`
+attributes; the status chip names the map; track/dash selects ship disabled until a comb exists.
+`tests/r5.test.js` 232 → **264**, including a CIE L* monotonicity check computed in-test over all
+five tables (perceptual is measured, not asserted) and the assertion that no line-style key
+reaches the refine cache. All new assertions mutation-checked; two initially missed and were
+strengthened. **No new headless assertion, deliberately** — the user asked for a quick pass, a
+launch costs 4–5 minutes, and the rot risk here is source-shaped rather than pixel-shaped.
+
 ### R5.4 — bound it in time
 
 Restrict the overlay to a selected time span rather than the full pane width, composing

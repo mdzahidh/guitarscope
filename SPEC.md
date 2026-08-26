@@ -1464,3 +1464,84 @@ assertion above read `[null]` on a loaded machine because the launch predicate w
 **pane A**'s overlay. A predicate must read what the assertion reads — so it now waits for
 both panes (`bothCombed`), still strictly weaker than the assertion it guards. No assertion was
 weakened.
+
+## The look pass — five colormaps, and a line the colormap cannot make (session 23, user request)
+
+> "Few things lets make quick changes without too much rigorous testing to experiment with
+> first to nail the color before we do anything complicated. a. Lets add a couple of
+> perceptual colormaps for the spectogram including parula, viridis etc. b. The line used for
+> frequency comb, lets have options for colors that are not part of the colormap and very
+> distinct, e.g. "black" in the parula would work great and we wouldn't need any halo or other
+> effects thatt makes the lines look much thicker and ugly. Lets also have options for the
+> dotted patterns, by default we should have a finer dotted pattern."
+
+The user's own diagnosis, and it is the right one. R5.1a widened the tracks (halo 3 → 5 px,
+line 1.5 → 2.5 px) because a census said a track is read against **its own halo** rather than
+against the magma. That census was true and the conclusion followed from a premise nobody had
+questioned: that the track's hue is one of the six string colors, which live *inside* the
+colormap's own gamut and therefore need something black underneath. Change the premise and
+the whole width goes away. A hue no perceptual colormap ever produces separates itself — one
+stroke, 1.4 px, no halo at all. The user reached for black on parula; the reason it works is
+that a perceptual colormap by construction never reaches its own extremes.
+
+**Explicitly framed as an experiment.** The rigour was relaxed for the look, not for the gate:
+the contracts added are exactly the ones that would rot silently — a colormap that isn't
+perceptual, a halo that quietly becomes unconditional again, a default dash that drifts back
+to `[6,4]`, a line style leaking into the refine cache key. Nothing was added to assert taste.
+
+**(a) The colormaps.** `CMAP_HEX` / `CMAP_NAMES` / `cmapTable()` / `cmapColor()` join block 0
+beside `MAGMA`. `magma` stays first, stays the default, and — this mattered — keeps both its
+name and its table: `MAGMA_HEX`, `MAGMA` and `magmaColor()` are byte-identical, so
+`tests/dsp.test.js`'s existing colormap assertions and every old caller read what they always
+read. `inferno`, `viridis` and `cividis` are matplotlib 3.10.1 verbatim; `parula` is MATLAB's
+default via OpenCV's `COLORMAP_PARULA`. `cmapTable()` builds the flat 768-byte table lazily
+and caches it, and an unknown name falls back to magma rather than throwing.
+
+**"Perceptual" is measured, not asserted.** The gate computes CIE L\* from each table's own
+sRGB triples and requires the last entry to clear the first by > 55 and no step to fall back
+by more than 2.5. Measured: magma 0.1 → 97.9 and inferno 0.1 → 98.0 (both strictly rising),
+viridis 14.9 → 90.9 (−0.03), cividis 13.8 → 91.3 (−0.01, and colorblind-safe by construction),
+parula 24.2 → 95.6 (−0.17 — the least uniform of the five, kept because its mid-blues are
+exactly what leaves a black line legible). A rainbow cannot pass this; that is the point.
+
+**(b) The track color, and the halo it retires.** `SG_TRACKS` in block 4 offers the R5.1
+`string` hues plus four fixed colors (black, white, cyan, magenta). The draw pass reads
+`halo = !tk.rgb` — the halo is *exactly* the statement "this hue lives inside the colormap",
+never a style choice of its own. With `string` the pass is unchanged from R5.1a (5 px black at
+α 0.75, then 2.5 px of `_trackColor`); with a fixed color it is one 1.4 px stroke and nothing
+else. Fixed colors lose the per-string identity, which is the trade the selector makes
+explicit rather than hides. Label outlines still get a contrasting stroke in every mode
+(`tk.halo`), because text needs one regardless of what the line needs.
+
+**(c) The dash.** `SG_DASHES` — `fine [1,3]` (the new default), `dot [2,4]`, `dash [6,4]`
+(R5.1a's), `solid []`. At a 10 px period with six combs interleaved the dash was reading as
+line *weight* rather than as pattern; at 4 px it reads as a dotted line. The fundamental stays
+solid in every mode, because that distinction carries information (THEORY §1) rather than
+decoration. This supersedes R5.1a's `[6,4]` and R5.1's "no labels, dashes carry the rank".
+
+**Three selects in the sgram card head**, grouped as `Colors`. The colormap select is always
+live; the track and dash selects ship `disabled` and are enabled by `syncSgHarmSel()` from
+every door into `state.sgFrets`, exactly as R5.6's ranges are — an affordance, not help text.
+`state.sgCmap` / `sgTrack` / `sgDash` are view state like the rest of R5.6: unpersisted, never
+exported, absent from `_cardStateFor`. Hooks `?sgcmap=` / `?sgtrack=` / `?sgdash=`; panes
+publish `data-sgcmap` always and `data-sgtrack` whenever a comb is drawn.
+
+**The cache key had to split.** `sgramModelFor()` now keeps two: `gkey` is the analysis the
+M2.7 refine asks for (`dbMax|dbMin|offset`, plus window and span), and `key = gkey + "|" + cmap`
+is what the rendered image is cached under. Recoloring therefore repaints from the cached
+analysis and **never re-runs an FFT**; the track color and dash reach neither key, because they
+are drawn on top of the image rather than into it. The gate asserts this directly — a build
+that put `sgTrack` in the refine key would make every restyle cost a re-analysis.
+
+**Gate.** `tests/r5.test.js` 232 → **264**; the full seven steps green (dsp 171, r3 42, r4 60,
+m27 51, r5 264, headless 64, four tamper guards). One existing assertion was invalidated
+honestly rather than deleted: it matched a literal `setLineDash([6,4])` in the draw pass, which
+no longer exists, so it now asserts the pattern comes from `model.dash` *and* that the
+fundamental is drawn solid whatever the pattern is. All eleven new assertions were
+mutation-checked the day they were written, and two initial **misses** were closed by
+strengthening the assertion, never by weakening the mutation: the black/white check matched
+only key names (now it requires the exact `[0,0,0]` / `[255,255,255]` triples inside their own
+entries), and a colormap-name mutation was a no-op because `cmapTable()` falls back to magma
+for an unknown name — replaced by real table corruption (parula's 256 triples reversed, then
+shuffled; both caught by the L\* assertions). No new headless launch: the user asked for a
+quick experiment, and each launch costs four to five minutes.

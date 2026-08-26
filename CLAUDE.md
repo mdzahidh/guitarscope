@@ -374,6 +374,32 @@ build educational copy from it, never re-derive from scratch.
   lit at `?sgfocus=0&sgdim=95`). All new assertions mutation-checked the day they were
   written — one pairing had to be re-run because a mutation that removed the write path
   **masked** a second mutation under test.
+- **Look pass BUILT (session 23, reviewer, `555db8c`) — five colormaps, and a track color
+  the map cannot make.** The user asked for a quick experiment, explicitly "*without too
+  much rigorous testing … to nail the color*". **(a)** Block 0 gains `CMAP_HEX` — five
+  256×3 perceptual tables as hex strings (magma aliases the existing `MAGMA_HEX`;
+  inferno/viridis/cividis verbatim from matplotlib 3.10.1; parula from OpenCV) — plus
+  `CMAP_NAMES`, a lazily-inflating memoized `cmapTable()` and `cmapColor(name,t)`;
+  `_CMAPS` is pre-seeded with `MAGMA`, so **magma costs nothing and `magmaColor`/`MAGMA`
+  stay byte-identical** (`tests/dsp.test.js` names them). Magma is still the default.
+  Perceptual is **measured, not asserted**: the gate computes CIE L* per table and demands
+  a >55 rise with no step back worse than −2.5 (magma 0.1→97.9, inferno 0.1→98.0, viridis
+  14.9→90.9, cividis 13.8→91.3, parula 24.2→95.6). **(b)** `SG_TRACKS` (String hues /
+  Black / White / Cyan / Magenta) and `SG_DASHES` (**Fine dots `[1,3]` — the new default**
+  / Dots `[2,4]` / Dashes `[6,4]` — R5.1a's / Solid). **The halo is now a property of the
+  color, not a global rule:** `halo = !tk.rgb` says exactly "this hue lives inside the
+  colormap"; a fixed color draws one 1.4 px stroke and no halo, String hues keep R5.1a's
+  5 px black + 2.5 px lifted hue. `tk.halo` outlines **labels only**, never the line.
+  R5.1a's census ("a track is read against its own halo") was true but assumed track hues
+  inside the map's gamut — black on parula dissolves the premise. **Recoloring never
+  re-runs an FFT:** M2.7's refine key split into `gkey` (the analysis) and
+  `key = gkey+"|"+cm` (the image). Three selects in one `Colors` group in the sgram card
+  head; track/dash ship `disabled`, enabled by `syncSgHarmSel()` like the harmonic limit.
+  Gate: `tests/r5.test.js` 232 → **264**, all new assertions mutation-checked; two initially
+  **missed** and were strengthened (the fixed-color one accepted any `rgb`, now demands the
+  exact `[0,0,0]`/`[255,255,255]`; a parula check was absorbed by `cmapTable`'s magma
+  fallback, so the mutation now corrupts the table). No new headless assertion — a launch
+  costs 4–5 min and the rot risk here is source-shaped.
 - **NEXT — R5.4** (tasks + gates in docs/ROADMAP.md; specs in docs/STORY.md, math
   in docs/THEORY.md; do before M3/M4, which remain gated on explicit user go-ahead):
   bound the overlay in time, then **R5.5** near-floor disclosure on the LTAS
@@ -383,7 +409,7 @@ build educational copy from it, never re-derive from scratch.
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 232, headless 64, plus
+- The full gate is green: `./tests/verify.sh` — dsp 171, r3 42, r4 60, m27 51, r5 264, headless 64, plus
   all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -477,6 +503,11 @@ build educational copy from it, never re-derive from scratch.
   (the comb being held) and `data-sgclusters="<count>"` (R5.3 collision marks actually
   **drawn**, after the x-stride thinner — not the number of clusters found), all absent
   when there is nothing to report,
+  `?sgcmap=<magma|inferno|viridis|cividis|parula>`, `?sgtrack=<string|black|white|cyan|
+  magenta>` and `?sgdash=<fine|dot|dash|solid>` (the session-23 look pass; each validated
+  against its own table, an unknown name falling back to the default — these *do* have UI
+  selects in the sgram card head, the hooks exist so the gate can set them); every drawn
+  pane carries `data-sgcmap` and, when a comb exists, `data-sgtrack`,
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
@@ -536,7 +567,10 @@ build educational copy from it, never re-derive from scratch.
 - **DSP params:** Welch LTAS 8192-pt Hann 50 % overlap; log grid 60 Hz–20 kHz (700 pts);
   metrics integrate 60 Hz–20 kHz only; octave smoothing off/1-12/1-6/1-3; peak detection
   always on 1/6-oct curve. Spectrogram 2048-pt Hann, 256 log cells 60 Hz–20 kHz,
-  **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale;
+  **max-pooled per cell** (never mean — see ARCHITECTURE.md), shared A/B color scale,
+  drawn in one of **five** perceptual colormaps (`CMAP_HEX`: magma — the default — inferno,
+  viridis, cividis, parula; `state.sgCmap`, named on the status chip). Like every data
+  palette they **never theme**: the map is the user's choice, not the theme's;
   individual panes get
   a Free / File-time / First-onset time-axis choice; envelope overlay
   aligned at each file's first onset. **One global Level-match switch** (header
@@ -628,6 +662,12 @@ build educational copy from it, never re-derive from scratch.
   labels' vertical guard. Clicking one opens `clusterRatio()`'s reading of the chord —
   fundamentals go as `1/h_i`, octave duplicates folded, named only where docs/THEORY.md
   fixes the ratio (`4:5:6`, `10:12:15`, five intervals) and left as a bare ratio otherwise.
+  **Track color and dash (look pass):** `SG_TRACKS` / `SG_DASHES`, default String hues +
+  **fine `[1,3]`** dots, fundamentals always solid. **A halo is drawn only for hues that
+  live inside the colormap** (`halo = !tk.rgb`) — a fixed Black/White/Cyan/Magenta track is
+  one 1.4 px stroke, which is the point of offering them. `sgCmap`/`sgTrack`/`sgDash` are
+  view state like `sgFrets`: unpersisted, unexported, and only the colormap is in the image
+  cache key (`gkey` analysis + `cm`), never the line style.
 - Keep `tests/make_samples.js` synth math identical to the in-app demo synth when
   editing either.
 - Update SPEC.md changelog, this file, and ARCHITECTURE.md at milestone boundaries and

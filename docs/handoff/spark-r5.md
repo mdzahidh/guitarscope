@@ -52,7 +52,8 @@ rules about it:
 Its seven steps: `tests/dsp.test.js` (shipped math, green — keep it that way),
 `tests/r3.test.js` (green — 42), `tests/r4.test.js` (green — 60), `tests/m27.test.js`
 (green — 51), **`tests/r5.test.js` (8 pass / 67 fail today — those 67 are your job)**,
-`tests/headless.js` (**34 pass / 5 fail today** — same), then the tamper guards: `tests/`
+`tests/headless.js` (**35 pass / 5 fail today** — same; if a sixth line fails, look at
+*which* one before you believe it — see the flake note under "Verifying by eye"), then the tamper guards: `tests/`
 byte-identical to `master`, and the two SHA-256-frozen copy blocks from R3 and R4 (do not
 touch either; nothing in R5.0/R5.1 goes near them).
 
@@ -230,7 +231,11 @@ problem.
 **One measured flake, so you do not chase it:** roughly one headless launch in six exits
 before the app has drawn anything — `--virtual-time-budget` fast-forwards timers, not
 audio decodes. If a screenshot comes back looking like the empty app, take it again;
-`tests/headless.js` already retries internally.
+`tests/headless.js` already retries internally. It still surfaces occasionally as a lone
+pixel-compare failure inside the suite — the reviewer saw M2.7's *"and the zoomed pane
+really is redrawn from the finer STFT"* fail with `0 px differ` on one master run and pass
+on the next, with nothing changed. **Re-run before you debug**, and if a failure does not
+reproduce, say so in your report rather than editing anything to chase it.
 
 ## Standing constraints — these override any instinct to improve things
 

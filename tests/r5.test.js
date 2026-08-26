@@ -1175,5 +1175,76 @@ section("R5.5 — the wiring: dashed where the predicate holds, footnote only wh
     "…runs overlap by one point, so neighbouring runs meet with no seam");
 }
 
+section("Q3 — the same floor in the Band Energy table and the At-a-glance strip");
+{
+  const s4q = decomment(b4);
+  // Brace-matched, not /\n\}/: renderBandsTable is long enough that a naive slice
+  // swallows whatever follows it (batch-c lesson).
+  const bodyOf = (src, decl) => {
+    const i = src.indexOf(decl);
+    if (i < 0) return "";
+    let j = src.indexOf("{", i), d = 0;
+    for (let k = j; k < src.length; k++) {
+      if (src[k] === "{") d++;
+      else if (src[k] === "}" && --d === 0) return src.slice(i, k + 1);
+    }
+    return "";
+  };
+
+  const pct = bodyOf(decomment(blocks[2] || ""), "function fmtPct(");
+  ok(/r\s*>\s*0\s*&&\s*r\s*\*\s*100\s*<\s*0?\.05/.test(pct) && /<\s*0\.1\s*%/.test(pct),
+    "a tiny but real share prints '< 0.1 %', never '0.0 %': absent and small are " +
+    "different claims, and printing the wrong one is half of the 0 %/+6.7 dB paradox");
+
+  const nfb = bodyOf(s4q, "function nearFloorBands(");
+  ok(nfb, "nearFloorBands() exists — one helper, so the two cards share a floor");
+  ok(/displayedDb\(0\)/.test(nfb) && /displayedDb\(1\)/.test(nfb) && !/dispDb/.test(nfb),
+    "…read off displayedDb, never dispDb: both cards render at data-change points, " +
+    "where the animated curve may still be mid-flight");
+  ok(/nearFloorMask\(/.test(nfb) && /nearFloorDb\(/.test(nfb),
+    "…using R5.5's own predicate and its own floor — one predicate, never two");
+  ok(/if\s*\(\s*!\s*nf\[\s*k\s*\]\s*\)\s*return\s+false/.test(nfb) && /return\s+n\s*>\s*0/.test(nfb),
+    "…and a band is silence only when EVERY grid point in it is masked: one audible " +
+    "point inside the band makes the whole band audible");
+
+  const tbl = bodyOf(s4q, "function renderBandsTable(");
+  const reg = bodyOf(s4q, "function biggestRegionDelta(");
+  ok(/nearFloorBands\(\)/.test(tbl) && /nearFloorBands\(\)/.test(reg),
+    "both the band table and the verdict's region scan call that one helper, so they " +
+    "can never disagree about which bands are silence");
+  ok(/delta-floor/.test(tbl) && /nFloor/.test(tbl),
+    "…the table discloses by class, per row");
+  // The done-when, inverted: disclosure never touches the number.
+  const dAssigns = str => (str.match(/(^|[^.\w])d\s*=[^=]/g) || []).length;
+  ok(dAssigns(tbl.slice(tbl.indexOf("bandOnFloor("))) === 0 && dAssigns(reg) === 1,
+    "…and neither Δ is rewritten under the floor: exactly one assignment to d in the " +
+    "region scan (its declaration) and none after the table consults the predicate");
+  ok(/if\s*\(\s*nFloor\s*\)\s*bandsTable\.setAttribute/.test(tbl) &&
+     /bandsTable\.removeAttribute\(\s*["']data-nearfloor-rows["']/.test(tbl),
+    "…data-nearfloor-rows is absent, not '0', when nothing is on the floor — the same " +
+    "convention as the Difference canvas's data-nearfloor");
+
+  ok(/floored\s*=\s*null/.test(reg) && /cand\.onFloor/.test(reg) && /else\s+if\s*\(\s*!\s*best/.test(reg),
+    "the region scan splits its candidates: a floored band competes only with floored " +
+    "bands, so it can never win the headline by being the loudest silence");
+
+  const vd = bodyOf(s4q, "function renderVerdict(");
+  ok(/widest audible spectral gap/.test(vd),
+    "the headline says 'widest audible spectral gap' — the word the user's report was " +
+    "missing when String zing was named at ~0 % energy");
+  ok(/bdFloor\s*&&/.test(vd) && /difference of silences/.test(vd),
+    "…and a larger floored Δ gets its own sentence rather than being dropped: disclose, " +
+    "never hide, and never rewrite");
+
+  const ss = bodyOf(s4q, "function setSmooth(v)");
+  ok(/renderVerdict\(\)/.test(ss) && /renderBandsTable\(\)/.test(ss),
+    "changing smoothing re-renders both cards: the predicate reads displayedDb, which " +
+    "smoothing moves, so the disclosure would otherwise go stale");
+
+  ok(/\.delta-floor\s*\{[^}]*var\(--dim\)[^}]*opacity/.test(html),
+    ".delta-floor is dim and faint in the stylesheet — the table's equivalent of the " +
+    "Difference plot's dashed, dimmed near-floor run");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

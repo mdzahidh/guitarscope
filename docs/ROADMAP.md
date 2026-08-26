@@ -61,6 +61,7 @@ CLAUDE.md status list and the SPEC.md changelog.
 | **Q1** | Quality of life: A/B color keys, EQ "Reshape", solid-vs-dashed harmonics on the line plots with user-set hues. | ✅ done | `### Q1 — quality-of-life batch a/b/c` |
 | **Q2** | Small changes: the shelf glyph that lied, defaults from real material, a key for the two stars. | ✅ done | `### Q2 — small changes a/b/c` |
 | **R5.5** | **Near-floor disclosure on the LTAS Difference** — say where a large Δ is two views of the floor rather than a real difference. | ✅ done | `### R5.5 — near-floor disclosure` |
+| **Q3** | Near-floor disclosure carried into the **Band Energy** table and the **At-a-glance** strip — one predicate, three cards. | ✅ done | `### Q3 — the same floor in three cards` |
 | **R6** | **Interval consonance explainer** — joint period, comb alignment, Plomp–Levelt/Sethares roughness. Now also carries **R6.4**, the overlay's time bound (was R5.4). | ⏸ blocked: two `docs/THEORY.md` §2.5 numeric caveats are unresolved (R6.4 is not blocked) | `# R6 — Interval consonance explainer` |
 | **Warped sgram difference** | Replace the removed pixel-wise spectrogram difference with an onset-warped / DTW one. | ⏸ deferred until after R6 | `### Deferred — warped spectrogram difference` |
 | **M3** | Live input; still owes the task-based entry points deferred from M2. | 🚫 gated on explicit user go-ahead | `# Gated` |
@@ -1411,6 +1412,63 @@ pixel assertion stays valid, which is why R5.5 needed no new headless launch.
 wiring contracts), all mutation-checked in one batched driver — 14 single-anchor mutations,
 each killing exactly its target, including two assertions that first passed vacuously and
 were strengthened. No new suite, no new `verify.sh` step, no new Chrome launch.
+
+### Q3 — the same floor in three cards ✅ BUILT (session 26, reviewer)
+
+R5.5 disclosed the floor on the Difference plot only. The user then read the *other* two cards
+and found the same paradox stated twice more:
+
+> "what about the \"Band Energy\" card, e.g. in one case the String Zing, and Air has 0% energy
+> but difference is +6.7 dB?"
+
+> "when we are summarizing things \"AT A GLANCE\" we need to be careful about the differences
+> when they are audible … the String Zing part is ~0% energy, but the difference (likely within
+> the silence) is 6.7 dB and the At a glance says … *Their widest spectral gap is String zing
+> (5–10 kHz), where SG runs 6.7 dB hotter* … which sounds misleading"
+
+Both are the same defect as R5.5 and get the same answer — **keep the number, disclose the
+floor** — plus one printing fix that was half the paradox on its own.
+
+**a. `fmtPct` no longer says a small share is zero.** A high band on an electric guitar really
+can hold 0.04 % of the energy; `"0.0 %"` claims *absent*, which is a different and false claim.
+Below 0.05 % it now prints `< 0.1 %`. Central, because all six callers are shares of energy.
+
+**b. One predicate, never two.** `nearFloorBands()` (block 4, directly above the band table)
+calls R5.5's own `nearFloorMask()` / `nearFloorDb()` on `displayedDb(0)`/`displayedDb(1)` — the
+*settled* curves, not `dispDb`, which may be mid-animation — and returns `{floorDb, onFloor}`.
+A band counts as floor only when **every** grid point inside it is masked: one audible point
+inside the band makes the band audible. Both the Band Energy table and the verdict's region
+scan call that one helper, so the two cards cannot disagree about which bands are silence.
+
+**c. The table discloses per row.** A floored Δ cell takes `.delta-floor` (dim, `opacity:.45`)
+instead of its A/B color, carries a `title=` naming the measured floor, and the footnote gains
+one sentence printing that floor. `data-nearfloor-rows` is set only when some row is floored —
+**absent, not `"0"`**, the same convention as the Difference canvas's `data-nearfloor`. The Δ
+itself is untouched; an inverted assertion enforces that no delta is rewritten after the
+predicate is consulted.
+
+**d. The strip never headlines a silence.** `biggestRegionDelta()` now splits its candidates:
+a floored band competes only with floored bands, so it can never win by being the loudest
+silence. The headline reads "Their widest **audible** spectral gap is …", and a floored band
+that out-measures it gets **its own sentence** — *"Air (10–20 kHz) shows a wider 7.0 dB Δ, but
+both takes sit below −47 dB there — a difference of silences, not a tone difference."* Disclose,
+never hide, and never rewrite.
+
+**One honest cost, flagged rather than buried.** The mask lives on the *display* curve
+(smoothed, level-matched); the band table integrates *raw* Welch power. Binding them makes the
+table's disclosure inherit the plot's smoothing setting. That is the deliberate trade — one
+floor across the app beats domain purity, because a user comparing two cards is comparing
+claims, not domains. Its one consequence is fixed: `setSmooth()` now re-renders the verdict and
+the band table, which it previously did not.
+
+**Verification, in proportion.** The demo pair has **no** near-floor region at shipped
+thresholds, so both paths were proved through real Chrome against a scratch copy of the page
+with `NEARFLOOR_ABS_DB` lowered to −47: `data-nearfloor-rows="2"`, four `delta-floor` cells,
+and the strip printing an audible headline *and* the floored disclosure in one paragraph.
+`tests/r5.test.js` 284 → **298**, all 14 mutation-checked in one batched driver; one mutation
+was inert because `indexOf("function nearFloorBands")` still matches `nearFloorBandsZ` — the
+`setSmoothUI` trap again — so every body lookup in the section now includes the `(`. No new
+suite, no new `verify.sh` step, no new Chrome launch.
 
 ### Deferred — warped spectrogram difference (not in R5; after R6)
 

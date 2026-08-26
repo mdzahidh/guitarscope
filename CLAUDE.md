@@ -520,6 +520,31 @@ build educational copy from it, never re-derive from scratch.
   assertion moved. Gate: `tests/r5.test.js` 267 → **284** (6 math + 11 source-read, one
   inverted), all mutation-checked in one batched driver; no new suite, no new `verify.sh` step,
   no new Chrome launch.
+- **Q3 the same floor in three cards BUILT (session 26, reviewer).** The user read the *other*
+  two cards after R5.5 and found the identical paradox twice more — a Band Energy row printing
+  `0.0 %` beside `+6.7 dB`, and an At-a-glance strip calling that band *"their widest spectral
+  gap"*. Same defect, same answer: **keep the number, disclose the floor.** **(a)** `fmtPct`
+  prints **`< 0.1 %`** under 0.05 % instead of rounding a real share to `0.0 %` — *absent* and
+  *small* are different claims, and printing the wrong one was half the paradox (all six callers
+  are shares of energy, so the fix is central). **(b) One predicate, never two:**
+  `nearFloorBands()` calls R5.5's own `nearFloorMask()`/`nearFloorDb()` on `displayedDb(0/1)` —
+  the **settled** curves, never `dispDb`, which may be mid-animation — and both the Band Energy
+  table and the verdict's region scan call it, so they cannot state different floors. A band is
+  floor only when **every** grid point inside it is masked. **(c)** A floored Δ cell takes
+  `.delta-floor` (dim, `opacity:.45`) plus a `title=`, the footnote names the measured floor, and
+  `data-nearfloor-rows` is **absent, not `"0"`**, like `diffCanvas`'s `data-nearfloor`. **(d)**
+  `biggestRegionDelta()` splits its candidates so a floored band competes only with floored ones
+  — it can never win the headline by being the loudest silence; the headline says "widest
+  **audible** spectral gap", and a larger floored Δ gets **its own** disclosing sentence.
+  **Neither Δ is rewritten** (an inverted assertion pins it). **One cost, flagged not buried:**
+  the mask lives on the *display* curve (smoothed, level-matched) while the table integrates
+  *raw* Welch power — one floor across the app beats domain purity, and the consequence is fixed
+  (`setSmooth()` now re-renders both cards). Gate: `tests/r5.test.js` 284 → **298**, all 14
+  mutation-checked; one came back **inert** because `indexOf("function nearFloorBands")` matches
+  `nearFloorBandsZ` — the `setSmoothUI` prefix trap again — so every body lookup now includes the
+  `(`. Both verdict paths proved through real Chrome against a scratch page with
+  `NEARFLOOR_ABS_DB` at −47 (lowering `NEARFLOOR_REL_DB` cannot work: the floor is the *looser*
+  of the two). No new suite, no new `verify.sh` step, no new Chrome launch.
 - **NEXT — the user's visual test.** R5 is closed; nothing is queued. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
   in docs/THEORY.md.) M3/M4 remain gated on explicit user go-ahead.
@@ -532,7 +557,7 @@ build educational copy from it, never re-derive from scratch.
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 284, headless 64, plus
+- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 298, headless 64, plus
   all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
@@ -636,7 +661,8 @@ build educational copy from it, never re-derive from scratch.
   pane carries `data-sgcmap` and, when a comb exists, `data-sgtrack`,
   the LTAS Difference canvas carries `data-nearfloor="<count>"` — grid points drawn as
   "both curves below the floor" (R5.5), absent when there are none (again: node cannot read a
-  canvas),
+  canvas) — and the Band Energy table carries `data-nearfloor-rows="<count>"`, the rows whose
+  whole band sits under that floor (Q3), absent by the same convention,
   `?strings=1|0` (bottom-axis open-string labels), `?harmonics=0|1` (compat hook —
   `1` turns harmonics 2–4 on for every string), `?how` (open the "How to use this
   app" walkthrough), `?about` (open the About modal), `?debug` (reveal the hidden
@@ -716,7 +742,13 @@ build educational copy from it, never re-derive from scratch.
   `NEARFLOOR_MIN_RUN = 4` grid points are dropped **in the predicate**: a lone bin under the
   floor between audible neighbours is a notch, not silence. A large Δ where both curves are on
   the floor is a difference of silences — the Difference is a log-ratio, the Band Energy share
-  is a power integral, and the plot says which one it is showing. Both line plots print the status chip (smoothing · level-match · zoom);
+  is a power integral, and the plot says which one it is showing. **Q3 carries the same floor
+  into the other two cards, through one shared predicate** (`nearFloorBands()`, reading
+  `displayedDb`, marking a band only when *every* grid point in it is masked — one predicate,
+  never two): a floored Band Energy row prints its Δ in `.delta-floor` with a `title=` and a
+  footnote naming the floor (`data-nearfloor-rows`), and the "At a glance" strip headlines the
+  widest **audible** gap only, giving any larger floored Δ its own disclosing sentence. `fmtPct`
+  prints `< 0.1 %` rather than rounding a real share to `0.0 %`. No Δ is ever rewritten. Both line plots print the status chip (smoothing · level-match · zoom);
   the header Regions field holds the vocabulary selector. **Strings axis (M2.6b):**
   header toggle (default off, `gsStrings`, "S" key) draws open-string fundamentals as
   dotted verticals labeled on the **bottom** axis of both frequency line plots; labels

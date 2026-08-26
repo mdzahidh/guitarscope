@@ -1820,3 +1820,59 @@ run green — dsp 187, r3 42, r4 60, m27 51, r5 284, headless 64, four tamper gu
 diff, so it reports a reviewer-authored test change once it is committed. That is the intended
 behaviour — the guard exists so a **delegated builder** cannot edit the tests it must pass; the
 reviewer may, and records the change here, as with every prior reviewer commit.
+
+---
+
+## Q3 — the same floor in three cards (2026-08-26, session 26)
+
+R5.5 disclosed the near-floor only where it was first noticed, on the LTAS Difference plot. The
+user read the other two cards and found the same contradiction printed twice more:
+
+> "what about the "Band Energy" card, e.g. in one case the String Zing, and Air has 0% energy but
+> difference is +6.7 dB?"
+
+> "when we are summarizing things "AT A GLANCE" we need to be careful about the differences when
+> they are audible … the String Zing part is ~0% energy, but the difference (likely within the
+> silence) is 6.7 db and the At a glance says … *Their widest spectral gap is String zing
+> (5–10 kHz), where SG runs 6.7 dB hotter* … which sounds misleading"
+
+Both are the R5.5 defect — a log ratio quoted beside a linear power integral without saying that
+both sides are silence — and both take the R5.5 answer: **keep the raw Δ honest, disclose
+inaudibility, never warp the number.**
+
+1. **`fmtPct` no longer rounds a real share to zero.** Under 0.05 % it prints `< 0.1 %`. A high
+   band on an electric guitar genuinely can hold 0.04 % of the energy; `0.0 %` asserts *absent*,
+   a different and false claim, and was half of why the row read as self-contradictory. All six
+   callers are shares of energy, so the change is safe centrally.
+2. **One predicate, never two.** `nearFloorBands()` calls R5.5's `nearFloorMask()`/`nearFloorDb()`
+   on `displayedDb(0)`/`displayedDb(1)` — the settled curves, not `dispDb`, which may be
+   mid-animation — and returns `{floorDb, onFloor}`. The Band Energy table and the verdict's
+   region scan both call it, so the cards cannot disagree about which bands are silence. A band
+   counts as floor only when **every** grid point inside it is masked: one audible point inside
+   the band makes the band audible.
+3. **The table discloses per row.** A floored Δ cell takes `.delta-floor` (dim, `opacity:.45`)
+   rather than its A/B color, carries a `title=` naming the measured floor, and the footnote
+   gains one sentence printing that floor — the same floor the Difference plot's status chip
+   prints. `data-nearfloor-rows` is set only when some row is floored: absent, not `"0"`, like
+   `diffCanvas`'s `data-nearfloor`.
+4. **The strip never headlines a silence.** `biggestRegionDelta()` splits candidates so a floored
+   band competes only with floored bands; the headline reads "their widest **audible** spectral
+   gap"; and a floored band with a larger Δ gets its own sentence — *"Air (10–20 kHz) shows a
+   wider 7.0 dB Δ, but both takes sit below −47 dB there — a difference of silences, not a tone
+   difference."* Disclose, never hide, and never rewrite.
+
+**One cost, flagged rather than buried.** The mask lives on the *display* curve (smoothed,
+level-matched); the band table integrates *raw* Welch power. Binding them makes the table's
+disclosure inherit the plot's smoothing setting. Accepted deliberately — one floor across the app
+beats domain purity, because a user reading two cards is comparing claims, not domains. Its one
+consequence is fixed: `setSmooth()` now re-renders the verdict and the band table, which it did
+not before.
+
+**Gate.** `tests/r5.test.js` 284 → **298**, all 14 new assertions mutation-checked in one batched
+driver, including the inverted "no Δ is rewritten" contract. One mutation came back **inert**:
+`indexOf("function nearFloorBands")` still matches a renamed `nearFloorBandsZ` — the
+`setSmoothUI` prefix trap for the second time — so every body lookup in the section now includes
+the `(`. The demo pair has no near-floor region at shipped thresholds, so both verdict paths were
+proved through real Chrome against a scratch copy with `NEARFLOOR_ABS_DB` lowered to −47
+(lowering `NEARFLOOR_REL_DB` cannot produce a partial floor: `nearFloorDb` takes the **looser**
+of the two tests). No new suite, no new `verify.sh` step, no new Chrome launch.

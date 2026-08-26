@@ -1475,6 +1475,47 @@ after the mask is built). All mutation-checked in one batched driver; two of the
 vacuously — an empty regex slice satisfies "nothing was written to `diffBuf`" — and were
 strengthened to require a non-trivial body. No new suite, no new `verify.sh` step.
 
+## Q3 (session 26): the same floor in three cards
+
+R5.5 disclosed the floor on the Difference plot. The user then found the identical paradox
+printed twice more — a Band Energy row reading `0.0 %` beside `+6.7 dB`, and an At-a-glance
+strip naming that band as "their widest spectral gap". Same defect, same answer: **keep the
+number, disclose the floor.**
+
+- **`fmtPct` prints `< 0.1 %`, never a rounded `0.0 %`.** A high band on an electric really can
+  hold 0.04 % of the energy; `0.0 %` asserts *absent*, which is false, and was half of why the
+  row looked self-contradictory. All six callers are shares of energy, so the fix is central.
+- **`nearFloorBands()` is the single shared predicate.** It reads `displayedDb(0)`/
+  `displayedDb(1)` — the settled, cached curves, **not** `dispDb`, which may be mid-animation —
+  and hands back `{floorDb, onFloor}` built from R5.5's own `nearFloorMask()`/`nearFloorDb()`.
+  One predicate, never two: the band table and the verdict's region scan call the same helper,
+  so the two cards cannot state different floors or disagree about which bands are silence.
+- **A band is silence only when *every* grid point inside it is masked.** One audible point
+  inside the band makes the band audible. The looser "any point" reading would let a single
+  masked bin condemn a live band.
+- **The table discloses by row, the strip by sentence.** A floored cell takes `.delta-floor`
+  (dim, `opacity:.45`) and a `title=` naming the measured floor, the footnote prints that floor
+  once, and `data-nearfloor-rows` is set **only when some row is floored** — absent, not `"0"`,
+  matching `diffCanvas`'s `data-nearfloor`. In the strip, `biggestRegionDelta()` splits its
+  candidates so a floored band competes only with floored bands and can never win the headline
+  by being the loudest silence; the headline says "widest **audible** spectral gap", and a
+  floored band that out-measures it gets its own disclosing sentence. **Neither Δ is rewritten**
+  — an inverted assertion pins that.
+- **Flagged, not hidden: a domain mismatch bought on purpose.** The mask lives on the *display*
+  curve (smoothed, level-matched); the band table integrates *raw* Welch power over [f0,f1].
+  Binding them makes the table's disclosure inherit the plot's smoothing setting. That is the
+  deliberate trade — one floor across the app beats domain purity, because a user reading two
+  cards is comparing claims, not domains. Its one consequence is fixed: `setSmooth()` now
+  re-renders the verdict and the band table, which it previously did not.
+
+Gate: `tests/r5.test.js` 284 → **298**, all 14 mutation-checked in one batched driver. One
+mutation was **inert** — `indexOf("function nearFloorBands")` still matches a renamed
+`nearFloorBandsZ`, the `setSmoothUI` prefix trap for the second time — so every body lookup in
+the section now includes the `(`. The demo pair has no near-floor region at shipped thresholds,
+so both verdict paths were proved through real Chrome against a scratch copy with
+`NEARFLOOR_ABS_DB` lowered to −47 (lowering `NEARFLOOR_REL_DB` cannot work: the floor is the
+**looser** of the two tests). No new suite, no new `verify.sh` step, no new Chrome launch.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

@@ -427,6 +427,9 @@ table.datatable tr.grp td{
 .delta-a{ color:var(--slot-a); }
 .delta-b{ color:var(--slot-b); }
 .delta-0{ color:var(--dim); }
+/* R5.5: a delta between two silences. Faint, never rewritten — same
+   disclosure the Difference plot makes by dashing its near-floor runs. */
+.delta-floor{ color:var(--dim); opacity:.45; }
 
 /* ---------- tone character ---------- */
 .tonerows{ display:flex; flex-direction:column; margin-top:4px; }
@@ -2858,7 +2861,14 @@ function fmtHz(f, digits){
 }
 function fmtDb(v, digits){ return (v==null||!isFinite(v)) ? "—" : ((v>0?"+":"")+v.toFixed(digits!=null?digits:1)+" dB"); }
 function fmtMs(s){ return (s==null||!isFinite(s)) ? "—" : (s<1 ? Math.round(s*1000)+" ms" : s.toFixed(2)+" s"); }
-function fmtPct(r){ return (r==null||!isFinite(r)) ? "—" : (r*100).toFixed(1)+" %"; }
+function fmtPct(r){
+  // A high band on an electric guitar really can hold 0.04 % of the energy.
+  // "0.0 %" says absent; "< 0.1 %" says small, which is the true statement —
+  // and it is half of why a 0 %/+6.7 dB row looked self-contradictory (R5.5).
+  if(r==null||!isFinite(r)) return "—";
+  if(r>0 && r*100<0.05) return "< 0.1 %";
+  return (r*100).toFixed(1)+" %";
+}
 function noteStr(f, a4){
   const n=noteInfo(f, a4);
   return n ? n.name+(n.cents ? " "+(n.cents>0?"+":"")+n.cents+"¢" : "") : "—";
@@ -5789,6 +5799,32 @@ function attachZoom(wrap,canvas,keyFn,extBtn){
   },true);
 }
 
+// ---------- near-floor bands (R5.5) ----------
+// The share is a linear power integral and Δ is a log ratio, so a band sitting on
+// the noise floor prints a vanishing share beside a confident dB number. Same floor
+// as the Difference plot — one predicate, never two — but read off the settled
+// curves (displayedDb), not dispDb, which may be mid-animation. One helper serves
+// both the Band Energy table and the verdict strip, so the two can never disagree
+// about which bands are silence.
+function nearFloorBands(){
+  const cur=[displayedDb(0),displayedDb(1)];
+  if(!cur[0]||!cur[1]) return null;
+  const nf=nearFloorMask(cur[0],cur[1]);
+  const floorDb=nearFloorDb(cur[0],cur[1]);
+  // A band counts as floor only when EVERY grid point inside it is masked, i.e.
+  // both recordings are below the floor right across the band.
+  const onFloor=(f0,f1)=>{
+    let n=0;
+    for(let k=0;k<GRID.length;k++){
+      if(GRID[k]<f0||GRID[k]>f1) continue;
+      if(!nf[k]) return false;
+      n++;
+    }
+    return n>0;
+  };
+  return {floorDb,onFloor};
+}
+
 // ---------- band table ----------
 // Tuning-derived bounds are floats — print Hz rounded, kHz to 2–3 significant digits.
 function rangeStr(f0,f1){
@@ -5806,6 +5842,10 @@ function renderBandsTable(){
   const tot=[s0?bandPower(s0.welch.power,s0.welch.df,60,20000):null,
              s1?bandPower(s1.welch.power,s1.welch.df,60,20000):null];
   const nCols=2+slots.length+(both?1:0);
+  const nfb=nearFloorBands();
+  const floorDb=nfb?nfb.floorDb:null;
+  const bandOnFloor=(f0,f1)=>!!nfb&&nfb.onFloor(f0,f1);
+  let nFloor=0;
   let html='<thead><tr><th>Band</th><th>Range</th>'+
     slots.map(i=>'<th>'+esc(shortName(state.slots[i].name,16))+'</th>').join('')+
     (both?'<th>Δ (A − B)</th>':'')+'</tr></thead><tbody>';
@@ -5816,8 +5856,12 @@ function renderBandsTable(){
     for(const i of slots) cells+='<td>'+fmtPct(p[i]/Math.max(tot[i],1e-30))+'</td>';
     if(both){
       const d=10*Math.log10(Math.max(p[0],1e-30)/Math.max(p[1],1e-30))-(state.lm&&state.lmOffset!=null?state.lmOffset:0);
-      const cls=d>0.75?"delta-a":(d<-0.75?"delta-b":"delta-0");
-      cells+='<td class="'+cls+'">'+fmtDb(d,1)+'</td>';
+      const onFloor=bandOnFloor(f0,f1);
+      if(onFloor) nFloor++;
+      const cls=onFloor?"delta-floor":(d>0.75?"delta-a":(d<-0.75?"delta-b":"delta-0"));
+      const tip=onFloor?' title="Both recordings are below '+floorDb.toFixed(0)
+        +' dB across this band — a difference of silences."':"";
+      cells+='<td class="'+cls+'"'+tip+'>'+fmtDb(d,1)+'</td>';
     }
     return '<tr><td>'+termsHtml+'</td><td class="rng">'+rangeStr(f0,f1)+'</td>'+cells+'</tr>';
   };
@@ -5843,7 +5887,14 @@ function renderBandsTable(){
   if(both) foot+=state.lm&&state.lmOffset!=null
     ? " Δ is band level A − B after the "+fmtDb(state.lmOffset,2)+" level-match on B."
     : " Δ is raw band level A − B (level-match off).";
+  // R5.5 disclosure: name the floor, exactly as the Difference plot's status chip
+  // does, so the two cards can never state different floors.
+  if(nFloor) foot+=" Faint Δ = both recordings sit below "+floorDb.toFixed(0)
+    +" dB across the whole band (≈ inaudible) — a difference of silences, not a tone difference.";
   bandsFoot.innerHTML=foot;
+  // Absent when there are none, like the Difference canvas's data-nearfloor.
+  if(nFloor) bandsTable.setAttribute("data-nearfloor-rows", String(nFloor));
+  else bandsTable.removeAttribute("data-nearfloor-rows");
 }
 
 // ---------- tone character ----------
@@ -6034,16 +6085,23 @@ function biggestRegionDelta(){
   const s0=state.slots[0], s1=state.slots[1];
   if(!s0||!s1) return null;
   const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
-  let best=null;
+  const nfb=nearFloorBands();
+  let best=null, floored=null;
   for(const r of vocab.regions){
     const f0=regionF(r.f0), f1=regionF(r.f1);
     const p0=bandPower(s0.welch.power,s0.welch.df,f0,f1);
     const p1=bandPower(s1.welch.power,s1.welch.df,f0,f1);
     const d=10*Math.log10(Math.max(p0,1e-30)/Math.max(p1,1e-30))
             -(state.lm&&state.lmOffset!=null?state.lmOffset:0);
-    if(isFinite(d)&&(!best||Math.abs(d)>Math.abs(best.d))) best={r,f0,f1,d};
+    if(!isFinite(d)) continue;
+    // R5.5: a band where both takes sit under the floor can hold the largest Δ in
+    // the table and still be inaudible. Never let it be the headline; report it
+    // separately so the strip discloses rather than hides it.
+    const cand={r,f0,f1,d,onFloor:!!nfb&&nfb.onFloor(f0,f1)};
+    if(cand.onFloor){ if(!floored||Math.abs(d)>Math.abs(floored.d)) floored=cand; }
+    else if(!best||Math.abs(d)>Math.abs(best.d)) best=cand;
   }
-  return best;
+  return {best,floored,floorDb:nfb?nfb.floorDb:null};
 }
 function renderVerdict(){
   const n=(state.slots[0]?1:0)+(state.slots[1]?1:0);
@@ -6074,11 +6132,20 @@ function renderVerdict(){
           "no meaningful "+termHtml("level-match","level")+" gap.");
       }
     }
-    const bd=biggestRegionDelta();
+    const bdAll=biggestRegionDelta();
+    const bd=bdAll?bdAll.best:null, bdFloor=bdAll?bdAll.floored:null;
     if(bd&&Math.abs(bd.d)>=1){
       const label=bd.r.label.charAt(0)+bd.r.label.slice(1).toLowerCase();
-      parts.push("Their widest spectral gap is "+termHtml(bd.r.key,label)+" ("+rangeStr(bd.f0,bd.f1)+
+      parts.push("Their widest audible spectral gap is "+termHtml(bd.r.key,label)+" ("+rangeStr(bd.f0,bd.f1)+
         "), where "+slotNameHtml(bd.d>0?0:1)+" runs "+Math.abs(bd.d).toFixed(1)+" dB hotter.");
+    }
+    // Disclose, never rewrite: a bigger Δ that lives under the floor is named as
+    // what it is — a difference of silences — rather than dropped or promoted.
+    if(bdFloor&&Math.abs(bdFloor.d)>=1&&(!bd||Math.abs(bdFloor.d)>Math.abs(bd.d))){
+      const flabel=bdFloor.r.label.charAt(0)+bdFloor.r.label.slice(1).toLowerCase();
+      parts.push(termHtml(bdFloor.r.key,flabel)+" ("+rangeStr(bdFloor.f0,bdFloor.f1)+") shows a wider "+
+        Math.abs(bdFloor.d).toFixed(1)+" dB Δ, but both takes sit below "+bdAll.floorDb.toFixed(0)+
+        " dB there — a difference of silences, not a tone difference.");
     }
     const cands=proseCandidates();
     if(cands.length) parts.push(cands[0].html);
@@ -7809,6 +7876,8 @@ function setSmooth(v){
   setSmoothUI(v);
   updateCurves(true);
   renderFooter();
+  // The near-floor predicate reads displayedDb, which smoothing moves.
+  renderVerdict(); renderBandsTable();
 }
 function setTheme(t){
   if(!THEMES.includes(t)) return;

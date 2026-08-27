@@ -1976,3 +1976,42 @@ the launches R5.3 already makes, asserting that at rest `#sgramCtlMove` precedes
 the document and that with pane A expanded the very same node sits *inside* the receiver. No
 new suite, no new `verify.sh` step, no new Chrome launch.
 
+
+## Q5 — the strip answers both questions (2026-08-27, session 28, user report)
+
+The user compared their own `SG.wav` and `Les_Paul.wav` and found the Les Paul sustaining
+**≈1.6×** longer in the mids — and "At a glance" never said so. Their point is a product
+point, not a bug report: sustain is one of the properties a guitarist actually *feels*, and a
+summary that omits it while itemising spectral shape is answering half the question.
+
+**The threshold was never the problem.** `proseCandidates()` already builds the sustain
+sentence at `r >= 1.35`, so a 1.6× ratio cleared it comfortably. The strip simply printed
+`cands[0]` — and of the ten ranked sentences, **six are spectral** and they carry the larger
+multipliers (centroid `(r-1)*8`, warmth `(r-1)*4`, low end `(r-1)*3.5`) against the
+time-domain ones (attack and sustain `(r-1)*2`, tightness `(r-1)*1.8`, dynamic range `d/4`).
+A spectral finding therefore wins the single slot almost every time two guitars differ at all.
+
+**Fixed by tagging, not by rescoring.** Every `cands.push({...})` now declares
+`fam:"tone"` or `fam:"time"`, and `renderVerdict()` prints its leader and then
+`cands.find(c => c.fam !== cands[0].fam)` — the strongest sentence from the *other* family,
+if one cleared its own threshold. Rescoring was the obvious alternative and was rejected:
+`proseCandidates()` is shared verbatim with the tone panel's prose (`cands.slice(0,4)`), so
+re-weighting to promote sustain in the strip would silently reorder the detail paragraph too,
+and every existing multiplier is a calibration nobody has a reason to disturb. The tag is
+additive; no score, threshold or sentence changed. The invariant that made the strip
+trustworthy in the first place — *one source, summary and detail cannot disagree* — is
+exactly what the fix leans on.
+
+A player asks two questions, "how does it sound" and "how does it feel". The strip now
+answers both whenever the measurement supports both, and still says nothing it cannot
+measure: with no time-domain candidate over threshold, the second sentence is simply absent.
+
+**Gate, in proportion.** `tests/dsp.test.js` 187 → **193** — six source-read contracts on a
+brace-matched slice of `proseCandidates` and `renderVerdict`: all ten pushes tagged, exactly
+four in the `time` family, sustain among them **pinned by name** (the one the user missed),
+its sentence printing the ratio a player would quote, and the two lines of family-aware
+selection. All six mutation-checked the day they were written; one was strengthened after
+review — the ratio assertion originally accepted a `×` from anywhere in the function, and now
+reads a slice scoped to the sustain sentence. No new suite, no new `verify.sh` step, no new
+Chrome launch. Verified in real Chrome besides: on the demo pair the strip now closes with
+*"Demo — Warm's performance was captured with more dynamic range — 46.7 dB against 20.6 dB."*

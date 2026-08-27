@@ -596,6 +596,28 @@ build educational copy from it, never re-derive from scratch.
   M2.6d's fold-toggle exemption already covers every moved control). Gate: `tests/r5.test.js`
   307 → **324** (all 17 mutation-checked), `tests/headless.js` 67 → **69** — a DOM-order pair
   folded into R5.3's existing launches, no new Chrome launch.
+- **Q5 the verdict strip answers both questions BUILT (session 28, reviewer).** The user
+  compared their own SG and Les Paul and found the LP sustaining **≈1.6×** longer in the mids,
+  unmentioned by "At a glance". The threshold was never the problem — `proseCandidates()`
+  builds that sentence at `r >= 1.35` — the **selection** was: the strip printed `cands[0]`,
+  and six of the ten ranked sentences are spectral carrying the larger multipliers (centroid
+  `(r-1)*8`, warmth `(r-1)*4`, low end `(r-1)*3.5` against attack/sustain `(r-1)*2`,
+  tightness `(r-1)*1.8`, dynamic range `d/4`), so colour wins the single slot almost every
+  time. Fixed by **tagging, not rescoring**: every `cands.push` declares `fam:"tone"` or
+  `fam:"time"`, and `renderVerdict()` prints its leader plus
+  `cands.find(c=>c.fam!==cands[0].fam)` — the strongest sentence from the other family, if one
+  cleared its own threshold. Rescoring would have reordered the tone panel's prose too
+  (`cands.slice(0,4)` is the *same* list — the invariant that summary and detail cannot
+  disagree), so no score, threshold or sentence changed. A player asks "how does it sound" and
+  "how does it feel"; the strip answers both when the measurement supports both, and stays
+  silent when it doesn't (`find` returns undefined → the strip is byte-identical to before).
+  Gate: `tests/dsp.test.js` 187 → **193**, six source-read contracts on brace-matched slices
+  of `proseCandidates`/`renderVerdict` — all ten pushes tagged, exactly four `time`, **sustain
+  pinned by name**, its sentence printing the ratio a player would quote, and the two lines of
+  selection; all mutation-checked, one strengthened after review (the ratio assertion accepted
+  a `×` from anywhere in the function; it now reads a slice scoped to the sustain sentence).
+  No new suite, no new `verify.sh` step, no new Chrome launch. Demo pair checked in real
+  Chrome: the strip now closes with the dynamic-range sentence.
 - **NEXT — the user’s visual test.** R5 is closed; Q4a and Q4b are built, so nothing stands
   between here and R6. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
@@ -609,8 +631,14 @@ build educational copy from it, never re-derive from scratch.
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 324, headless 69, plus
-  all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
+- The gate: `./tests/verify.sh` — dsp **193**, r3 42, r4 60, m27 51, r5 324, headless 69.
+  **Step 1 is red on master and has been since `ac65835` "EQ match: fit
+  each band inside its neighbours, in increasing frequency"** — the single-peak recovery bound
+  `ok(mx < 1.0)` at [tests/dsp.test.js:547](tests/dsp.test.js#L547) went 0.999 → 1.022 dB there
+  (bisected; every commit before it passes, every one after fails). Block-0 EQ math, unrelated to
+  any later work; awaiting the user's call on fitting vs. re-justifying the bound. Steps 2–7 and
+  all four tamper guards (`tests/` untouched, all three frozen copy SHAs) are green.
+  `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless
   `?demo` screenshots in both themes (EQ device faces, single-guitar, magnify, all four
@@ -830,7 +858,10 @@ build educational copy from it, never re-derive from scratch.
   physical bands regardless of lane. All lane regions are click-to-glossary; new
   glossary categories must be appended to `GLOSS_CATS` or their entries won't render.
   The "At a glance" verdict strip reuses the Band-Energy math and the tone panel's
-  `proseCandidates()` verbatim so summary and detail can never disagree. Playback
+  `proseCandidates()` verbatim so summary and detail can never disagree; every candidate
+  declares `fam:"tone"`/`fam:"time"` and the strip prints its leader **plus the strongest
+  sentence of the other family** (Q5) — the ranking itself is never re-weighted, because the
+  tone panel reads the same list. Playback
   (region audition buttons in popovers; per-card Play) always sources the **analyzed
   mono mix** — never the original file — with level-match gain on B when active
   (printed on the card button); region audition band-passes with a 4th-order

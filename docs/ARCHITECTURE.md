@@ -1561,6 +1561,23 @@ so both verdict paths were proved through real Chrome against a scratch copy wit
 `NEARFLOOR_ABS_DB` lowered to −47 (lowering `NEARFLOOR_REL_DB` cannot work: the floor is the
 **looser** of the two tests). No new suite, no new `verify.sh` step, no new Chrome launch.
 
+## Q5 (session 28): the verdict strip has two families, not one ranking
+
+- **A single top-scoring sentence is a spectral sentence.** `proseCandidates()` ranks ten
+  contrasts; six of them are spectral and they carry the larger multipliers, so `cands[0]`
+  is almost always about colour. That is why a 1.6x sustain difference between the user's
+  two guitars never reached "At a glance" — not a threshold failure (`r >= 1.35` passed),
+  a selection failure.
+- **Tag, do not rescore.** Each candidate now declares `fam:"tone"` or `fam:"time"` and
+  `renderVerdict()` prints `cands[0]` plus the first candidate of the other family.
+  Re-weighting the scores would have worked too, and would have reordered the tone panel's
+  prose paragraph along with it — the list is shared verbatim (`cands.slice(0,4)`), which is
+  the whole reason summary and detail cannot contradict each other. Preserve the ordering;
+  change what the *consumer* selects.
+- The second sentence is conditional on the measurement, not on the layout: with nothing in
+  the other family over threshold, `find` returns undefined and the strip is exactly what it
+  was. Contract in `tests/dsp.test.js` (193 assertions).
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

@@ -920,6 +920,43 @@ function approx(a, b, tol) { return Math.abs(a - b) <= tol; }
     ok(/legendTarget:"reshape "/.test(html), 'the target curve is labelled "reshape", not "target"');
   }
 
+  // ---- the verdict strip answers both questions (2026-08-27 user report) ----
+  // A Les Paul sustaining ~1.6x longer than an SG never reached "At a glance": the
+  // strip printed the single top-scoring candidate, and the spectral candidates
+  // outnumber and outscore the time-domain ones. Contract: every candidate is
+  // tagged, and the strip reaches past its leader for the other family.
+  {
+    const body = fn => {
+      const i = html.indexOf("function " + fn + "(");
+      let d = 0, k = html.indexOf("{", i);
+      for (; k < html.length; k++) {
+        const c = html[k];
+        if (c === "{") d++;
+        else if (c === "}" && --d === 0) { k++; break; }
+      }
+      return html.slice(i, k);
+    };
+    const pc = body("proseCandidates"), rv = body("renderVerdict");
+
+    const pushes = pc.match(/cands\.push\(\{/g) || [];
+    const tagged = pc.match(/cands\.push\(\{fam:"(tone|time)"/g) || [];
+    ok(pushes.length === 10 && tagged.length === 10,
+      "every ranked sentence declares its family", pushes.length + " pushes, " + tagged.length + " tagged");
+    ok((pc.match(/fam:"time"/g) || []).length === 4,
+      "attack, sustain, tightness and dynamic range are the time-domain family");
+    // The one the user missed, pinned by name: sustain must not be filed as colour.
+    const sus = pc.slice(pc.indexOf('termHtml("sustain","sustains")') - 200, pc.indexOf('termHtml("sustain","sustains")'));
+    ok(/fam:"time"/.test(sus), "sustain is a time-domain difference");
+    const susSent = pc.slice(pc.indexOf('termHtml("sustain","sustains")'));
+    ok(/r\.toFixed\(1\)[^;]*(\\u00d7|\u00d7)/.test(susSent.slice(0, susSent.indexOf("});"))),
+      "the sustain sentence prints the ratio a player would quote");
+
+    ok(/const other=cands\.find\(c=>c\.fam!==cands\[0\]\.fam\);/.test(rv),
+      "the strip looks past its leader for the other family");
+    ok(/if\(other\) parts\.push\(other\.html\);/.test(rv),
+      "and prints it when the measurement cleared its own threshold");
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

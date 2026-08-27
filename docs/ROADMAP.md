@@ -63,7 +63,7 @@ CLAUDE.md status list and the SPEC.md changelog.
 | **R5.5** | **Near-floor disclosure on the LTAS Difference** — say where a large Δ is two views of the floor rather than a real difference. | ✅ done | `### R5.5 — near-floor disclosure` |
 | **Q3** | Near-floor disclosure carried into the **Band Energy** table and the **At-a-glance** strip — one predicate, three cards. | ✅ done | `### Q3 — the same floor in three cards` |
 | **Q4a** | The **expanded view, truly expanded** (1/2) — collision-mark clicks and Hold-Fade work in the magnify overlay. | ✅ done | `#### Q4a — the two interactions` |
-| **Q4b** | The **expanded view, truly expanded** (2/2) — the overlay carries the sgram card head's Overlay / Colors / Legibility controls. | 🔨 **in progress** — after Q4a, before R6 | `#### Q4b — the controls in the expanded view` |
+| **Q4b** | The **expanded view, truly expanded** (2/2) — the overlay carries the sgram card head's Overlay / Colors / Legibility controls. | ✅ done | `#### Q4b — the controls in the expanded view` |
 | **R6** | **Interval consonance explainer** — joint period, comb alignment, Plomp–Levelt/Sethares roughness. Now also carries **R6.4**, the overlay's time bound (was R5.4). | ⏸ blocked: two `docs/THEORY.md` §2.5 numeric caveats are unresolved (R6.4 is not blocked) | `# R6 — Interval consonance explainer` |
 | **Warped sgram difference** | Replace the removed pixel-wise spectrogram difference with an onset-warped / DTW one. | ⏸ deferred until after R6 | `### Deferred — warped spectrogram difference` |
 | **M3** | Live input; still owes the task-based entry points deferred from M2. | 🚫 gated on explicit user go-ahead | `# Gated` |
@@ -1584,7 +1584,7 @@ no new `verify.sh` step, no new Chrome launch.
 
 ---
 
-#### Q4b — the controls in the expanded view 📝 RECORDED — not started
+#### Q4b — the controls in the expanded view ✅ BUILT (session 27)
 
 The user's (i): "*Overlay, colors, Line style and the options in that row, and the
 Legibility Hold Fade controls in the expanded view*" — i.e. the sgram card head's four
@@ -1613,6 +1613,44 @@ node-moving order has to hold on a cold boot too.
 **Verification, in proportion.** Source-read contracts only, plus one DOM read in the
 existing `?mag=sga` launch asserting the controls are reachable from inside the modal. No
 new suite, no new `verify.sh` step, no new Chrome launch.
+
+**How it landed (session 27, reviewer; `990a5e7`).** 83 lines added / 56 removed in
+`index.html`, of which the great majority is the four groups moving one indent level in.
+Gate green: `tests/r5.test.js` 307 → **324**, `tests/headless.js` 67 → **69**.
+
+- **Q4b.1 shipped exactly as specified — the nodes move, nothing is cloned.** One wrapper
+  `<div class="ctlmove" id="sgramCtlMove">` holds all four groups; one placeholder
+  `<span id="sgramCtlHome" hidden>` marks where it stands; `syncMagCtls(key)` moves it into
+  `#magCtls` (a new last child of `.mag .mhead`) for `sga`/`sgb` and `insertBefore`s it
+  back at the placeholder for everything else. Because the elements are *the same
+  elements*, every `el()` handle, every listener and every `syncSgHarmSel()` write keeps
+  landing wherever the cluster is standing — there is no second copy, so there is nothing
+  to keep in step. `syncMagCtls` is idempotent (it early-returns when the wrapper is
+  already in the right parent *and* the right position), so the cold-boot `?mag=` hook and
+  a re-open of the same view are both no-ops. An inverted contract (`!/cloneNode/`) keeps
+  it that way.
+- **`display:contents` is what makes it free at home.** The wrapper is
+  `.ctlmove{display:contents}`, so in the card head the four `.ctlgroup`s lay out as
+  direct children of `.controls` exactly as before — proved rather than eyeballed: a
+  1440×4600 render of `?demo&open=all&sgnote=all&theme=bright` has the **same SHA-256**
+  before and after the change. Inside the modal, `#magCtls .ctlmove{display:flex}` turns
+  the same node into a real wrapping row, `.mag .mhead` gains `flex-wrap:wrap` with
+  `#magCtls{flex:0 1 100%}` so the cluster takes its own line under the title, and
+  `#magCtls:empty{display:none}` means the six non-spectrogram magnify views are
+  pixel-untouched (checked at `?mag=spec`).
+- **Q4b.2 needed no code, which was the prediction.** All nine sgram handlers already end
+  in `requestDraw()`, and `drawAll()` tail-calls `drawMag()` — so a control changed inside
+  the overlay redraws the overlay. Nine source-read contracts now pin that, one per
+  handler, plus one on `drawAll`'s tail.
+- **The two open decisions, settled — and the first one is a judgement call, not a
+  measurement.** *(a) The exports do **not** travel.* `#sgramPngBtn` / `#sgramJsonBtn` are
+  not a `.ctlgroup`, the recorded split does not name them, and `exportSgramPNG` builds its
+  own canvas stack at a fixed size — offering them beside the expanded picture would
+  promise "export what I am looking at" and hand back something else. They stay in the card
+  head, after the placeholder, and a contract pins that ordering. *(b) Folded-while-away is
+  a non-event*: `.card.collapsed .cardhead .controls{display:none}` (index.html:242) only
+  hides nodes that are still in the card, and M2.6d's fold-toggle exemption list already
+  covers every moved control, so nothing new can trip the fold.
 
 ---
 

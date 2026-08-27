@@ -1927,3 +1927,52 @@ attributes (`data-sgcomb`, `data-sgwin`) are asserted **equal** to pane A's; dra
 (`data-sgclusters`, `data-sglabels`) only **non-zero**, because the 12 px label guard and the
 mark x-stride measure the surface being drawn on and the expanded canvas is a different size.
 No new suite, no new `verify.sh` step, no new Chrome launch.
+
+## Q4b — the expanded view, truly expanded (2/2): the controls (2026-08-26, session 27)
+
+The other half of the same recorded request: the expanded spectrogram should carry the card
+head's *"Overlay, colors, Line style and the options in that row, and the Legibility Hold Fade
+controls"*. Before this, opening the overlay meant losing every control that changes what the
+overlay is showing — you could look closely at a prediction you could no longer adjust. One
+commit (`990a5e7`), 83 lines added / 56 removed in `index.html`, the majority of which is four
+control groups moving one indent level in.
+
+**Move the live nodes; never copy them.** The four `.ctlgroup`s are wrapped in
+`<div class="ctlmove" id="sgramCtlMove">` with a hidden `<span id="sgramCtlHome">` holding its
+seat, and `syncMagCtls(key)` moves that wrapper into `#magCtls` (a new last child of
+`.mag .mhead`) for `sga`/`sgb`, or back to the placeholder for anything else. The alternative —
+cloning the cluster into the modal — needs the two copies kept in step forever, and every
+`el()`-bound handler, every listener and every `syncSgHarmSel()` write would have to learn
+there are two of each. Moving the originals means none of that code changes at all.
+`syncMagCtls` early-returns when the wrapper is already in the right parent *and* position, so
+the cold-boot `?mag=` hook and re-opening the same view are no-ops; `openMag()` calls it
+**before** `drawMag()`, `closeMag()` calls it with `null`.
+
+**`display:contents` is the mechanism.** At home the wrapper is layout-inert, so the groups
+still lay out as direct children of `.controls`: the card head renders byte-identically — a
+1440×4600 `?demo&open=all&sgnote=all&theme=bright` render has the same SHA-256 before and
+after the change, which is the standard this project holds "no visual regression" to. At the
+destination `#magCtls .ctlmove{display:flex}` turns the same node into a real wrapping row,
+`.mag .mhead` gains `flex-wrap:wrap` with `#magCtls{flex:0 1 100%}`, and
+`#magCtls:empty{display:none}` leaves the six non-spectrogram magnify views untouched.
+
+**Q4b.2 needed no code, exactly as the estimate predicted.** All nine sgram handlers already
+end in `requestDraw()`, and `drawAll()` tail-calls `drawMag()` — so a control changed inside
+the overlay redraws the overlay. Nine source-read contracts now pin that, one per handler,
+plus one on `drawAll`'s tail, so the wiring cannot rot silently.
+
+**The two open decisions.** *(a) The exports do not travel* — `#sgramPngBtn` / `#sgramJsonBtn`
+are not a `.ctlgroup`, the recorded split does not name them, and `exportSgramPNG` builds its
+own canvas stack at a fixed size, so offering them beside the expanded picture would promise
+"export what I am looking at" and deliver something else. **This one is the reviewer's
+judgement, not a measurement, and is flagged to the user as such.** *(b) Folding the card while
+its controls are away is a non-event*: `.card.collapsed .cardhead .controls{display:none}` only
+hides nodes still in the card, and M2.6d's fold-toggle exemption list already covers every
+moved control.
+
+**Gate, in proportion.** `tests/r5.test.js` 307 → **324** (17 source-read contracts, all
+mutation-checked and killed) and `tests/headless.js` 67 → **69** — a DOM-order pair folded into
+the launches R5.3 already makes, asserting that at rest `#sgramCtlMove` precedes `#magCtls` in
+the document and that with pane A expanded the very same node sits *inside* the receiver. No
+new suite, no new `verify.sh` step, no new Chrome launch.
+

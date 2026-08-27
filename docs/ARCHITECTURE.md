@@ -194,6 +194,28 @@ power with the same full-scale-sine convention as Welch → resample each frame 
   `tests/dsp.test.js` contract reads the *first* `.popover{` in the stylesheet. And
   `escCascade()` must take `popover` **before** `magModal` — a popover over the overlay is the
   innermost thing on screen, and closing the modal first orphans it.
+- **Q4b (session 27) — the controls travel; they are never copied.** The sgram card head's
+  four `.ctlgroup`s (Overlay / Colors / Legibility / Time axis) live inside one wrapper,
+  `<div class="ctlmove" id="sgramCtlMove">`, with a hidden `<span id="sgramCtlHome">` marking
+  its seat. `syncMagCtls(key)` — called from `openMag()` *before* `drawMag()`, and from
+  `closeMag()` — `appendChild`s that wrapper into `#magCtls` (a new last child of
+  `.mag .mhead`) for the `sga`/`sgb` views and `insertBefore`s it back at the placeholder for
+  everything else. Because these are **the same DOM nodes**, every `el()` handle, listener and
+  `syncSgHarmSel()` write keeps landing wherever the cluster is standing; a cloned set would
+  need mirrored state and two sources of truth for the same control. The move is idempotent
+  (early return when already in the right parent *and* position), so the cold-boot `?mag=`
+  hook and a re-open are no-ops, and an inverted contract (`!/cloneNode/`) keeps the copy
+  route closed.
+- **`display:contents` is what makes the wrapper free at home.** `.ctlmove{display:contents}`
+  means the four groups still lay out as direct children of `.controls` — the card head renders
+  **byte-identically** (same PNG SHA-256 before and after the change). At the destination,
+  `#magCtls .ctlmove{display:flex}` turns the same node into a wrapping row, `.mag .mhead`
+  gains `flex-wrap:wrap` with `#magCtls{flex:0 1 100%}` so the cluster takes its own line under
+  the title, and `#magCtls:empty{display:none}` keeps the six non-spectrogram magnify views
+  pixel-untouched. The **exports stay behind**: `exportSgramPNG` builds its own canvas stack at
+  a fixed size, so a PNG button beside the expanded picture would promise "export what I am
+  looking at" and hand back something else. Redraw needed no code — all nine sgram handlers
+  already end in `requestDraw()` and `drawAll()` tail-calls `drawMag()`.
 
 ### EQ-vocabulary rows in Band Energy
 

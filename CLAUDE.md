@@ -569,22 +569,47 @@ build educational copy from it, never re-derive from scratch.
   launch (no `body{overflow:hidden}` rule + `--hide-scrollbars` means opening the modal cannot
   reflow the page); model-derived attrs asserted **equal** to pane A's, drawing-derived ones only
   **non-zero** (the label guard and mark stride measure the surface being drawn on).
-- **NEXT — the user’s visual test.** R5 is closed; Q4a is built. One task remains before R6:
-  **Q4b — the controls in the expanded view** (the sgram card head’s Overlay / Colors / Legibility
-  groups move into the modal head; ~3–4 units, and mostly taste). Spec: docs/ROADMAP.md
-  `#### Q4b`. (Tasks + gates in
+- **Q4b the expanded view, truly expanded (2/2) BUILT (session 27, reviewer).** The other half:
+  opening the overlay used to mean losing every control that changes what the overlay shows. The
+  four sgram `.ctlgroup`s (Overlay / Colors / Legibility / Time axis) now live in one wrapper,
+  `<div class="ctlmove" id="sgramCtlMove">`, with a hidden `<span id="sgramCtlHome">` holding its
+  seat; **`syncMagCtls(key)`** moves that wrapper into **`#magCtls`** (a new last child of
+  `.mag .mhead`) for `sga`/`sgb` and `insertBefore`s it home for everything else. **The live nodes
+  travel — nothing is cloned:** a copy would need mirrored state, and every `el()` handle,
+  listener and `syncSgHarmSel()` write would have to learn there are two of each; moving the
+  originals changes none of that code. `syncMagCtls` early-returns when the wrapper is already in
+  the right parent *and* position (so the cold-boot `?mag=` hook and a re-open are no-ops); it is
+  called from `openMag()` **before** `drawMag()`, and from `closeMag()` with `null`; an inverted
+  contract (`!/cloneNode/`) keeps the copy route closed. **`.ctlmove{display:contents}`** is what
+  makes the wrapper free at home — the card head renders **byte-identically** (same PNG SHA-256
+  before and after) — while `#magCtls .ctlmove{display:flex}` makes it a real wrapping row at the
+  destination, `.mag .mhead` gains `flex-wrap:wrap` with `#magCtls{flex:0 1 100%}`, and
+  `#magCtls:empty{display:none}` leaves the six non-sgram magnify views pixel-untouched. **Q4b.2
+  needed no code**: all nine sgram handlers already end in `requestDraw()` and `drawAll()`
+  tail-calls `drawMag()` (nine contracts + one on the tail now pin it). **Two decisions, one of
+  them taste:** the **exports stay behind** — `#sgramPngBtn`/`#sgramJsonBtn` are not a
+  `.ctlgroup`, the recorded split doesn't name them, and `exportSgramPNG` builds its own canvas
+  stack at a fixed size, so a PNG button beside the expanded picture would promise "export what
+  I'm looking at" and hand back something else (**reviewer's judgement, flagged to the user**);
+  and folding the card while its controls are away is a non-event
+  (`.card.collapsed .cardhead .controls{display:none}` only hides nodes still in the card, and
+  M2.6d's fold-toggle exemption already covers every moved control). Gate: `tests/r5.test.js`
+  307 → **324** (all 17 mutation-checked), `tests/headless.js` 67 → **69** — a DOM-order pair
+  folded into R5.3's existing launches, no new Chrome launch.
+- **NEXT — the user’s visual test.** R5 is closed; Q4a and Q4b are built, so nothing stands
+  between here and R6. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
   in docs/THEORY.md.) M3/M4 remain gated on explicit user go-ahead.
   **R5.4 (bound the overlay in time) is no longer part of R5** — the user moved it into R6 as
   **R6.4** on 2026-08-26, so R5 closed with R5.5.
-  R5.1/R5.2/R5.6/R5.3/R5.7/Q1/Q2/R5.5/Q3 are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
+  R5.1/R5.2/R5.6/R5.3/R5.7/Q1/Q2/R5.5/Q3/Q4a/Q4b are all built and awaiting the user's visual test. **R6** is the old R5 — interval consonance
   explainers (joint period, comb alignment, Plomp–Levelt roughness) — still blocked until
   the user resolves the two docs/THEORY.md §2.5 numeric caveats (R6.4 is not blocked: it is
   plumbing, not physics). Educational tone: measure
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 307, headless 67, plus
+- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 324, headless 69, plus
   all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless

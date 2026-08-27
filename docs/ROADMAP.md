@@ -62,8 +62,8 @@ CLAUDE.md status list and the SPEC.md changelog.
 | **Q2** | Small changes: the shelf glyph that lied, defaults from real material, a key for the two stars. | ✅ done | `### Q2 — small changes a/b/c` |
 | **R5.5** | **Near-floor disclosure on the LTAS Difference** — say where a large Δ is two views of the floor rather than a real difference. | ✅ done | `### R5.5 — near-floor disclosure` |
 | **Q3** | Near-floor disclosure carried into the **Band Energy** table and the **At-a-glance** strip — one predicate, three cards. | ✅ done | `### Q3 — the same floor in three cards` |
-| **Q4a** | The **expanded view, truly expanded** (1/2) — collision-mark clicks and Hold-Fade work in the magnify overlay. | 📝 recorded, not started — **next build, before R6** | `#### Q4a — the two interactions` |
-| **Q4b** | The **expanded view, truly expanded** (2/2) — the overlay carries the sgram card head's Overlay / Colors / Legibility controls. | 📝 recorded, not started — **after Q4a, before R6** | `#### Q4b — the controls in the expanded view` |
+| **Q4a** | The **expanded view, truly expanded** (1/2) — collision-mark clicks and Hold-Fade work in the magnify overlay. | ✅ done | `#### Q4a — the two interactions` |
+| **Q4b** | The **expanded view, truly expanded** (2/2) — the overlay carries the sgram card head's Overlay / Colors / Legibility controls. | 🔨 **in progress** — after Q4a, before R6 | `#### Q4b — the controls in the expanded view` |
 | **R6** | **Interval consonance explainer** — joint period, comb alignment, Plomp–Levelt/Sethares roughness. Now also carries **R6.4**, the overlay's time bound (was R5.4). | ⏸ blocked: two `docs/THEORY.md` §2.5 numeric caveats are unresolved (R6.4 is not blocked) | `# R6 — Interval consonance explainer` |
 | **Warped sgram difference** | Replace the removed pixel-wise spectrogram difference with an onset-warped / DTW one. | ⏸ deferred until after R6 | `### Deferred — warped spectrogram difference` |
 | **M3** | Live input; still owes the task-based entry points deferred from M2. | 🚫 gated on explicit user go-ahead | `# Gated` |
@@ -1516,7 +1516,7 @@ are away from their card.
 
 ---
 
-#### Q4a — the two interactions 📝 RECORDED — not started
+#### Q4a — the two interactions ✅ BUILT (session 27)
 
 The whole of the user's (a) and (b). No controls move; the overlay is driven by the small
 pane's controls exactly as it is today.
@@ -1554,6 +1554,33 @@ neither is visible from the pane code):
 bindings (in the spirit of the existing R5.1/R5.3 wiring assertions), plus `?mag=sga`
 folded into an **existing** headless launch reading the mirrored `data-*`. No new suite,
 no new `verify.sh` step, no new Chrome launch.
+
+**How it landed (session 27, reviewer; `4db0965` · `c1753b1` · `544ec34` · `09e8591`).**
+111 lines of `index.html`, gate green at 67 headless assertions. Four notes worth keeping:
+
+- **Q4a.1/Q4a.4 shrank into one idea.** The overlay got its own `magHits`, and the pane
+  loop's seven `setAttribute`/`removeAttribute` pairs became **`sgSyncData(canvas, model,
+  nLabels, hits)`** with `sgClearData(canvas)` beside it — the pane and the expanded view
+  of that same pane now report through *one* function, because two near-duplicates are
+  exactly how they would come to disagree about what they are showing. `drawMag()` empties
+  `magHits` and calls `sgClearData(magCanvas)` before dispatching, so the six non-sgram
+  views leave the overlay canvas carrying no spectrogram claims at all.
+- **Q4a.3 split the surface from the pane.** `attachSgFocus(i)` became
+  `attachSgFocus(wrap, canvas, pane)` where `pane` is a **thunk** — the overlay answers
+  "whichever pane is expanded right now" (`magKey==="sga"?0:magKey==="sgb"?1:null`) and
+  returns `null` when the expanded view is not a spectrogram, so the hold is simply not
+  offered. No math changed: `_sgTrackAt` already took the surface's own width and height.
+- **Both ordering traps were real, and both cost one line.** `body.magopen .popover{
+  z-index:80 }` lifts a popover over the modal **only while an expanded view is open** —
+  left global it would also float over About/How/the recording guide, which nothing asked
+  for; and `escCascade()` now takes `popover` before `magModal`, since the popover is the
+  innermost thing on screen. The CSS rule sits deliberately *below* the `.popover` block:
+  a `tests/dsp.test.js` contract reads the **first** `.popover{` in the stylesheet.
+- **The headless launch was folded, not added.** The existing `sgchord=E` launch carries
+  `&mag=sga`; model-derived attributes (`data-sgcomb`, `data-sgwin`) are asserted **equal**
+  to pane A's, drawing-derived ones (`data-sgclusters`, `data-sglabels`) only **non-zero** —
+  the label guard and the mark stride measure the surface being drawn on, and the expanded
+  canvas is a different size. `tests/r5.test.js` 298 → **307**, `tests/headless.js` 64 → **67**.
 
 ---
 

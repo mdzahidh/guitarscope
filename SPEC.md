@@ -1876,3 +1876,54 @@ the `(`. The demo pair has no near-floor region at shipped thresholds, so both v
 proved through real Chrome against a scratch copy with `NEARFLOOR_ABS_DB` lowered to −47
 (lowering `NEARFLOOR_REL_DB` cannot produce a partial floor: `nearFloorDb` takes the **looser**
 of the two tests). No new suite, no new `verify.sh` step, no new Chrome launch.
+
+## Q4a — the expanded view, truly expanded (1/2): the two interactions (2026-08-26, session 27)
+
+The user's request, recorded and split at Q3: *"in the expanded view of the spectrogram, the
+clicking of the collision markers, and Hold-Fade should also work interactively."* The magnify
+overlay had `attachZoom` and nothing else — a spectrogram drawn at full screen where every
+click target R5.3 built was inert and every hold R5.6 built was ignored. Four commits,
+111 lines of `index.html`.
+
+**The overlay is a surface, not a pane — and that is the whole design.** Everything else fell
+out of taking that seriously:
+
+1. **Its own hit array.** `magHits` beside `sgHits[0]`/`sgHits[1]`. The overlay draws at its own
+   size, so a pane's rectangles are wrong for it by construction; reusing them would also leave
+   stale targets live behind the modal. `drawMag()` empties `magHits` and calls
+   `sgClearData(magCanvas)` before dispatching, so the six non-spectrogram views leave the
+   overlay canvas carrying no spectrogram claims at all.
+2. **One reporter, never two.** The pane loop's seven `setAttribute`/`removeAttribute` pairs
+   became `sgSyncData(canvas, model, nLabels, hits)` with `sgClearData(canvas)` beside it, and
+   the overlay's new `drawSgMag(i, ctx, w, h)` calls the same function on `magCanvas`. Two
+   near-duplicates are precisely how a pane and the expanded view of that same pane come to
+   disagree about what they are showing.
+3. **The surface and the pane it shows are different things.** `attachSgFocus(i)` became
+   `attachSgFocus(wrap, canvas, pane)` where `pane` is a **thunk**: the panes pass `()=>0` and
+   `()=>1`, the overlay passes `()=>magKey==="sga"?0:magKey==="sgb"?1:null` and the hold is
+   simply not offered when the expanded view is not a spectrogram. No math changed — `_sgTrackAt`
+   already read the surface's own width and height. `state.sgFocus` is global, so a hold taken in
+   the overlay redraws the panes behind the modal for free (`drawAll()` tail-calls `drawMag()`).
+
+**Both ordering traps found while costing the task were real, and each cost one line.**
+`.popover` is `z-index:60` against `.modal`'s `75`, so a cluster popover opened from inside the
+overlay would have rendered *behind* it: `body.magopen .popover{ z-index:80; }` lifts it **only
+while an expanded view is open** — left global it would also float over About / How to use /
+the recording guide, which nothing asked for. And `escCascade()` closed `magModal` before
+`popover`, orphaning it; the two are now swapped, because a popover over the overlay is the
+innermost thing on screen. The CSS rule sits deliberately *below* the `.popover` block: a
+`tests/dsp.test.js` contract reads the **first** `.popover{` in the stylesheet.
+
+The hover cursor came along too — `magWrap` runs the same hit test the panes run in
+`attachSgramCrosshair` and sets `help`, skipped while a drag owns the cursor (`attachZoom` is
+bound to the same wrap). A click target the cursor doesn't announce is the defect M2.6d went
+looking for.
+
+**Gate, in proportion.** `tests/r5.test.js` 298 → **307** (source-read contracts for the new
+bindings) and `tests/headless.js` 64 → **67** — `&mag=sga` folded into the **existing**
+`sgchord=E` launch rather than adding one, since opening the modal cannot reflow the page
+(there is no `body{overflow:hidden}` rule and headless runs `--hide-scrollbars`). Model-derived
+attributes (`data-sgcomb`, `data-sgwin`) are asserted **equal** to pane A's; drawing-derived ones
+(`data-sgclusters`, `data-sglabels`) only **non-zero**, because the 12 px label guard and the
+mark x-stride measure the surface being drawn on and the expanded canvas is a different size.
+No new suite, no new `verify.sh` step, no new Chrome launch.

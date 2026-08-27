@@ -545,7 +545,34 @@ build educational copy from it, never re-derive from scratch.
   `(`. Both verdict paths proved through real Chrome against a scratch page with
   `NEARFLOOR_ABS_DB` at −47 (lowering `NEARFLOOR_REL_DB` cannot work: the floor is the *looser*
   of the two). No new suite, no new `verify.sh` step, no new Chrome launch.
-- **NEXT — the user’s visual test.** R5 is closed. Two tasks are **recorded, not started** — the user split them 2026-08-26 and scheduled both before R6: **Q4a — the two interactions** (collision-mark clicks and Hold-Fade in the spectrogram’s magnify overlay, which today gets `attachZoom` but neither `attachHitClicks` nor `attachSgFocus`; ~1 unit of work) and then **Q4b — the controls in the expanded view** (the sgram card head’s Overlay / Colors / Legibility groups move into the modal head; ~3–4 units, and mostly taste). Two ordering traps found while costing Q4a and recorded there: `.popover` is `z-index:60` against `.modal`’s `75`, so a cluster popover opened over the overlay renders **behind** it; and `escCascade()` closes `magModal` **before** `popover`, so Esc would orphan the popover. Spec and traps: docs/ROADMAP.md `#### Q4a` / `#### Q4b`. (Tasks + gates in
+- **Q4a the expanded view, truly expanded (1/2) BUILT (session 27, reviewer).** The magnify
+  overlay had `attachZoom` and nothing else: every R5.3 collision mark was inert there and every
+  R5.6 hold ignored. The design is one sentence — **the overlay is a surface, not a pane** — and
+  everything follows. It gets its own `magHits` (a pane's rectangles are wrong for a canvas of a
+  different size, and would also leave stale targets live behind the modal); the pane loop's seven
+  `setAttribute`/`removeAttribute` pairs became **`sgSyncData(canvas,model,nLabels,hits)`** +
+  `sgClearData(canvas)`, which the overlay's new `drawSgMag(i,ctx,w,h)` calls on `magCanvas` —
+  **one reporter**, because two near-duplicates are how a pane and the expanded view of that same
+  pane come to disagree about what they are showing; and `attachSgFocus(i)` became
+  **`attachSgFocus(wrap,canvas,pane)`** with `pane` a **thunk** (`()=>0`, `()=>1`, and
+  `()=>magKey==="sga"?0:magKey==="sgb"?1:null` — `null` when the expanded view isn't a
+  spectrogram, so the hold is simply not offered). `state.sgFocus` is global, so a hold taken in
+  the overlay redraws the panes behind the modal for free (`drawAll()` tail-calls `drawMag()`).
+  `drawMag()` empties `magHits` and clears the attributes before dispatching, so the six
+  non-sgram views leave `magCanvas` claiming nothing. **Both recorded ordering traps were real,
+  one line each:** `body.magopen .popover{ z-index:80; }` lifts a popover over the modal **only
+  while an expanded view is open** (global would also float it over About/How/the guide), placed
+  *below* the `.popover` block because a `dsp.test.js` contract reads the **first** `.popover{`;
+  and `escCascade()` now takes `popover` before `magModal`. `magWrap` runs the panes' own hit
+  test for the `help` cursor, skipped while a drag owns it. Gate: `tests/r5.test.js` 298 →
+  **307**, `tests/headless.js` 64 → **67** — `&mag=sga` folded into the **existing** `sgchord=E`
+  launch (no `body{overflow:hidden}` rule + `--hide-scrollbars` means opening the modal cannot
+  reflow the page); model-derived attrs asserted **equal** to pane A's, drawing-derived ones only
+  **non-zero** (the label guard and mark stride measure the surface being drawn on).
+- **NEXT — the user’s visual test.** R5 is closed; Q4a is built. One task remains before R6:
+  **Q4b — the controls in the expanded view** (the sgram card head’s Overlay / Colors / Legibility
+  groups move into the modal head; ~3–4 units, and mostly taste). Spec: docs/ROADMAP.md
+  `#### Q4b`. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
   in docs/THEORY.md.) M3/M4 remain gated on explicit user go-ahead.
   **R5.4 (bound the overlay in time) is no longer part of R5** — the user moved it into R6 as
@@ -557,7 +584,7 @@ build educational copy from it, never re-derive from scratch.
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 298, headless 64, plus
+- The full gate is green: `./tests/verify.sh` — dsp 187, r3 42, r4 60, m27 51, r5 307, headless 67, plus
   all four tamper guards (`tests/` untouched, all three frozen copy SHAs). `tests/dsp.test.js` includes the M2.6e switch CSS contract and the R1.3
   snapshot back-compat guard, extracted from `index.html` and mutation-checked. Demo pair verified end-to-end
   against a numeric probe of the full pipeline; every view since M2 verified by headless

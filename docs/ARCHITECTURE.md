@@ -172,6 +172,29 @@ power with the same full-scale-sine convention as Welch → resample each frame 
   `?mag=<key>` is the headless hook. Cached spectrogram images are drawn at whatever
   size the scene requests, so no extra invalidation is needed.
 
+- **Q4a (session 27) — the overlay is a *surface*, not a pane.** A spectrogram in the overlay
+  now takes clicks on R5.3's collision marks and R5.6's hold-to-follow, and the whole design is
+  that one distinction. It draws at its own size, so it owns its own hit rectangles (`magHits`,
+  beside `sgHits[0..1]`) — reusing a pane's would be wrong by construction *and* would leave
+  stale targets live behind the modal; `drawMag()` empties them and calls `sgClearData(magCanvas)`
+  before dispatching, so the six non-spectrogram views leave the overlay canvas making no
+  spectrogram claims. The gate-visible `data-sg*` attributes go through **one** function,
+  `sgSyncData(canvas, model, nLabels, hits)`, called by both the pane loop and the overlay's
+  `drawSgMag(i,ctx,w,h)`: two near-duplicate reporters are exactly how a pane and the expanded
+  view of that same pane come to disagree about what they are showing. And `attachSgFocus` takes
+  `(wrap, canvas, pane)` where `pane` is a **thunk** — the panes pass `()=>0`/`()=>1`, the overlay
+  answers "whichever pane is expanded right now" and returns `null` when the expanded view isn't
+  a spectrogram, so the hold is simply not offered rather than guarded at every use. No geometry
+  changed: `_sgTrackAt` already read the surface's own width and height, and `state.sgFocus` is
+  global, so a hold taken in the overlay redraws the panes behind the modal for free.
+- **Two z-order traps live here.** `.popover` is `z-index:60` and `.modal` is `75`, so a popover
+  opened from inside the overlay renders *behind* it — fixed with `body.magopen .popover{
+  z-index:80; }`, scoped to `body.magopen` because a global lift would also float popovers over
+  About / How to use / the recording guide. The rule sits **below** the `.popover` block: a
+  `tests/dsp.test.js` contract reads the *first* `.popover{` in the stylesheet. And
+  `escCascade()` must take `popover` **before** `magModal` — a popover over the overlay is the
+  innermost thing on screen, and closing the modal first orphans it.
+
 ### EQ-vocabulary rows in Band Energy
 
 - The band table gained a second section listing the same six colloquial `EQ_REGIONS`

@@ -565,8 +565,10 @@ body.magopen .popover{ z-index:80; }
   transition:background var(--dur) var(--ease);
 }
 .glossitem > button:hover{ background:var(--panel2); }
-.glossitem .gname{ font-size:13.5px; color:var(--ink); font-weight:500; }
-.glossitem .ghook{ font-size:11.5px; color:var(--dim); margin-top:1px; }
+.glossitem .gname{ display:block; font-size:13.5px; color:var(--ink); font-weight:500; }
+/* both are <span>: without display:block they run together on one line and the
+   margin-top below is inert, so the term and its definition read as one word. */
+.glossitem .ghook{ display:block; font-size:11.5px; line-height:1.45; color:var(--dim); margin-top:2px; }
 .glossdetail{ padding:2px 16px 14px; display:none; }
 .glossitem.open{ background:var(--panel2); }
 .glossitem.open .glossdetail{ display:block; animation:reveal 200ms var(--ease); }

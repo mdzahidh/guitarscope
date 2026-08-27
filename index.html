@@ -2653,10 +2653,24 @@ function fitParametricEq(freqs, targetDb, device){
       for(let k=0;k<n;k++) total[k] -= bandCur[i][k];
       setTrim();
       const qList = spec.qFixed ? [spec.qFixed] : device.qChoices;
-      const NF = 25, lr = Math.log(spec.fMax/spec.fMin);
+      // Bands are declared low-to-high and the device face prints them in that
+      // order, so the fitted centers must not cross: each band scans only
+      // between its neighbours' current centers. For the peaks this is free —
+      // they are interchangeable shapes differing only in allowed range, so any
+      // crossing assignment has an ordered twin with the same response. For a
+      // shelf it is a real (small, measured) constraint: a shelf corner could
+      // legitimately sit among the peaks, but a strip of frequencies that runs
+      // backwards is unreadable and does not transfer to the plug-in.
+      // Both stocked devices declare non-decreasing fMin and fMax, so this
+      // window is never empty; the clamps keep it inside the band's own range
+      // whatever a future device declares.
+      const clampF = f => Math.max(spec.fMin, Math.min(spec.fMax, f));
+      const fLo = i > 0 ? clampF(state[i-1].f) : spec.fMin;
+      const fHi = Math.max(fLo, i < nb-1 ? clampF(state[i+1].f) : spec.fMax);
+      const NF = 25, lr = Math.log(fHi/fLo);
       let best = { sse:Infinity, f:st.f, g:0, q:st.q };
       for(let fi=0; fi<NF; fi++){
-        const fc = spec.fMin*Math.exp(lr*fi/(NF-1));
+        const fc = fLo*Math.exp(lr*fi/(NF-1));
         for(const qc of qList){
           let num = 0, den = 0;
           for(let k=0;k<n;k++){
@@ -2669,6 +2683,22 @@ function fitParametricEq(freqs, targetDb, device){
           const s = sseWith(spec.type, fc, g, qc);
           if(s < best.sse) best = { sse:s, f:fc, g, q:qc };
         }
+      }
+      // Refine the winning center inside its own grid cell, the same way the gain
+      // is refined: the 25-point scan locates the band, the ternary search places
+      // it. Kept inside [fLo,fHi] so the ordering constraint still holds.
+      {
+        const step = Math.exp(lr/(NF-1));
+        let flo2 = Math.max(fLo, best.f/step), fhi2 = Math.min(fHi, best.f*step);
+        for(let it=0; it<24 && fhi2 > flo2; it++){
+          const r = Math.log(fhi2/flo2);
+          const f1 = flo2*Math.exp(r/3), f2 = flo2*Math.exp(2*r/3);
+          if(sseWith(spec.type, f1, best.g, best.q) <= sseWith(spec.type, f2, best.g, best.q)) fhi2 = f2;
+          else flo2 = f1;
+        }
+        const fT = Math.sqrt(flo2*fhi2);
+        const sT = sseWith(spec.type, fT, best.g, best.q);
+        if(sT < best.sse){ best.f = fT; best.sse = sT; }
       }
       let lo = -gMax, hi = gMax;
       for(let it=0; it<24; it++){

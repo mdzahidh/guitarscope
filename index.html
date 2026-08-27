@@ -4850,6 +4850,10 @@ let rafId=0;
 const specHits=[];
 const diffHits=[];
 const sgHits=[[],[]];   // R5.3: per-pane collision-mark click targets
+// Q4a: the magnify overlay draws a spectrogram at its own size, so its hit
+// rectangles are its own — never a pane's, whose targets would go stale behind
+// the modal (and whose rect belongs to a different surface).
+const magHits=[];
 
 function updateCurves(animate){
   const to=[displayedDb(0),displayedDb(1)];
@@ -5345,9 +5349,9 @@ const MAG_VIEWS={
   diff:{ title:()=>"Difference — A − B, dB",
     draw:(ctx,w,h)=>{ const m=buildDiffModel(); if(m) drawDiffScene(ctx,w,h,m); } },
   sga:{ title:()=>sgMagTitle(0),
-    draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(0,sc); if(m) drawSpectrogramScene(ctx,w,h,m); } },
+    draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(0,sc); if(m) drawSpectrogramScene(ctx,w,h,m,magHits); } },
   sgb:{ title:()=>sgMagTitle(1),
-    draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(1,sc); if(m) drawSpectrogramScene(ctx,w,h,m); } },
+    draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(1,sc); if(m) drawSpectrogramScene(ctx,w,h,m,magHits); } },
   env:{ title:()=>"Envelope — dB re full scale",
     draw:(ctx,w,h)=>{ const m=buildEnvModel(); if(m) drawEnvelopeScene(ctx,w,h,m); } },
   eqface:{ title:()=>{ const f=bothLoaded()&&eqFitData(); return "EQ match — "+(f?f.device.name+" settings":"device settings"); },
@@ -5361,6 +5365,7 @@ function drawMag(){
   magTitle.textContent=MAG_VIEWS[magKey].title();
   const {ctx,w,h}=setupCanvas(magCanvas);
   ctx.clearRect(0,0,w,h);
+  magHits.length=0;   // Q4a: the view about to draw owns them; the others leave it empty
   MAG_VIEWS[magKey].draw(ctx,w,h);
 }
 function openMag(key){

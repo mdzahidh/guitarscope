@@ -10,6 +10,22 @@ tone-character panel — with every number traceable to the formula that produce
 It is one HTML file. There is no build step, no server, and no network access of any
 kind.
 
+## Private by design — nothing you drop in ever leaves your browser
+
+**Your recordings are analysed right where they sit: in your own browser, on your own
+machine.** Nothing is uploaded, and there is nothing to upload it to — no backend, no
+API, no analytics, no CDN, no fonts or scripts fetched from anywhere. Claude Rameau is
+a pure client-side page, so the audio you drop in never touches a network at all.
+
+That's not a policy you have to take on trust. It's the architecture:
+
+- **One file, no dependencies.** Read `index.html` and you have read the whole program.
+- **Works with the network off.** Pull the plug, open it from `file://`, and everything
+  — including the demo pair, which is synthesised in the page — still works.
+- **Nothing is stored anywhere but your own browser.** Your tuning, theme and colour
+  choices live in `localStorage`; exports (PNG, CSV, JSON) are written straight to your
+  downloads folder.
+
 ## Open it
 
 ```
@@ -40,13 +56,6 @@ substituted into the formula.
 **How you record matters more than anything in this app.** Change only the guitar:
 same player, same part, same signal chain, same room, same gain staging. The in-app
 *How to record* guide covers it.
-
-## Your recordings never leave the machine
-
-Audio is decoded and analysed in the page. Nothing is uploaded, and there is nothing
-to upload it to: no server, no analytics, no CDN, no fonts or scripts fetched from
-anywhere. You can verify that by reading the one file, or by running it with the
-network off — everything, including the demo pair, works from `file://`.
 
 ## What it measures
 

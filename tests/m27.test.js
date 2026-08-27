@@ -235,7 +235,10 @@ section("M2.7.2 — opts.minHopDiv: the hop floor that made refining pointless")
     // window is published as an attribute for --dump-dom to read. An attribute,
     // not UI: it must not appear on screen or in an export.
     const wired = decomment(b3 + b4);
-    ok(/(setAttribute\s*\(\s*["\x27]data-sgwin["\x27]|dataset\.sgwin)/.test(wired),
+    // Q4a.4: written through one shared reporter now, so a pane and its expanded
+    // view cannot report different windows for the same model.
+    const sgw = (/function sgSyncData\([\s\S]*?\n\}/.exec(wired) || [""])[0];
+    ok(/set\(\s*"data-sgwin"\s*,\s*model\.sg\.win/.test(sgw) && /setAttribute\(/.test(sgw),
       "the pane publishes data-sgwin for the gate to read");
     ok(!/data-sgwin/.test(html.slice(0, html.indexOf("</style>"))),
       "it is never styled — it is a probe, not a surface");

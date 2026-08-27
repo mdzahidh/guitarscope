@@ -436,13 +436,23 @@ section("R5.7 — three base colours, and string hues as a modifier on top");
 section("R5.1 — the pane says what it drew, and the PNG shows it");
 {
   const s = decomment(b4);
-  ok(/setAttribute\(\s*"data-sgcomb"/.test(s),
+  // Q4a.4: one reporter serves a pane and its expanded view — two near-duplicate
+  // blocks are how the two surfaces come to disagree about what they are showing.
+  // So these read the helper's body, and read that the pane pass routes through it.
+  const sync = (/function sgSyncData\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  const clear = (/function sgClearData\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  ok(sync !== "" && clear !== "", "one shared reporter, and one shared clear");
+  ok(/const set\s*=\s*\([^)]*\)\s*=>\s*\{[^}]*removeAttribute\(/.test(sync),
+    "…whose setter drops the attribute on null rather than printing one");
+  ok(/set\(\s*"data-sgcomb"\s*,\s*model\.comb\s*\?/.test(sync),
     "each pane reports its track count — the canvas is unreachable from node");
-  const mSet = /setAttribute\(\s*"data-sgcomb"/.exec(s);
-  ok(!!mSet && /removeAttribute\(\s*"data-sgcomb"/.test(s.slice(mSet.index, mSet.index + 400)),
+  ok(/set\(\s*"data-sgcomb"[^)]*:\s*null\s*\)/.test(sync),
     "…and the same site drops it again when the overlay is off");
-  ok((s.match(/removeAttribute\(\s*"data-sgcomb"/g) || []).length >= 2,
+  ok(/"data-sgcomb"/.test(clear),
     "…and the no-source pass clears it too, as it already clears data-sgwin");
+  ok(/sgSyncData\(\s*sgramCanvases\s*\[\s*i\s*\]/.test(s) &&
+     /sgClearData\(\s*sgramCanvases\s*\[\s*i\s*\]/.test(s),
+    "…and both pane passes go through the shared pair");
   // A PNG is a picture of what the user is looking at (user request, 2026-08-25).
   // No exporter may blank the overlay, the strings axis or the shown harmonics
   // behind the user's back; CSV/JSON stay data-only, asserted above.
@@ -760,11 +770,13 @@ section("R5.6 — the hooks, and the pane attributes a node gate can read");
     "?sgfocus= takes a string index only — out of range holds nothing");
   ok(!/gsScrim|gsDim|gsFocus|["'](sgscrim|sgdim|sgfocus)["']\s*:/.test(s),
     "…and nothing about them is remembered, like every other gate hook");
-  const da = /function drawAll[\s\S]*?\n\}/.exec(s);
-  const d = da ? da[0] : "";
-  ok(/data-sglabels/.test(d), "each pane reports how many labels it drew");
-  ok(/data-sgfocus/.test(d), "…and which comb it is holding, if any");
-  ok(/removeAttribute\s*\(\s*"data-sglabels"\s*\)/.test(d) && /removeAttribute\s*\(\s*"data-sgfocus"\s*\)/.test(d),
+  const sync = (/function sgSyncData\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  const clear = (/function sgClearData\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  ok(/set\(\s*"data-sglabels"\s*,\s*model\.comb\s*\?\s*nLabels/.test(sync),
+    "each pane reports how many labels it drew");
+  ok(/set\(\s*"data-sgfocus"[^)]{0,60}model\.focus/.test(sync),
+    "…and which comb it is holding, if any");
+  ok(/"data-sglabels"/.test(clear) && /"data-sgfocus"/.test(clear),
     "…and clears both when there is nothing to report");
 }
 // ---------------------------------------------------------- R5.3 wiring ----
@@ -1020,14 +1032,16 @@ section("R5.3 — the door, and what a node gate can count");
     "?pop=clu<N> pins the Nth cluster's popover — the canvas is unreachable from node");
   ok(!/gsClusters|["']sgclusters["']\s*:/.test(s),
     "nothing about the marks is remembered — they are a reading of the overlay");
-  const da = /function drawAll[\s\S]*?\n\}/.exec(s);
-  const d = da ? da[0] : "";
-  ok(/setAttribute\s*\(\s*"data-sgclusters"/.test(d), "each pane reports how many marks it drew");
-  // Twice: once when a pane drew no marks, once when the card is folded and neither pane
-  // drew at all. A stale count is worse than none — it would read as marks a reader can click.
-  ok((d.match(/removeAttribute\s*\(\s*"data-sgclusters"\s*\)/g) || []).length === 2,
+  const sync = (/function sgSyncData\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  const clear = (/function sgClearData\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  ok(/set\(\s*"data-sgclusters"/.test(sync), "each pane reports how many marks it drew");
+  // Two ways to have nothing to say: a pane that drew no marks (the ||null below), and a
+  // folded card that drew no pane at all (the shared clear). A stale count is worse than
+  // none — it would read as marks a reader can click.
+  ok(/set\(\s*"data-sgclusters"\s*,\s*[A-Za-z]+\s*\|\|\s*null\s*\)/.test(sync) &&
+     /"data-sgclusters"/.test(clear),
     "…and clears the count both when a pane finds nothing and when the card is folded");
-  ok(/sgHits\s*\[\s*i\s*\]\.filter\([\s\S]{0,40}cluster/.test(d),
+  ok(/hits\.filter\([\s\S]{0,40}cluster/.test(sync),
     "the count is the marks actually drawn, not the clusters found");
 }
 
@@ -1244,6 +1258,31 @@ section("Q3 — the same floor in the Band Energy table and the At-a-glance stri
   ok(/\.delta-floor\s*\{[^}]*var\(--dim\)[^}]*opacity/.test(html),
     ".delta-floor is dim and faint in the stylesheet — the table's equivalent of the " +
     "Difference plot's dashed, dimmed near-floor run");
+}
+
+// -------------------------------------------------------------- Q4a.4 ----
+// The expanded view of a spectrogram pane is the same model on a bigger canvas.
+// It draws through the same scene builder and reports through the same reporter,
+// so it can never claim a window, a track count or a mark count its pane doesn't.
+section("Q4a.4 — the expanded view reports what it drew, through the pane's reporter");
+{
+  const s = decomment(b4);
+  const dsm = (/function drawSgMag\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  ok(dsm !== "", "drawSgMag() draws one pane's expanded view");
+  ok(/sgramModelFor\(/.test(dsm) && /drawSpectrogramScene\(/.test(dsm),
+    "…from that pane's own model, through the same scene builder — never a second " +
+    "drawing path that could drift");
+  ok(/sgSyncData\(\s*magCanvas\s*,/.test(dsm),
+    "…and reports onto magCanvas through the shared reporter");
+  ok(/drawSpectrogramScene\([^)]*magHits\s*\)/.test(dsm),
+    "…filling the overlay's own hit array, so a mark there is clickable (Q4a.2)");
+  const mv = (/const MAG_VIEWS\s*=[\s\S]*?\n\};/.exec(s) || [""])[0];
+  ok(/sga\s*:\s*\{[^}]*drawSgMag\(\s*0/.test(mv) && /sgb\s*:\s*\{[^}]*drawSgMag\(\s*1/.test(mv),
+    "both spectrogram entries in MAG_VIEWS route through it, pane index and all");
+  const dm = (/function drawMag\(\)[\s\S]*?\n\}/.exec(s) || [""])[0];
+  ok(/sgClearData\(\s*magCanvas\s*\)/.test(dm),
+    "every expanded view clears the attributes before it draws — only a spectrogram " +
+    "puts them back, so a line plot never inherits the last pane's numbers");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

@@ -686,12 +686,35 @@ section("R5.3 — the marks say where two strings meet");
   // a build marking a constant (every landing of the tuning, say, rather than of
   // what is sounding) prints one number for both shapes. Relational, because the
   // x-stride thinner reads the plot width, and the plot width moved at R5.7.
-  const e = domDrawn(SG + "&sgchord=E", bothCombed);
+  // Q4a.4 rides along on this launch: the expanded view of pane A is the same model
+  // on a bigger canvas, so it is asked the same questions here rather than in a
+  // Chrome launch of its own.
+  const magged = p => bothCombed(p) && sgattr(p, "magCanvas", "data-sgcomb") !== null;
+  const e = domDrawn(SG + "&sgchord=E&mag=sga", magged);
   const nE = sgattr(e, "sgramCanvasA", "data-sgclusters");
   ok(nE > 0, "E major's 36 partials land on each other, and the pane says how often",
     String(nE));
   ok(sgattr(e, "sgramCanvasB", "data-sgclusters") === nE, "…on both panes",
     String(sgattr(e, "sgramCanvasB", "data-sgclusters")));
+
+  // The expanded view draws the same model, so the counts that come from the model
+  // must match the pane exactly …
+  ok(sgattr(e, "magCanvas", "data-sgcomb") === sgcomb(e, "sgramCanvasA") &&
+     sgattr(e, "magCanvas", "data-sgwin") === sgattr(e, "sgramCanvasA", "data-sgwin"),
+    "the expanded view carries the pane's own partial count and window",
+    sgattr(e, "magCanvas", "data-sgcomb") + " partials, window " +
+    sgattr(e, "magCanvas", "data-sgwin"));
+  // … while the counts that come from the *drawing* need only be real. Both the
+  // label guard and the mark stride measure the canvas they are drawing on, and
+  // the expanded canvas is a different size — equality here would be asserting a
+  // coincidence, not the wiring.
+  ok(sgattr(e, "magCanvas", "data-sgclusters") > 0 &&
+     sgattr(e, "magCanvas", "data-sglabels") > 0,
+    "…and reports marks and labels of its own, so both are clickable there",
+    sgattr(e, "magCanvas", "data-sgclusters") + " marks, " +
+    sgattr(e, "magCanvas", "data-sglabels") + " labels");
+  ok(!/id="magCanvas"[^>]*data-sgfocus/.test(e),
+    "…and holds no comb until someone holds one");
 
   const c = domDrawn(SG + "&sgchord=C", combed("sgramCanvasA"));
   const nC = sgattr(c, "sgramCanvasA", "data-sgclusters");

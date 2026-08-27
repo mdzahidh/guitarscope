@@ -4860,6 +4860,28 @@ const sgHits=[[],[]];   // R5.3: per-pane collision-mark click targets
 // rectangles are its own — never a pane's, whose targets would go stale behind
 // the modal (and whose rect belongs to a different surface).
 const magHits=[];
+// Q4a.4: what a spectrogram surface just painted, reported for the gate — the canvas
+// is unreachable from node, so these attributes are the only way a test can see it.
+// Absent rather than "0" throughout (the house convention), and one function, because
+// two near-duplicates are how a pane and the expanded view of that same pane come to
+// disagree about what they are showing.
+function sgSyncData(canvas,model,nLabels,hits){
+  const set=(k,v)=>{ if(v==null) canvas.removeAttribute(k); else canvas.setAttribute(k,String(v)); };
+  set("data-sgwin", model.sg.win);
+  set("data-sgcmap", model.cmap||"magma");
+  set("data-sgtrack", model.comb?(model.track||"white"):null);
+  set("data-sgcomb", model.comb?model.comb.length:null);
+  set("data-sglabels", model.comb?nLabels:null);
+  set("data-sgfocus", (model.comb&&model.focus!=null)?model.focus:null);
+  // R5.3: marks actually drawn, which is not the cluster count — the overlap guard
+  // drops some — so a surface reports what a reader can actually click.
+  const nClu=hits.filter(hh=>hh.cluster).length;
+  set("data-sgclusters", nClu||null);
+}
+function sgClearData(canvas){
+  for(const k of ["data-sgwin","data-sgcomb","data-sgcmap","data-sgtrack",
+                  "data-sglabels","data-sgfocus","data-sgclusters"]) canvas.removeAttribute(k);
+}
 
 function updateCurves(animate){
   const to=[displayedDb(0),displayedDb(1)];
@@ -5297,31 +5319,9 @@ function drawAll(){
     const c=setupCanvas(sgramCanvases[i]);
     sgHits[i].length=0;
     const nLabels=drawSpectrogramScene(c.ctx,c.w,c.h,model,sgHits[i]);
-    sgramCanvases[i].setAttribute("data-sgwin", String(model.sg.win));
-    // The look this pane actually painted (colormap always; track style only when
-    // there is a track). Same reason as data-sgwin: node cannot read the canvas.
-    sgramCanvases[i].setAttribute("data-sgcmap", model.cmap||"magma");
-    if(model.comb) sgramCanvases[i].setAttribute("data-sgtrack", model.track||"white");
-    else sgramCanvases[i].removeAttribute("data-sgtrack");
-    // R5.1: pane reports its own overlay track count — the canvas is unreachable from node.
-    if(model.comb) sgramCanvases[i].setAttribute("data-sgcomb", String(model.comb.length));
-    else sgramCanvases[i].removeAttribute("data-sgcomb");
-    // R5.6: …and how many of those tracks it could name, and which comb it is holding.
-    if(model.comb) sgramCanvases[i].setAttribute("data-sglabels", String(nLabels));
-    else sgramCanvases[i].removeAttribute("data-sglabels");
-    if(model.comb && model.focus!=null) sgramCanvases[i].setAttribute("data-sgfocus", String(model.focus));
-    else sgramCanvases[i].removeAttribute("data-sgfocus");
-    // R5.3: marks actually drawn, which is not the cluster count — the overlap
-    // guard drops some — so the pane reports what a reader can click.
-    const nClu=sgHits[i].filter(hh=>hh.cluster).length;
-    if(nClu) sgramCanvases[i].setAttribute("data-sgclusters", String(nClu));
-    else sgramCanvases[i].removeAttribute("data-sgclusters");
+    sgSyncData(sgramCanvases[i],model,nLabels,sgHits[i]);
   } else {
-    for(let i=0;i<2;i++){ sgHits[i].length=0;
-      sgramCanvases[i].removeAttribute("data-sgwin"); sgramCanvases[i].removeAttribute("data-sgcomb");
-      sgramCanvases[i].removeAttribute("data-sgcmap"); sgramCanvases[i].removeAttribute("data-sgtrack");
-      sgramCanvases[i].removeAttribute("data-sglabels"); sgramCanvases[i].removeAttribute("data-sgfocus");
-      sgramCanvases[i].removeAttribute("data-sgclusters"); }
+    for(let i=0;i<2;i++){ sgHits[i].length=0; sgClearData(sgramCanvases[i]); }
   }
   const em=collState.env?null:buildEnvModel();
   if(em){
@@ -5354,10 +5354,8 @@ const MAG_VIEWS={
     draw:(ctx,w,h)=>{ if(anyLoaded()) drawSpectrumScene(ctx,w,h,buildSpecModel(false),[]); } },
   diff:{ title:()=>"Difference — A − B, dB",
     draw:(ctx,w,h)=>{ const m=buildDiffModel(); if(m) drawDiffScene(ctx,w,h,m); } },
-  sga:{ title:()=>sgMagTitle(0),
-    draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(0,sc); if(m) drawSpectrogramScene(ctx,w,h,m,magHits); } },
-  sgb:{ title:()=>sgMagTitle(1),
-    draw:(ctx,w,h)=>{ const sc=sgramScale(), m=sc&&sgramModelFor(1,sc); if(m) drawSpectrogramScene(ctx,w,h,m,magHits); } },
+  sga:{ title:()=>sgMagTitle(0), draw:(ctx,w,h)=>drawSgMag(0,ctx,w,h) },
+  sgb:{ title:()=>sgMagTitle(1), draw:(ctx,w,h)=>drawSgMag(1,ctx,w,h) },
   env:{ title:()=>"Envelope — dB re full scale",
     draw:(ctx,w,h)=>{ const m=buildEnvModel(); if(m) drawEnvelopeScene(ctx,w,h,m); } },
   eqface:{ title:()=>{ const f=bothLoaded()&&eqFitData(); return "EQ match — "+(f?f.device.name+" settings":"device settings"); },
@@ -5366,12 +5364,22 @@ const MAG_VIEWS={
     draw:(ctx,w,h)=>{ const m=bothLoaded()&&buildEqModels(); if(m) drawEqRespScene(ctx,w,h,m.resp); } },
 };
 let magKey=null;
+// Q4a.4: the expanded view of pane i, drawn on its own canvas at its own size and
+// reporting through the pane's own reporter — same model, same numbers, so the
+// expanded view of a spectrogram can never claim something its pane doesn't.
+function drawSgMag(i,ctx,w,h){
+  const sc=sgramScale(), m=sc&&sgramModelFor(i,sc);
+  if(!m) return;
+  const nLabels=drawSpectrogramScene(ctx,w,h,m,magHits);
+  sgSyncData(magCanvas,m,nLabels,magHits);
+}
 function drawMag(){
   if(!magKey||!magModal.classList.contains("open")) return;
   magTitle.textContent=MAG_VIEWS[magKey].title();
   const {ctx,w,h}=setupCanvas(magCanvas);
   ctx.clearRect(0,0,w,h);
   magHits.length=0;   // Q4a: the view about to draw owns them; the others leave it empty
+  sgClearData(magCanvas);   // …and only a spectrogram view puts these back
   MAG_VIEWS[magKey].draw(ctx,w,h);
 }
 function openMag(key){

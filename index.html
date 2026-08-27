@@ -675,6 +675,11 @@ kbd{
   transition:color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .magbtn:hover{ color:var(--ink); border-color:var(--hair); }
+/* Spectrum + Difference carry the region lane across the top margin, and its
+   labels are anchored to frequencies — they cannot slide out of the way. That
+   corner of the plot itself is empty, so the buttons move into it instead.
+   --laneh follows PLOT.mT (34, or 48 for two-row vocabularies; syncLaneHeight). */
+.magbtn.inplot{ top:calc(var(--laneh, 34px) + 4px); right:22px; }
 
 /* interactive zoom */
 .zoombox{
@@ -858,7 +863,7 @@ kbd{
         </div>
         <div class="subbody">
           <div class="plotwrap" id="specWrap">
-            <button class="magbtn" data-mag="spec" title="Magnify" aria-label="Magnify spectrum plot">⤢</button>
+            <button class="magbtn inplot" data-mag="spec" title="Magnify" aria-label="Magnify spectrum plot">⤢</button>
             <canvas id="specCanvas"></canvas>
             <div class="xline" id="specXline"></div>
             <div class="readout" id="specReadout"></div>
@@ -892,7 +897,7 @@ kbd{
         </div>
         <div class="subbody">
           <div class="plotwrap" id="diffWrap">
-            <button class="magbtn" data-mag="diff" title="Magnify" aria-label="Magnify difference plot">⤢</button>
+            <button class="magbtn inplot" data-mag="diff" title="Magnify" aria-label="Magnify difference plot">⤢</button>
             <canvas id="diffCanvas"></canvas>
             <div class="xline" id="diffXline"></div>
             <div class="readout" id="diffReadout"></div>
@@ -981,7 +986,6 @@ kbd{
       </div>
       <div class="cardbody">
         <div class="plotwrap">
-          <button class="magbtn" data-mag="eqface" title="Magnify" aria-label="Magnify EQ device panel">⤢</button>
           <canvas id="eqFaceCanvas"></canvas>
         </div>
         <div class="plotwrap" id="eqRespWrap">
@@ -3362,6 +3366,19 @@ function termHtml(key, text){
 
 const PLOT={ mL:52, mR:18, mT:34, mB:34 }; // mT holds the EQ-region lane (34, or 48 for
 // two-row vocabularies — syncLaneHeight() keeps it in step); mB holds Hz ticks + string labels
+
+// The magnify button is a DOM element inside .plotwrap that the canvas cannot see:
+// 26x24 px at top:8px/right:8px (the .magbtn rule). Its corner placement is deliberate,
+// so canvas text keeps clear of it rather than the other way round — slid left where the
+// text is free to move, skipped where it is anchored to a frequency.
+const MAGBTN_W=26, MAGBTN_H=24, MAGBTN_PAD=8;
+const MAGBTN_BOT=MAGBTN_PAD+MAGBTN_H;                    // 32 — below this the corner is free
+function magSafeX(w){ return w-MAGBTN_PAD-MAGBTN_W-4; }  // rightmost x text may reach
+function overMagBtn(w, xRight, yTop){ return xRight>magSafeX(w) && yTop<MAGBTN_BOT+2; }
+// Spectrum + Difference instead put the button inside the plot (.magbtn.inplot,
+// right:22px), where the status chip lives — the chip's box ends at w-26, the button
+// starts at w-48, so 30 px of inset leaves a gap.
+const CHIP_INPLOT_INSET=30;
 const CSS_COLORS={};
 function cssColor(name){
   if(!CSS_COLORS[name]){
@@ -3680,7 +3697,11 @@ function laneTwoRows(){
   const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
   return vocab.regions.some(r=>r.row===1);
 }
-function syncLaneHeight(){ PLOT.mT=laneTwoRows()?48:34; }
+function syncLaneHeight(){
+  PLOT.mT=laneTwoRows()?48:34;
+  // .magbtn.inplot sits just under the lane, so it follows the lane's height
+  document.documentElement.style.setProperty("--laneh", PLOT.mT+"px");
+}
 function drawEqLane(ctx, w, hits){
   const vocab=VOCAB_BY_ID[VOCAB_ACTIVE]||VOCAB_BY_ID.eq;
   const twoRows=laneTwoRows();
@@ -3797,11 +3818,13 @@ function drawPeakDots(ctx, w, h, peaks, grid, db, yMin, yMax, color, hits){
 }
 
 // ---------- status chip (smoothing / level-match) drawn on plot ----------
-function drawStatusChip(ctx, w, text){
+// rightInset pushes the chip further left, for the two plots whose magnify button
+// sits inside the plot's own top-right corner (CHIP_INPLOT_INSET).
+function drawStatusChip(ctx, w, text, rightInset){
   ctx.save();
   ctx.font=FONT_XS;
   const tw=ctx.measureText(text).width;
-  const x=w-PLOT.mR-tw-16, y=PLOT.mT+8;
+  const x=w-PLOT.mR-tw-16-(rightInset||0), y=PLOT.mT+8;
   ctx.fillStyle=cssRGBA("chip-rgb",0.85);
   ctx.strokeStyle=cssRGBA("chipline-rgb",0.9);
   ctx.lineWidth=1; // don't inherit the caller's curve stroke width
@@ -3866,7 +3889,7 @@ function drawSpectrumScene(ctx, w, h, model, hits){
   }
   // the ✦ row owns the top-left corner when it is present, so the legend drops below it
   drawLegend(ctx, w, model.curves.map(c=>({color:c.color, label:c.label})), nCoin?20:0);
-  drawStatusChip(ctx, w, model.statusText);
+  drawStatusChip(ctx, w, model.statusText, CHIP_INPLOT_INSET);
   for(const c of model.curves){
     if(c.annotations && c.annotations.length)
       drawPeakDots(ctx, w, h, c.annotations, model.grid, c.db, model.yMin, model.yMax, c.color, hits);
@@ -3956,7 +3979,7 @@ function drawDiffScene(ctx, w, h, model, hits){
   ctx.fillText("▲ "+model.nameA+" louder", PLOT.mL+8, PLOT.mT+10);
   ctx.fillStyle=withAlpha(model.colorB,0.8);
   ctx.fillText("▼ "+model.nameB+" louder", PLOT.mL+8, PLOT.mT+pH-10);
-  drawStatusChip(ctx, w, model.statusText); // smoothing + level-match + zoom (house rule)
+  drawStatusChip(ctx, w, model.statusText, CHIP_INPLOT_INSET); // smoothing + level-match + zoom (house rule)
   ctx.restore();
 }
 
@@ -4269,7 +4292,11 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
   ctx.strokeStyle=cssColor("hair2");
   ctx.strokeRect(cbX+0.5, SGPLOT.mT+0.5, cbW-1, pH-1);
   ctx.font=FONT_XS; ctx.fillStyle=cssColor("dim"); ctx.textAlign="left";
-  ctx.textBaseline="bottom"; ctx.fillText((dbMax>0?"+":"")+dbMax+" dB", cbX-2, SGPLOT.mT-4);
+  const dbTop=(dbMax>0?"+":"")+dbMax+" dB", dbTopR=cbX-2+ctx.measureText(dbTop).width;
+  // both this and the status text sit in the magnify button's row when the top margin is at
+  // its base height (30); shift them left together so their spacing survives the dodge
+  const magShift=overMagBtn(w, dbTopR, SGPLOT.mT-13) ? dbTopR-magSafeX(w) : 0;
+  ctx.textBaseline="bottom"; ctx.fillText(dbTop, cbX-2-magShift, SGPLOT.mT-4);
   ctx.textBaseline="top";    ctx.fillText(dbMin+" dB", cbX-2, SGPLOT.mT+pH+4);
 
   // file name (top margin — never over data)
@@ -4277,11 +4304,13 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
   ctx.fillStyle=color;
   ctx.beginPath(); ctx.arc(SGPLOT.mL+4, 15, 3.5, 0, 2*Math.PI); ctx.fill();
   ctx.fillStyle=cssColor("mut"); ctx.textAlign="left";
-  const nm=name.length>44 ? name.slice(0,42)+"…" : name;
+  let nm=name.length>44 ? name.slice(0,42)+"…" : name;
+  const nmMax=magSafeX(w)-(SGPLOT.mL+13);
+  while(nm.length>1 && ctx.measureText(nm).width>nmMax) nm=nm.slice(0,-2)+"…";
   ctx.fillText(nm, SGPLOT.mL+13, 15.5);
   if(model.statusText){
     ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint"); ctx.textAlign="right";
-    ctx.fillText(model.statusText, cbX-20, 15.5);
+    ctx.fillText(model.statusText, cbX-20-magShift, 15.5);
   }
   if(model.zoomNote){   // active window always printed (house rule); bottom margin — top is full
     ctx.font=FONT_XS; ctx.fillStyle=cssColor("mut");

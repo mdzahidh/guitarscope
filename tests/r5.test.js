@@ -1301,10 +1301,12 @@ section("Q4b — the controls travel; they are never duplicated");
   ok(/class="ctlmove"/.test(head.slice(Math.max(0, iMove - 60), iMove)),
     "…the cluster is the .ctlmove node itself, so one move takes every group with it");
   const inside = head.slice(iMove, iHome);
-  ok((inside.match(/class="ctlgroup"/g) || []).length === 4 &&
+  ok((inside.match(/class="ctlgroup"/g) || []).length === 3 &&
      />\s*Overlay\s*</.test(inside) && />\s*Colors\s*</.test(inside) &&
-     />\s*Legibility\s*</.test(inside) && />\s*Time axis\s*</.test(inside),
-    "…and it holds all four groups — Overlay, Colors, Legibility, Time axis");
+     />\s*Legibility\s*</.test(inside) && !/>\s*Time axis\s*</.test(inside),
+    "…and it holds the three groups that change what the picture shows — Overlay, " +
+    "Colors, Legibility. Time axis stays behind: it is a property of the pane's own " +
+    "x-axis, not of the expanded picture");
   ok(iExp > iHome && head.slice(iHome, iExp).indexOf("ctlmove") < 0,
     "the exports stay behind: PNG and JSON build their own canvas at a fixed size, so " +
     "an export button in the expanded view would promise 'what I'm looking at' and " +

@@ -62,7 +62,8 @@ CLAUDE.md status list and the SPEC.md changelog.
 | **Q2** | Small changes: the shelf glyph that lied, defaults from real material, a key for the two stars. | ✅ done | `### Q2 — small changes a/b/c` |
 | **R5.5** | **Near-floor disclosure on the LTAS Difference** — say where a large Δ is two views of the floor rather than a real difference. | ✅ done | `### R5.5 — near-floor disclosure` |
 | **Q3** | Near-floor disclosure carried into the **Band Energy** table and the **At-a-glance** strip — one predicate, three cards. | ✅ done | `### Q3 — the same floor in three cards` |
-| **Q4** | The **expanded view, truly expanded** — collision-mark clicks and Hold-Fade work in the magnify overlay, and it carries the small pane's controls. | 📝 recorded, not started — **scheduled before R6** | `### Q4 — the expanded view, truly expanded` |
+| **Q4a** | The **expanded view, truly expanded** (1/2) — collision-mark clicks and Hold-Fade work in the magnify overlay. | 📝 recorded, not started — **next build, before R6** | `#### Q4a — the two interactions` |
+| **Q4b** | The **expanded view, truly expanded** (2/2) — the overlay carries the sgram card head's Overlay / Colors / Legibility controls. | 📝 recorded, not started — **after Q4a, before R6** | `#### Q4b — the controls in the expanded view` |
 | **R6** | **Interval consonance explainer** — joint period, comb alignment, Plomp–Levelt/Sethares roughness. Now also carries **R6.4**, the overlay's time bound (was R5.4). | ⏸ blocked: two `docs/THEORY.md` §2.5 numeric caveats are unresolved (R6.4 is not blocked) | `# R6 — Interval consonance explainer` |
 | **Warped sgram difference** | Replace the removed pixel-wise spectrogram difference with an onset-warped / DTW one. | ⏸ deferred until after R6 | `### Deferred — warped spectrogram difference` |
 | **M3** | Live input; still owes the task-based entry points deferred from M2. | 🚫 gated on explicit user go-ahead | `# Gated` |
@@ -1500,27 +1501,95 @@ fill. The R5.3 popover (`openClusterPopover`) and R5.6c's `_sgTrackAt()` are oth
 geometry-agnostic — they read a canvas rect and `SGPLOT` — so both should be reusable rather
 than duplicated.
 
-**Shape of the work (not a commitment to a diff).**
+**Split into two sub-milestones (2026-08-26, the user's own division).** Asked for the
+relative complexity and whether both could run inside R5 before R6, the user fixed the
+order: *"I only meant, having the following as the minimal as a first submilestone — a/
+click on the collision marker and showing popout; b. click and hold a frequency line to
+fade other frequency lines and only highlight the frequency i am hold on to and its comb
+(the same feature in the spectrogram regular view). and then having as a separate sub
+milestone — i/ Overlay, colors, Line style and the options in that row, and the Legibility
+Hold Fade controls in the expanded view."* So **Q4a is the interactions, Q4b is the
+controls**, in that order, both before R6. Costed at roughly **1 unit vs 3–4**: Q4a is
+~40 lines of plumbing with two one-line ordering traps; Q4b is ~50 JS + ~15 CSS and is
+mostly taste — layout of a head that has never wrapped, and what happens to controls that
+are away from their card.
 
-- **Q4.1** — Give the overlay its own hit array (a third slot, or a small `{hits, pane}` record
-  keyed by `magKey`) and pass it into `drawSpectrogramScene` from the `sga`/`sgb` `MAG_VIEWS`
-  entries. Keep `sgHits` pane-indexed; do **not** let the overlay write into a pane's slot, or
-  the pane's own targets go stale behind the modal.
-- **Q4.2** — Bind `attachHitClicks(magCanvas, <that array>)` and an `attachSgFocus`-equivalent
-  for the overlay. `attachSgFocus` currently closes over a pane index `i` for both the canvas
-  and the model; it needs the index split from the canvas so the same code serves both.
-- **Q4.3** — Carry the sgram card head's controls into the modal head, so the expanded view is
-  the same instrument: Overlay note + harmonic limit (`#sgNoteSel` / `#sgHarmSel`), Colors
-  (`#sgCmapSel` / `#sgTrackSel` / `#sgDashSel` / `#sgHueChk` / the three Triad pickers), Scrim
-  and Hold-fade (`#sgScrimRange` / `#sgDimRange`), and the time-alignment segment
-  (`#sgAlignSeg`). Cheapest honest route is to **move the live nodes** into the modal head on
+---
+
+#### Q4a — the two interactions 📝 RECORDED — not started
+
+The whole of the user's (a) and (b). No controls move; the overlay is driven by the small
+pane's controls exactly as it is today.
+
+- **Q4a.1** — Give the overlay its own hit array (a third slot, or a small `{hits, pane}`
+  record keyed by `magKey`) and pass it into `drawSpectrogramScene` from the `sga`/`sgb`
+  `MAG_VIEWS` entries. Keep `sgHits` pane-indexed; do **not** let the overlay write into a
+  pane's slot, or the pane's own targets go stale behind the modal.
+- **Q4a.2** — Bind `attachHitClicks(magCanvas, <that array>)`. This is the user's (a).
+- **Q4a.3** — Bind an `attachSgFocus`-equivalent for the overlay. This is the user's (b).
+  `attachSgFocus` currently closes over a pane index `i` for both the canvas and the model;
+  it needs the index split from the canvas so the same code serves both surfaces.
+  `_sgTrackAt(i,x,y,w,h)` already takes the surface's own width and height and reads
+  `SGPLOT` live, so the differently-sized overlay canvas is not a math problem; and
+  `state.sgFocus` is global, so a focus taken in the overlay redraws the panes behind it
+  for free.
+- **Q4a.4** — Mirror `data-sgclusters` / `data-sgfocus` / `data-sglabels` onto `magCanvas`
+  (absent rather than `"0"`, the house convention) so the gate can see any of this. The
+  pane loop sets them at index.html:5302–5314; both callers should share one helper rather
+  than carry a near-duplicate block.
+
+**Two ordering traps, both one-liners once seen** (found while costing this, 2026-08-26 —
+neither is visible from the pane code):
+
+- **`.popover` is `z-index:60` (index.html:485) and `.modal` is `z-index:75`
+  (index.html:607).** A cluster popover opened from inside the overlay renders *behind* the
+  modal — the feature reads as a dead click while working perfectly. Needs a deliberate
+  call: raise the popover above modals generally, or only while a mag view is open.
+- **`escCascade()` closes `magModal` before `popover`** (index.html:7968–7970). With a
+  popover open over the overlay, Esc dismisses the whole expanded view and orphans the
+  popover on the page behind it. The cascade has to close the popover first when both are
+  open.
+
+**Verification, in proportion.** Source-read contracts in `tests/r5.test.js` for the new
+bindings (in the spirit of the existing R5.1/R5.3 wiring assertions), plus `?mag=sga`
+folded into an **existing** headless launch reading the mirrored `data-*`. No new suite,
+no new `verify.sh` step, no new Chrome launch.
+
+---
+
+#### Q4b — the controls in the expanded view 📝 RECORDED — not started
+
+The user's (i): "*Overlay, colors, Line style and the options in that row, and the
+Legibility Hold Fade controls in the expanded view*" — i.e. the sgram card head's four
+`.ctlgroup`s (index.html:974–1030): Overlay note + harmonic limit (`#sgNoteSel` /
+`#sgHarmSel`), Colors (`#sgCmapSel` / `#sgTrackSel` / `#sgDashSel` / `#sgHueChk` / the
+three Triad pickers), Legibility (`#sgScrimRange` / `#sgDimRange`), and the time-alignment
+segment (`#sgAlignSeg`).
+
+- **Q4b.1** — Cheapest honest route is to **move the live nodes** into the modal head on
   open and back on close — one set of controls, one `sync*` path, no second copy to drift —
-  rather than cloning them and mirroring state.
-- **Q4.4** — Redraw on every one of those changes while the modal is open. `drawAll()` already
-  runs on control changes; `drawMag()` must run with it (it currently redraws on open, on zoom
-  and on resize).
+  rather than cloning them and mirroring state. Restoring exact position on close needs a
+  placeholder node; several controls ship `disabled` and are enabled only by
+  `syncSgHarmSel()`, so that function must keep reaching them wherever they live.
+- **Q4b.2** — Redraw on every one of those changes while the modal is open. Near-free:
+  `drawAll()` already tail-calls `drawMag()` (index.html:5330), so this is checking that
+  each handler routes through `drawAll`/`requestDraw`, not new code.
 
-**Traps recorded in advance.**
+**Open decisions (taste, not plumbing — settle with the user, don't improvise).** Does the
+exports group (`#sgramPngBtn` / `#sgramJsonBtn`) travel with them? What happens if the
+sgram card is folded while its controls are away? `.mag .mhead` is a two-item,
+non-wrapping baseline row today (index.html:690–693) and has never held a control cluster.
+And the source `.cardhead` is itself a fold toggle (M2.6d), so anything moved in or out of
+it must not trip that. The `?mag=` hook runs during init (index.html:8420), so the
+node-moving order has to hold on a cold boot too.
+
+**Verification, in proportion.** Source-read contracts only, plus one DOM read in the
+existing `?mag=sga` launch asserting the controls are reachable from inside the modal. No
+new suite, no new `verify.sh` step, no new Chrome launch.
+
+---
+
+**Traps recorded in advance (both sub-milestones).**
 
 - `SGPLOT` is a **module-level singleton** (index.html:3937) whose `mR` and `mT` are set at the
   head of every `drawSpectrogramScene` call (3947, 3953) and read *live* by
@@ -1532,16 +1601,8 @@ than duplicated.
   the surface that produced them. Hit-testing must always use the rect of the canvas the mouse
   is over.
 - R5.6c's focus drag hand-off (>3 px hands to the zoom box) must keep working in the overlay,
-  where `attachZoom` is already bound — the two listeners have to cooperate exactly as they do
-  on the pane.
-
-**Verification, in proportion.** Source-read contracts in `tests/r5.test.js` for the new
-bindings (in the spirit of the existing R5.1/R5.3 wiring assertions), plus `?mag=sga` folded
-into an **existing** headless launch. Node cannot read a canvas, so the overlay needs the same
-`data-*` treatment the panes get today (`data-sgclusters` / `data-sgfocus` / `data-sglabels` are
-set on `sgramCanvases[i]` only, index.html:5302–5314) — set them on `magCanvas` too, absent
-rather than `"0"`, and the headless check is one DOM read. No new suite, no new `verify.sh`
-step, no new Chrome launch.
+  where `attachZoom` is already bound (index.html:8324) — the two listeners have to cooperate
+  exactly as they do on the pane.
 
 ### Deferred — warped spectrogram difference (not in R5; after R6)
 

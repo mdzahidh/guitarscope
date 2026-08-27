@@ -1578,6 +1578,70 @@ so both verdict paths were proved through real Chrome against a scratch copy wit
   the other family over threshold, `find` returns undefined and the strip is exactly what it
   was. Contract in `tests/dsp.test.js` (193 assertions).
 
+## Q6 (session 28): every plot names both of its axes
+
+Five plots carried units and nothing else — the two frequency line plots and the EQ
+response printed a bare `Hz` at the right end of the tick row and a rotated `dB` up the
+left margin; the spectrogram and envelope printed `s` and `Hz`/`dB` the same way. A unit
+is not a label: `dB` alone does not say whether the axis is a level, a difference between
+two levels, or a filter's gain, and the app draws all three on the same kind of canvas.
+The design brief is a laboratory instrument, and an instrument names its quantities.
+
+**One helper, both axes, every plot.** `drawAxisTitles(ctx, w, h, P, xTitle, yTitle,
+xDrop, xRightText)` sits immediately above `drawAxes` in block 3. `P` is `PLOT` or
+`SGPLOT` — passed in, so the dynamic margins (`PLOT.mT` by vocabulary rows, `SGPLOT.mR`
+by comb, `SGPLOT.mT` by cluster key) are read live at draw time like every other consumer,
+never captured. The five titles:
+
+| plot | x | y |
+|---|---|---|
+| Spectrum | Frequency (Hz) | Level (dB) |
+| LTAS Difference | Frequency (Hz) | Difference (dB) |
+| EQ match response | Frequency (Hz) | Gain (dB) |
+| Spectrogram | Time (s) | Frequency (Hz) |
+| Envelope | Time (s) | Level (dB) |
+
+`drawAxes` gained a `yTitle` parameter and calls the helper itself, so the spectrum and
+the EQ response name their own y quantity at the call site (`"Level (dB)"` vs
+`"Gain (dB)"`). `drawDiffScene` draws its own grid and never calls `drawAxes`, so it calls
+the helper directly; so do `drawSpectrogramScene` and `drawEnvelopeScene`.
+
+**The y title runs at x = 12.** Rotated −90° with `textBaseline="middle"`, which puts the
+glyph column at x ≈ 12–22. The right-aligned y tick labels end at `PLOT.mL - 8 = 44` and
+the widest of them (`-100`) reaches back to x ≈ 24. The two columns never touch, and the
+same holds for `SGPLOT.mL`. This is why the title is drawn at a fixed 12 rather than
+derived from the margin.
+
+**`PLOT.mB` went 34 → 48, and that was the whole layout problem.** The x title has to sit
+*below* `drawStringAxis`'s open-string names, which are written at `PLOT.mT + pH + 20`
+with a 14 px click rect — rows +18..+32, i.e. the old bottom margin was already full. The
+title drops to +34 and needs 48 px of margin. The cost is 14 px of plot height on the four
+line plots (the Difference canvas is 232 px, so its plot goes 164 → 150). Every reader of
+`mB` derives from the live object — the scene builders, the crosshairs, the zoom
+hit-testing, the magnify overlay and the PNG exporters — so growing it needed no other
+edit; there is no hardcoded 34 anywhere. `SGPLOT.mB` stays **34**: only ticks live in it
+(`SGPLOT.mT + pH + 7`, rows ≈ +7..+20), so the spectrogram's title drops just +21.
+
+**`xRightText` is "skip rather than smear" again.** The spectrogram prints its zoom note
+right-aligned at `SGPLOT.mT + pH + 19` — the x title's own row. Rather than move either
+element, the helper takes the text already occupying that row, measures it, and skips the
+centred title if it would reach within 10 px of it. On the demo pair at `?zoom=sga:0.5,1.5`
+both print with room to spare; the guard exists for a narrow pane or a longer note. The
+line plots pass nothing: their zoom note goes into the top `statusText`, not the tick row.
+
+The removed unit blocks set `ctx.font`/`fillStyle`/`textAlign` outside any save/restore,
+and the helper restores. Every later `fillText` in those scenes (nyquist banner, partial
+labels, cluster key, colorbar, name/status, zoom note, the envelope's `t = 0` label) sets
+its own font and alignment, so nothing depended on the leak.
+
+**No test moved.** The change was made under an explicit "without any testing" instruction;
+no suite asserted an axis unit string or `PLOT.mB` beforehand (`grep` over `tests/*.js`
+confirmed it), so the gate's counts are unchanged. Verified by reading the eight call
+sites, `node --check` on all five script blocks, and headless screenshots of
+`?demo&open=all&strings=1&zoom=sga:0.5,1.5` in which all five plots were cropped at full
+resolution and read — including the spectrum with open-string names directly above its new
+title, and the zoomed spectrogram with title and zoom note sharing a row.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

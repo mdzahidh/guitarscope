@@ -618,6 +618,25 @@ build educational copy from it, never re-derive from scratch.
   a `×` from anywhere in the function; it now reads a slice scoped to the sustain sentence).
   No new suite, no new `verify.sh` step, no new Chrome launch. Demo pair checked in real
   Chrome: the strip now closes with the dynamic-range sentence.
+- **Q6 every plot names both of its axes BUILT (session 28, reviewer; user request, "without
+  any testing").** The five plots printed **units, not labels** — a bare `Hz` at the end of the
+  tick row and a rotated `dB`/`Hz` up the left margin — and three of them print `dB` on y
+  meaning three different things (a level, a difference of levels, a filter's gain). One helper,
+  `drawAxisTitles(ctx,w,h,P,xTitle,yTitle,xDrop,xRightText)` in block 3, now names both axes on
+  all five, so two plots cannot disagree about how an axis is called: Spectrum
+  *Frequency (Hz) / Level (dB)*, Difference *… / Difference (dB)*, EQ response *… / Gain (dB)*,
+  Spectrogram *Time (s) / Frequency (Hz)*, Envelope *Time (s) / Level (dB)*. `P` is `PLOT` or
+  `SGPLOT`, **passed in**, so the dynamic margins are read live like every other consumer;
+  `drawAxes` gained a `yTitle` param and calls it, while `drawDiffScene`/`drawSpectrogramScene`/
+  `drawEnvelopeScene` call it directly. **`PLOT.mB` 34 → 48** because `drawStringAxis` owns rows
+  +18..+32 (open-string names at `mT+pH+20`, 14 px click rect), so the title drops to +34 —
+  costing 14 px of plot height on the four line plots; safe because every `mB` reader derives
+  from the live object. **`SGPLOT.mB` stays 34** (ticks only, ≈+7..+20; its title drops +21).
+  `xRightText` is **"skip rather than smear"** again — the spectrogram's right-aligned zoom note
+  shares the title's row, so the centred title is skipped rather than run into it. **No test
+  moved:** nothing in `tests/` asserted an axis unit or `PLOT.mB`, gate counts unchanged;
+  verified by the eight call sites, `node --check` on all five blocks, and full-resolution crops
+  of `?demo&open=all&strings=1&zoom=sga:0.5,1.5`.
 - **NEXT — the user’s visual test.** R5 is closed; Q4a and Q4b are built, so nothing stands
   between here and R6. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
@@ -791,7 +810,9 @@ build educational copy from it, never re-derive from scratch.
   **user-overridable per theme** by clicking a loaded card's letter chip (localStorage
   `gsColors`, applied as inline `--slot-a/--slot-b`; snapshots deliberately don't carry
   colors — viewer preference, not analysis state). Tabular numerals, no
-  chartjunk/3D/glow, 150–250 ms non-bouncy transitions. All plot chrome routes through
+  chartjunk/3D/glow, 150–250 ms non-bouncy transitions. **Every plot names both axes** —
+  quantity then unit in parentheses, through the one `drawAxisTitles()` helper (Q6), never a
+  bare unit. All plot chrome routes through
   CSS vars (`cssColor`/`cssRGBA`); **data colormaps never theme** — the magma
   spectrogram (never rainbow) and the diverging difference stay dark scope-screens in
   both themes. The diverging endpoints default to amber/teal and follow user-picked

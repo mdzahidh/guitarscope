@@ -3375,8 +3375,9 @@ function termHtml(key, text){
    Term "links" inside canvases are recorded as hit rectangles.
    ============================================================ */
 
-const PLOT={ mL:52, mR:18, mT:34, mB:34 }; // mT holds the EQ-region lane (34, or 48 for
+const PLOT={ mL:52, mR:18, mT:34, mB:48 }; // mT holds the EQ-region lane (34, or 48 for
 // two-row vocabularies — syncLaneHeight() keeps it in step); mB holds Hz ticks + string labels
+// (drawStringAxis writes those at +20) + the x-axis title at +34, which is why mB is 48
 
 // The magnify button is a DOM element inside .plotwrap that the canvas cannot see:
 // 26x24 px at top:8px/right:8px (the .magbtn rule). Its corner placement is deliberate,
@@ -3466,7 +3467,29 @@ function xTicksFor(f0, f1){
   return {major:major, minor:minor};
 }
 
-function drawAxes(ctx, w, h, yMin, yMax, yStep){
+// ---------- axis titles ----------
+// Every plot names both axes the same way: quantity first, unit in parentheses.
+// The x title is centred under the tick row (below the open-string names on the
+// line plots — hence PLOT.mB 48); the y title runs up the left margin at x=12,
+// the column the right-aligned tick labels never reach. P is PLOT or SGPLOT, so
+// the dynamic margins are read live like everywhere else. xRightText is anything
+// already printed right-aligned on the title's own row (the spectrogram prints its
+// zoom note there): the title is skipped rather than smeared into it.
+function drawAxisTitles(ctx, w, h, P, xTitle, yTitle, xDrop, xRightText){
+  const pW=w-P.mL-P.mR, pH=h-P.mT-P.mB;
+  ctx.save();
+  ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint");
+  ctx.textAlign="center"; ctx.textBaseline="top";
+  const guard = xRightText ? P.mL+pW-ctx.measureText(xRightText).width-10 : Infinity;
+  if(P.mL+pW/2+ctx.measureText(xTitle).width/2 <= guard)
+    ctx.fillText(xTitle, P.mL+pW/2, P.mT+pH+xDrop);
+  ctx.translate(12, P.mT+pH/2); ctx.rotate(-Math.PI/2);
+  ctx.textBaseline="middle";
+  ctx.fillText(yTitle, 0, 0);
+  ctx.restore();
+}
+
+function drawAxes(ctx, w, h, yMin, yMax, yStep, yTitle){
   const pW=w-PLOT.mL-PLOT.mR, pH=h-PLOT.mT-PLOT.mB;
   const ticks=xTicksFor(XV.f0, XV.f1);
   ctx.save();
@@ -3481,7 +3504,7 @@ function drawAxes(ctx, w, h, yMin, yMax, yStep){
     ctx.strokeStyle=cssRGBA("grid-rgb",0.06); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(x,PLOT.mT); ctx.lineTo(x,PLOT.mT+pH); ctx.stroke();
     ctx.fillStyle=cssColor("dim");
-    // clamp the last label inside the plot so it can't run into the "Hz" unit
+    // clamp the last label inside the plot so it can't overhang the right edge
     const lw=ctx.measureText(fLabel(f)).width;
     ctx.fillText(fLabel(f), Math.min(x, PLOT.mL+pW-lw/2-2), PLOT.mT+pH+7);
   }
@@ -3493,16 +3516,8 @@ function drawAxes(ctx, w, h, yMin, yMax, yStep){
     ctx.fillStyle=cssColor("dim");
     ctx.fillText((v>0?"+":"")+v, PLOT.mL-8, y);
   }
-  // axis units
-  ctx.textAlign="left"; ctx.textBaseline="bottom";
-  ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint");
-  ctx.fillText("Hz", PLOT.mL+pW+3, PLOT.mT+pH+18);
-  ctx.save();
-  ctx.translate(12, PLOT.mT+2); ctx.rotate(-Math.PI/2);
-  ctx.textAlign="right"; ctx.textBaseline="middle";
-  ctx.fillText("dB", 0, 0);
   ctx.restore();
-  ctx.restore();
+  drawAxisTitles(ctx, w, h, PLOT, "Frequency (Hz)", yTitle||"Level (dB)", 34);
 }
 
 // ---------- region shading (from the active vocabulary) ----------
@@ -3892,7 +3907,7 @@ function drawSpectrumScene(ctx, w, h, model, hits){
   setXView(model.fv?model.fv[0]:FMIN, model.fv?model.fv[1]:FMAX);
   if(model.exportBg){ ctx.fillStyle=cssColor("panel"); ctx.fillRect(0,0,w,h); }
   drawRegionShading(ctx, w, h);
-  drawAxes(ctx, w, h, model.yMin, model.yMax, model.yStep||10);
+  drawAxes(ctx, w, h, model.yMin, model.yMax, model.yStep||10, "Level (dB)");
   const nCoin=drawStringAxis(ctx, w, h, model.markers, hits, model.coincidences);
   drawEqLane(ctx, w, hits);
   for(const c of model.curves){
@@ -3939,6 +3954,7 @@ function drawDiffScene(ctx, w, h, model, hits){
     ctx.strokeStyle=cssRGBA("ink-rgb",0.28); ctx.lineWidth=1;
     ctx.beginPath(); ctx.moveTo(PLOT.mL,yOf(0)); ctx.lineTo(PLOT.mL+pW,yOf(0)); ctx.stroke();
   }
+  drawAxisTitles(ctx, w, h, PLOT, "Frequency (Hz)", "Difference (dB)", 34);
   drawStringAxis(ctx, w, h, model.markers, hits, model.coincidences);
   drawEqLane(ctx, w, hits); // lane + string labels are click targets here too
 
@@ -4117,15 +4133,7 @@ function drawSpectrogramScene(ctx, w, h, model, hits){
     ctx.fillText(tTickLabel(t,step), x, SGPLOT.mT+pH+7);
   }
 
-  // axis units
-  ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint");
-  ctx.textAlign="left"; ctx.textBaseline="bottom";
-  ctx.fillText("s", SGPLOT.mL+pW+3, SGPLOT.mT+pH+18);
-  ctx.save();
-  ctx.translate(12, SGPLOT.mT+2); ctx.rotate(-Math.PI/2);
-  ctx.textAlign="right"; ctx.textBaseline="middle";
-  ctx.fillText("Hz", 0, 0);
-  ctx.restore();
+  drawAxisTitles(ctx, w, h, SGPLOT, "Time (s)", "Frequency (Hz)", 21, model.zoomNote);
 
   // onset markers along the top edge of the image (onsets are in file time)
   if(onsets && onsets.length){
@@ -4366,15 +4374,7 @@ function drawEnvelopeScene(ctx, w, h, model){
     ctx.fillStyle=cssColor("dim"); ctx.fillText((v>0?"+":"")+v, PLOT.mL-8, y);
   }
 
-  // axis units
-  ctx.font=FONT_XS; ctx.fillStyle=cssColor("faint");
-  ctx.textAlign="left"; ctx.textBaseline="bottom";
-  ctx.fillText("s", PLOT.mL+pW+3, PLOT.mT+pH+18);
-  ctx.save();
-  ctx.translate(12, PLOT.mT+2); ctx.rotate(-Math.PI/2);
-  ctx.textAlign="right"; ctx.textBaseline="middle";
-  ctx.fillText("dB", 0, 0);
-  ctx.restore();
+  drawAxisTitles(ctx, w, h, PLOT, "Time (s)", "Level (dB)", 34);
 
   // t = 0 alignment line
   if(tMin<=0 && 0<=tMax){
@@ -4588,7 +4588,7 @@ function drawEqRespScene(ctx, w, h, model){
   const yMin = model.yLo!=null ? model.yLo : -model.yMax;
   const yMax = model.yHi!=null ? model.yHi : model.yMax;
   const yStep = model.yLo!=null ? niceStep((yMax-yMin)/5) : (yMax>12?6:3);
-  drawAxes(ctx, w, h, yMin, yMax, yStep);
+  drawAxes(ctx, w, h, yMin, yMax, yStep, "Gain (dB)");
   const yOf=v=>PLOT.mT+(1-(Math.max(yMin,Math.min(yMax,v))-yMin)/(yMax-yMin))*pH;
   const stroke=(vals)=>{ // NaN-tolerant polyline
     ctx.beginPath();

@@ -2015,3 +2015,49 @@ review — the ratio assertion originally accepted a `×` from anywhere in the f
 reads a slice scoped to the sustain sentence. No new suite, no new `verify.sh` step, no new
 Chrome launch. Verified in real Chrome besides: on the demo pair the strip now closes with
 *"Demo — Warm's performance was captured with more dynamic range — 46.7 dB against 20.6 dB."*
+
+## Q6 — every plot names both of its axes (2026-08-27, session 28, user request)
+
+> *"without any testing can you make sure all the plots (spectrum, difference, the line plot
+> in the EQ match card, spectogram, envelope) have their axes labeled properly."*
+
+They had **units**, not labels. Each of the five printed a bare `Hz` at the end of its tick
+row and a rotated `dB`/`Hz` up the left margin, and nothing named the quantity. On this app
+that gap is real rather than pedantic: three different plots print `dB` on their y axis and
+mean three different things by it — an absolute level, a **difference** between two levels,
+and a filter's **gain**. The design brief is a laboratory instrument, and an instrument names
+what it is measuring.
+
+**One helper, so two plots cannot disagree about how an axis is named.**
+`drawAxisTitles(ctx, w, h, P, xTitle, yTitle, xDrop, xRightText)` in block 3, immediately
+above `drawAxes`. `P` is `PLOT` or `SGPLOT`, passed in rather than closed over, so the three
+dynamic margins (`PLOT.mT` by vocabulary rows, `SGPLOT.mR` by comb, `SGPLOT.mT` by cluster
+key) are read live at draw time like every other consumer. `drawAxes` gained a `yTitle`
+argument and calls the helper itself; the spectrum passes `"Level (dB)"` and the EQ response
+`"Gain (dB)"`. `drawDiffScene` draws its own grid and never calls `drawAxes`, so it calls the
+helper directly with `"Difference (dB)"`, and so do `drawSpectrogramScene`
+(`Time (s)` / `Frequency (Hz)`) and `drawEnvelopeScene` (`Time (s)` / `Level (dB)`).
+
+**`PLOT.mB` 34 → 48 — the layout was the whole problem.** The x title has to sit *below* the
+open-string names, which `drawStringAxis` writes at `PLOT.mT + pH + 20` with a 14 px click
+rect: rows +18..+32 filled the old margin exactly. The title drops to +34 and the margin
+grows to 48, costing 14 px of plot height on the four line plots (the 232 px Difference canvas
+goes 164 → 150 px of plot). Cheap, and checked before it was made: every reader of `mB` —
+scene builders, crosshairs, zoom hit-testing, the magnify overlay, the PNG exporters — derives
+from the live object, and there is no hardcoded 34 anywhere. `SGPLOT.mB` **stays 34**: only
+ticks live in it (rows ≈ +7..+20), so the spectrogram's title drops just +21 and fits.
+
+**`xRightText` is "skip rather than smear" again.** The spectrogram already prints its zoom
+note right-aligned on the x title's own row. The helper takes that text, measures it, and
+skips the centred title if it would come within 10 px — the same rule the partial labels, the
+harmonic labels, the string names, the ✦ marks and the cluster key all follow. On the demo
+pair at `?zoom=sga:0.5,1.5` both print with room to spare; the guard is for a narrow pane or a
+longer note. The line plots pass nothing — their zoom note goes into the top status chip.
+
+**No test moved,** as instructed. Nothing in `tests/` asserted an axis unit string or
+`PLOT.mB` beforehand, so the gate's counts are unchanged and no assertion was written or
+weakened. Verified instead by reading all eight call sites, `node --check` on all five script
+blocks, and a headless run of `?demo&open=all&strings=1&zoom=sga:0.5,1.5` with each of the
+five plots cropped at full resolution and read — deliberately the two hardest cases included:
+the spectrum with its open-string names sitting directly above the new title, and the zoomed
+spectrogram with title and zoom note sharing a row.

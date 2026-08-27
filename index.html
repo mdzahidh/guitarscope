@@ -491,6 +491,12 @@ table.datatable tr.grp td{
   max-height:min(70vh, 560px); overflow-y:auto; overscroll-behavior:contain;
 }
 .popover.open{ opacity:1; transform:none; pointer-events:auto; }
+/* Q4a.2: a collision mark clicked inside the magnified view opens a popover, and
+   .modal is z-index 75 — so the popover is lifted above it, but only while an
+   expanded view is open. Left global it would also float over the About/How/guide
+   modals, which nothing asked for. Keep it *below* the .popover block: a
+   dsp.test.js contract reads the first `.popover{` in the stylesheet. */
+body.magopen .popover{ z-index:80; }
 .pop-term{ font-size:15px; font-weight:600; letter-spacing:.01em; }
 .pop-cat{ font-size:10.5px; color:var(--dim); letter-spacing:.1em; text-transform:uppercase; margin-top:1px; }
 .pop-sec{ margin-top:12px; }
@@ -5372,9 +5378,14 @@ function openMag(key){
   if(!MAG_VIEWS[key]) return;
   magKey=key;
   magModal.classList.add("open");
+  document.body.classList.add("magopen");
   drawMag();
 }
-function closeMag(){ magModal.classList.remove("open"); magKey=null; }
+function closeMag(){
+  magModal.classList.remove("open");
+  document.body.classList.remove("magopen");
+  magKey=null;
+}
 
 // ---------- crosshair readouts ----------
 function attachCrosshair(wrap,canvas,xline,readout,isDiff){
@@ -7971,8 +7982,10 @@ function openColorPop(i,anchor){
 function closeColorPop(){ colorPop.classList.remove("open"); colorPopSlot=-1; }
 function escCascade(){
   if(colorPop.classList.contains("open")) return closeColorPop();
-  if(magModal.classList.contains("open")) return closeMag();
+  // A popover opened from inside the expanded view sits above it (Q4a.2), so it is
+  // the innermost thing on screen and Esc has to take it first.
   if(popover.classList.contains("open")) return closePopover();
+  if(magModal.classList.contains("open")) return closeMag();
   if(playCur) return stopPlayback();
   if(glossPanel.classList.contains("open")) return setGloss(false);
   if(shortcutsModal.classList.contains("open")) return shortcutsModal.classList.remove("open");
@@ -8249,6 +8262,16 @@ function boot(){
   attachHitClicks(diffCanvas,diffHits);
   attachHitClicks(sgramCanvases[0],sgHits[0]);   // R5.3: collision marks
   attachHitClicks(sgramCanvases[1],sgHits[1]);
+  attachHitClicks(magCanvas,magHits);            // Q4a.2: …and in the expanded view
+  // The same hit test the panes run in attachSgramCrosshair: a click target the
+  // cursor doesn't announce is the defect M2.6d went looking for. Never while a
+  // drag owns the cursor — attachZoom is bound to this wrap too.
+  magWrap.addEventListener("mousemove",e=>{
+    if(e.buttons&1) return;
+    const rect=magCanvas.getBoundingClientRect();
+    const x=e.clientX-rect.left, y=e.clientY-rect.top;
+    magCanvas.style.cursor=magHits.some(hh=>x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h)?"help":"";
+  });
   popover.addEventListener("input",e=>{
     const c=e.target.closest?e.target.closest(".string-color"):null;
     if(c) _setStringColor(+popover.dataset.stringSi, c.value, false);

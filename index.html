@@ -682,6 +682,24 @@ kbd{
   border:1px solid rgba(var(--grid-rgb),0.55);
   background:rgba(var(--grid-rgb),0.08);
 }
+/* The spectrogram is a dark scope-screen in both themes (data colormaps never
+   theme), so its mouse chrome doesn't theme either: white line, white zoom box,
+   white readout — on the two panes and on the expanded view of the same image.
+   Scoped by wrap id, because .xline/.zoombox/.readout are shared with the
+   paper-background line plots, which keep their ink chrome. */
+#sgramWrapA .xline, #sgramWrapB .xline, #magWrap.sgview .xline{
+  background:rgba(255,255,255,.88); box-shadow:0 0 2px rgba(0,0,0,.55);
+}
+#sgramWrapA .zoombox, #sgramWrapB .zoombox, #magWrap.sgview .zoombox{
+  border-color:rgba(255,255,255,.92); background:rgba(255,255,255,.12);
+}
+#sgramWrapA .readout, #sgramWrapB .readout, #magWrap.sgview .readout{
+  background:rgba(255,255,255,.95); border-color:rgba(0,0,0,.28); color:#1a1712;
+}
+#sgramWrapA .readout .rf, #sgramWrapB .readout .rf, #magWrap.sgview .readout .rf,
+#sgramWrapA .readout .db, #sgramWrapB .readout .db, #magWrap.sgview .readout .db{ color:#1a1712; }
+#sgramWrapA .readout .rn, #sgramWrapB .readout .rn, #magWrap.sgview .readout .rn,
+#sgramWrapA .readout .nm, #sgramWrapB .readout .nm, #magWrap.sgview .readout .nm{ color:rgba(26,23,18,.62); }
 .zoomreset{
   position:absolute; top:8px; right:40px; z-index:5; height:24px;
   display:none; align-items:center; padding:0 9px;
@@ -1289,7 +1307,10 @@ kbd{
       </div>
       <div id="magCtls"></div>
     </div>
-    <div class="magwrap" id="magWrap"><canvas id="magCanvas"></canvas></div>
+    <div class="magwrap" id="magWrap"><canvas id="magCanvas"></canvas>
+      <div class="xline" id="magXline"></div>
+      <div class="readout" id="magReadout"></div>
+    </div>
   </div>
 </div>
 
@@ -4686,7 +4707,8 @@ const debugLoadBtn=el("debugLoadBtn");
 const magModal=el("magModal"), magTitle=el("magTitle"),
       magCanvas=el("magCanvas"), magClose=el("magClose"),
       magWrap=el("magWrap"), magReset=el("magReset"),
-      magCtls=el("magCtls");
+      magCtls=el("magCtls"),
+      magXline=el("magXline"), magReadout=el("magReadout");
 const sgramCtlMove=el("sgramCtlMove"), sgramCtlHome=el("sgramCtlHome");
 const magBtns=Array.from(document.querySelectorAll(".magbtn"));
 const glossBackdrop=el("glossBackdrop"), glossPanel=el("glossPanel"),
@@ -5442,6 +5464,7 @@ function syncMagCtls(key){
 function openMag(key){
   if(!MAG_VIEWS[key]) return;
   magKey=key;
+  magWrap.classList.toggle("sgview",key==="sga"||key==="sgb");
   syncMagCtls(key);
   magModal.classList.add("open");
   document.body.classList.add("magopen");
@@ -5451,6 +5474,8 @@ function closeMag(){
   magModal.classList.remove("open");
   document.body.classList.remove("magopen");
   magKey=null;
+  magWrap.classList.remove("sgview");
+  magXline.style.display="none"; magReadout.style.display="none";
   syncMagCtls(null);
 }
 
@@ -5502,11 +5527,14 @@ function attachCrosshair(wrap,canvas,xline,readout,isDiff){
     xline.style.display="none"; readout.style.display="none";
   });
 }
-function attachSgramCrosshair(i){
-  const wrap=sgramWraps[i], canvas=sgramCanvases[i],
-        xline=sgramXlines[i], readout=sgramReadouts[i];
+// `pane` is a thunk and `hitsFn` returns that surface's own hit list — the same
+// shape attachSgFocus takes, so the expanded view reads the pane it is showing
+// rather than owning a second, drifting copy of this code.
+function attachSgramCrosshair(wrap,canvas,xline,readout,pane,hitsFn){
   const hide=()=>{ xline.style.display="none"; readout.style.display="none"; };
   wrap.addEventListener("mousemove",e=>{
+    const i=pane();
+    if(i==null){ hide(); return; }
     const s=state.slots[i], tv=s&&s.tvis;
     if(!tv||!tv.sg){ hide(); return; }
     const sg=s._sgShown||tv.sg;   // what the pane actually drew: base or refined
@@ -5517,7 +5545,7 @@ function attachSgramCrosshair(i){
     // R5.3: a collision mark is a doc target, so the cursor says so (M2.6d's
     // affordance rule) — but never while a drag owns the cursor.
     if(!(e.buttons&1))
-      canvas.style.cursor=sgHits[i].some(hh=>x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h)?"help":"";
+      canvas.style.cursor=hitsFn().some(hh=>x>=hh.x&&x<=hh.x+hh.w&&y>=hh.y&&y<=hh.y+hh.h)?"help":"";
     if(x<SGPLOT.mL||x>w-SGPLOT.mR||y<SGPLOT.mT||y>h-SGPLOT.mB){ hide(); return; }
     const view=sgramView(i);
     const zw=sgramZoomWin(i===0?"sga":"sgb",view.T0,view.T1);
@@ -8415,7 +8443,10 @@ function boot(){
 
   attachCrosshair(specWrap,specCanvas,specXline,specReadout,false);
   attachCrosshair(diffWrap,diffCanvas,diffXline,diffReadout,true);
-  attachSgramCrosshair(0); attachSgramCrosshair(1);
+  attachSgramCrosshair(sgramWraps[0],sgramCanvases[0],sgramXlines[0],sgramReadouts[0],()=>0,()=>sgHits[0]);
+  attachSgramCrosshair(sgramWraps[1],sgramCanvases[1],sgramXlines[1],sgramReadouts[1],()=>1,()=>sgHits[1]);
+  attachSgramCrosshair(magWrap,magCanvas,magXline,magReadout,
+    ()=>magKey==="sga"?0:magKey==="sgb"?1:null,()=>magHits);
   attachSgFocus(sgramWraps[0],sgramCanvases[0],()=>0);
   attachSgFocus(sgramWraps[1],sgramCanvases[1],()=>1);
   attachSgFocus(magWrap,magCanvas,()=>magKey==="sga"?0:magKey==="sgb"?1:null);

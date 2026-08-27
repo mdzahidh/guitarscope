@@ -5508,11 +5508,18 @@ function _sgTrackAt(i,x,y,w,h){
 // pane comes back. A press that turns into a drag belongs to the zoom box instead —
 // attachZoom() ignores a press until it has moved more than 3 px, so the two gestures
 // hand off at the same threshold rather than both firing.
-function attachSgFocus(i){
-  const wrap=sgramWraps[i], canvas=sgramCanvases[i];
+// Q4a.3: the surface and the pane it shows are two different things — the magnify
+// overlay draws pane 0 or pane 1 on its own canvas, at its own size. `pane` is a
+// thunk so the overlay can answer "whichever one is expanded right now"; it returns
+// null when this surface is not currently showing a spectrogram, and the hold is
+// simply not offered. state.sgFocus is global, so a hold taken here redraws the
+// panes behind the modal for free (drawAll tail-calls drawMag, and vice versa).
+function attachSgFocus(wrap,canvas,pane){
   let down=null;
   const clear=()=>{ down=null; if(state.sgFocus!=null){ state.sgFocus=null; requestDraw(); } };
   wrap.addEventListener("mousedown",e=>{
+    const i=pane();
+    if(i==null) return;
     const rect=canvas.getBoundingClientRect();
     const k=_sgTrackAt(i,e.clientX-rect.left,e.clientY-rect.top,rect.width,rect.height);
     if(k==null) return;
@@ -8342,7 +8349,9 @@ function boot(){
   attachCrosshair(specWrap,specCanvas,specXline,specReadout,false);
   attachCrosshair(diffWrap,diffCanvas,diffXline,diffReadout,true);
   attachSgramCrosshair(0); attachSgramCrosshair(1);
-  attachSgFocus(0); attachSgFocus(1);
+  attachSgFocus(sgramWraps[0],sgramCanvases[0],()=>0);
+  attachSgFocus(sgramWraps[1],sgramCanvases[1],()=>1);
+  attachSgFocus(magWrap,magCanvas,()=>magKey==="sga"?0:magKey==="sgb"?1:null);
   attachEnvCrosshair();
 
   attachZoom(specWrap, specCanvas, ()=>"spec");

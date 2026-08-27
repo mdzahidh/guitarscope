@@ -1285,5 +1285,87 @@ section("Q4a.4 — the expanded view reports what it drew, through the pane's re
     "puts them back, so a line plot never inherits the last pane's numbers");
 }
 
+// -------------------------------------------------------------- Q4b ------
+// The expanded view carries the same controls, not copies of them. One set of live
+// nodes travels into the modal head and comes home again, so there is no second copy
+// to drift and no mirrored state to keep in step.
+section("Q4b — the controls travel; they are never duplicated");
+{
+  const s = decomment(b4);
+  const head = html.slice(html.indexOf('id="sgramCard"'), html.indexOf('id="sgramCanvasA"'));
+  const iMove = head.indexOf('id="sgramCtlMove"');
+  const iHome = head.indexOf('id="sgramCtlHome"');
+  const iExp  = head.indexOf('id="sgramPngBtn"');
+  ok(iMove > 0 && iHome > iMove, "the sgram card head holds a movable cluster and the " +
+    "placeholder it comes home to");
+  ok(/class="ctlmove"/.test(head.slice(Math.max(0, iMove - 60), iMove)),
+    "…the cluster is the .ctlmove node itself, so one move takes every group with it");
+  const inside = head.slice(iMove, iHome);
+  ok((inside.match(/class="ctlgroup"/g) || []).length === 4 &&
+     />\s*Overlay\s*</.test(inside) && />\s*Colors\s*</.test(inside) &&
+     />\s*Legibility\s*</.test(inside) && />\s*Time axis\s*</.test(inside),
+    "…and it holds all four groups — Overlay, Colors, Legibility, Time axis");
+  ok(iExp > iHome && head.slice(iHome, iExp).indexOf("ctlmove") < 0,
+    "the exports stay behind: PNG and JSON build their own canvas at a fixed size, so " +
+    "an export button in the expanded view would promise 'what I'm looking at' and " +
+    "deliver something else");
+
+  ok(/\.ctlmove\s*\{[^}]*display:\s*contents/.test(html),
+    "at home the wrapper is display:contents — the card head lays out as if it weren't " +
+    "there, which is why the card is pixel-identical to before");
+  ok(/#magCtls\s+\.ctlmove\s*\{[^}]*display:\s*flex/.test(html),
+    "…and a real flex row once it has travelled");
+  ok(/#magCtls:empty\s*\{[^}]*display:\s*none/.test(html),
+    "an empty receiver takes no space, so magnifying a line plot looks exactly as it did");
+  const mhead = html.slice(html.indexOf('<div class="mhead">'), html.indexOf('class="magwrap"'));
+  ok(/id="magCtls"/.test(mhead), "the receiver lives in the magnify head, beside the title");
+
+  const smc = (/function syncMagCtls\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  ok(smc !== "", "syncMagCtls() decides where the cluster stands");
+  ok(/"sga"/.test(smc) && /"sgb"/.test(smc),
+    "…only the two spectrogram views take it — no other magnified plot has an overlay " +
+    "to control");
+  ok(/magCtls\.appendChild\(\s*sgramCtlMove\s*\)/.test(smc),
+    "…moving the live node into the modal, never a clone");
+  ok(/insertBefore\(\s*sgramCtlMove\s*,\s*sgramCtlHome\s*\)/.test(smc),
+    "…and putting it back exactly where it stood, before its placeholder");
+  ok(!/cloneNode/.test(s),
+    "nothing in the app clones a control: a copy would need mirrored state, and " +
+    "syncSgHarmSel() writes to one set of elements");
+
+  const om = (/function openMag\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  const cm = (/function closeMag\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  ok(/syncMagCtls\(\s*key\s*\)/.test(om) &&
+     om.indexOf("syncMagCtls") < om.indexOf("drawMag"),
+    "openMag() moves them before it draws, so the first frame is already laid out right");
+  ok(/syncMagCtls\(\s*null\s*\)/.test(cm),
+    "closeMag() sends them home — including on Esc, which routes through the same door");
+}
+
+// Q4b.2 — a control changed in the expanded view redraws it. drawAll() tail-calls
+// drawMag(), so this is a question about routing, not about new code: every sgram
+// handler must end up in requestDraw() rather than poking one canvas directly.
+section("Q4b.2 — every sgram control redraws through drawAll, so the overlay follows");
+{
+  const s = decomment(b4);
+  const anchors = ["sgNoteSel.addEventListener", "sgHarmSel.addEventListener",
+    "input.addEventListener", "sgCmapSel.addEventListener", "sgTrackSel.addEventListener",
+    "sgDashSel.addEventListener", "inp.addEventListener", "sgHueChk.addEventListener",
+    "sgAlignSeg.addEventListener"];
+  const missing = anchors.filter(a => {
+    const i = s.indexOf(a);
+    if (i < 0) return true;
+    const j = s.indexOf(".addEventListener", i + a.length);
+    return !/requestDraw\(\)/.test(s.slice(i, j < 0 ? s.length : j));
+  });
+  ok(missing.length === 0,
+    "all nine handlers behind those controls end in requestDraw()",
+    missing.join(", ") || "none missing");
+  const da = (/function drawAll\([\s\S]*?\n\}/.exec(s) || [""])[0];
+  ok(/drawMag\(\)/.test(da),
+    "…and drawAll() finishes by drawing the expanded view, which is what makes the " +
+    "moved controls live rather than merely present");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

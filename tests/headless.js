@@ -716,6 +716,21 @@ section("R5.3 — the marks say where two strings meet");
   ok(!/id="magCanvas"[^>]*data-sgfocus/.test(e),
     "…and holds no comb until someone holds one");
 
+  // Q4b rides along too. The expanded view carries the same controls, not copies of
+  // them, so the only question a DOM read can ask is *where the one cluster stands*.
+  // At rest it is in the sgram card head, which the document declares long before the
+  // modal; with pane A expanded it is inside the modal's receiver. Relational — two
+  // indexes compared against each other, never a pinned position.
+  const before = (p, first, second) => {
+    const i = p.indexOf(first), j = p.indexOf(second);
+    return i >= 0 && j >= 0 && i < j;
+  };
+  ok(before(off, 'id="sgramCtlMove"', 'id="magCtls"'),
+    "at rest the overlay controls stand in the sgram card head, above the modal");
+  ok(before(e, 'id="magCtls"', 'id="sgramCtlMove"'),
+    "…and with pane A expanded the very same nodes are inside the modal's receiver, " +
+    "where the picture they drive is");
+
   const c = domDrawn(SG + "&sgchord=C", combed("sgramCanvasA"));
   const nC = sgattr(c, "sgramCanvasA", "data-sgclusters");
   ok(nC > 0 && nC < nE, "C's shape meets less often than E's — the count follows the chord",

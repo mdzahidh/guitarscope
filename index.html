@@ -215,6 +215,9 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .cardbody{ padding:0 20px 18px; }
 .controls{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
 .ctlgroup{ display:flex; align-items:center; gap:7px; }
+/* Q4b: inert in the card head — the groups lay out as if it weren't there —
+   and a real flex row once it has travelled into the magnify head. */
+.ctlmove{ display:contents; }
 .ctlgroup > span{ font-size:11px; color:var(--dim); letter-spacing:.08em; text-transform:uppercase; }
 .exports{ display:flex; gap:6px; }
 
@@ -695,8 +698,11 @@ kbd{
 }
 .mag .mhead{
   display:flex; justify-content:space-between; align-items:baseline;
-  gap:16px; margin-bottom:10px;
+  gap:16px; margin-bottom:10px; flex-wrap:wrap;
 }
+#magCtls{ flex:0 1 100%; }
+#magCtls:empty{ display:none; }   /* no gap for a row that isn't there */
+#magCtls .ctlmove{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
 .mag .mhead h3{ margin-bottom:0; }
 .mag .magwrap{ flex:1; min-height:0; position:relative; }
 .mag .magwrap canvas{ position:absolute; inset:0; width:100%; height:100%; }
@@ -977,62 +983,67 @@ kbd{
           </div>
         </div>
         <div class="controls">
-          <div class="ctlgroup">
-            <span>Overlay</span>
-            <select id="sgNoteSel" aria-label="Spectrogram harmonic overlay string"
-                    title="Draw where the harmonics of one string, an open chord, or every open string should fall, over the measurement — then look for the energy.">
-              <option value="off" selected>None</option>
-            </select>
-            <select id="sgHarmSel" aria-label="Spectrogram overlay harmonic count" disabled
-                    title="How far up the harmonic series to draw. 1 is the fundamental; each one above it is a whole-number multiple of that pitch.">
-              <option value="1">1st harmonic only</option>
-              <option value="4">Harmonics 1–4</option>
-              <option value="6" selected>Harmonics 1–6</option>
-              <option value="8">Harmonics 1–8</option>
-            </select>
-          </div>
-          <div class="ctlgroup">
-            <span>Colors</span>
-            <select id="sgCmapSel" aria-label="Spectrogram colormap"
-                    title="Which perceptual colormap paints the spectrogram. All five rise in lightness with level, so equal dB steps read as equal lightness steps — never a rainbow.">
-            </select>
-            <select id="sgTrackSel" aria-label="Overlay track color" disabled
-                    title="What color the predicted harmonic tracks are drawn in. A fixed color sits outside every colormap, so it draws as one thin line; Triad gives the root, third and fifth a color each, and every harmonic takes its own note's color.">
-            </select>
-            <select id="sgDashSel" aria-label="Overlay track dash pattern" disabled
-                    title="The dash pattern for harmonics above the fundamental. The fundamental is always solid.">
-            </select>
-            <input type="color" class="tricolor" id="sgTri0" disabled aria-label="Triad root color"
-                   title="Root — the note the chord is named after.">
-            <input type="color" class="tricolor" id="sgTri1" disabled aria-label="Triad third color"
-                   title="Third — major or minor; the note that says which.">
-            <input type="color" class="tricolor" id="sgTri2" disabled aria-label="Triad fifth color"
-                   title="Fifth — the note the root is tuned against.">
-            <label class="chklbl" title="Tint every track toward its own string's hue, so a line says which string it came from as well as which voice of the chord.">
-              <input type="checkbox" id="sgHueChk" disabled aria-label="Tint tracks with string hues"> String hues
-            </label>
-          </div>
-          <div class="ctlgroup">
-            <span>Legibility</span>
-            <label class="rangelbl" title="How far the spectrogram is dimmed under the tracks. The sheet is drawn between the measurement and the prediction, so the lines read as an overlay.">Sheet
-              <input type="range" id="sgScrimRange" min="0" max="90" step="5" value="10" disabled
-                     aria-label="Spectrogram overlay sheet opacity">
-              <output id="sgScrimOut">10%</output>
-            </label>
-            <label class="rangelbl" title="How far the other combs recede while one is held. Press and hold a track to follow it.">Hold fade
-              <input type="range" id="sgDimRange" min="0" max="95" step="5" value="80" disabled
-                     aria-label="Spectrogram held-comb fade">
-              <output id="sgDimOut">80%</output>
-            </label>
-          </div>
-          <div class="ctlgroup">
-            <span>Time axis</span>
-            <div class="seg" id="sgAlignSeg" role="group" aria-label="Spectrogram time alignment">
-              <button data-al="off" class="on">Free</button>
-              <button data-al="file">File time</button>
-              <button data-al="onset">First onset</button>
+          <!-- Q4b: one movable node, so the whole cluster travels to the magnify
+               overlay and back as live nodes — never a second copy to drift. -->
+          <div class="ctlmove" id="sgramCtlMove">
+            <div class="ctlgroup">
+              <span>Overlay</span>
+              <select id="sgNoteSel" aria-label="Spectrogram harmonic overlay string"
+                      title="Draw where the harmonics of one string, an open chord, or every open string should fall, over the measurement — then look for the energy.">
+                <option value="off" selected>None</option>
+              </select>
+              <select id="sgHarmSel" aria-label="Spectrogram overlay harmonic count" disabled
+                      title="How far up the harmonic series to draw. 1 is the fundamental; each one above it is a whole-number multiple of that pitch.">
+                <option value="1">1st harmonic only</option>
+                <option value="4">Harmonics 1–4</option>
+                <option value="6" selected>Harmonics 1–6</option>
+                <option value="8">Harmonics 1–8</option>
+              </select>
+            </div>
+            <div class="ctlgroup">
+              <span>Colors</span>
+              <select id="sgCmapSel" aria-label="Spectrogram colormap"
+                      title="Which perceptual colormap paints the spectrogram. All five rise in lightness with level, so equal dB steps read as equal lightness steps — never a rainbow.">
+              </select>
+              <select id="sgTrackSel" aria-label="Overlay track color" disabled
+                      title="What color the predicted harmonic tracks are drawn in. A fixed color sits outside every colormap, so it draws as one thin line; Triad gives the root, third and fifth a color each, and every harmonic takes its own note's color.">
+              </select>
+              <select id="sgDashSel" aria-label="Overlay track dash pattern" disabled
+                      title="The dash pattern for harmonics above the fundamental. The fundamental is always solid.">
+              </select>
+              <input type="color" class="tricolor" id="sgTri0" disabled aria-label="Triad root color"
+                     title="Root — the note the chord is named after.">
+              <input type="color" class="tricolor" id="sgTri1" disabled aria-label="Triad third color"
+                     title="Third — major or minor; the note that says which.">
+              <input type="color" class="tricolor" id="sgTri2" disabled aria-label="Triad fifth color"
+                     title="Fifth — the note the root is tuned against.">
+              <label class="chklbl" title="Tint every track toward its own string's hue, so a line says which string it came from as well as which voice of the chord.">
+                <input type="checkbox" id="sgHueChk" disabled aria-label="Tint tracks with string hues"> String hues
+              </label>
+            </div>
+            <div class="ctlgroup">
+              <span>Legibility</span>
+              <label class="rangelbl" title="How far the spectrogram is dimmed under the tracks. The sheet is drawn between the measurement and the prediction, so the lines read as an overlay.">Sheet
+                <input type="range" id="sgScrimRange" min="0" max="90" step="5" value="10" disabled
+                       aria-label="Spectrogram overlay sheet opacity">
+                <output id="sgScrimOut">10%</output>
+              </label>
+              <label class="rangelbl" title="How far the other combs recede while one is held. Press and hold a track to follow it.">Hold fade
+                <input type="range" id="sgDimRange" min="0" max="95" step="5" value="80" disabled
+                       aria-label="Spectrogram held-comb fade">
+                <output id="sgDimOut">80%</output>
+              </label>
+            </div>
+            <div class="ctlgroup">
+              <span>Time axis</span>
+              <div class="seg" id="sgAlignSeg" role="group" aria-label="Spectrogram time alignment">
+                <button data-al="off" class="on">Free</button>
+                <button data-al="file">File time</button>
+                <button data-al="onset">First onset</button>
+              </div>
             </div>
           </div>
+          <span id="sgramCtlHome" hidden></span>
           <div class="exports">
             <button class="btn" id="sgramPngBtn" disabled>PNG</button>
             <button class="btn" id="sgramJsonBtn" disabled>JSON</button>
@@ -1274,6 +1285,7 @@ kbd{
         <button class="btn" id="magReset" style="display:none">Reset zoom</button>
         <button class="iconbtn" id="magClose" aria-label="Close magnified view">✕</button>
       </div>
+      <div id="magCtls"></div>
     </div>
     <div class="magwrap" id="magWrap"><canvas id="magCanvas"></canvas></div>
   </div>
@@ -4641,7 +4653,9 @@ const resetSettingsBtn=el("resetSettingsBtn");
 const debugLoadBtn=el("debugLoadBtn");
 const magModal=el("magModal"), magTitle=el("magTitle"),
       magCanvas=el("magCanvas"), magClose=el("magClose"),
-      magWrap=el("magWrap"), magReset=el("magReset");
+      magWrap=el("magWrap"), magReset=el("magReset"),
+      magCtls=el("magCtls");
+const sgramCtlMove=el("sgramCtlMove"), sgramCtlHome=el("sgramCtlHome");
 const magBtns=Array.from(document.querySelectorAll(".magbtn"));
 const glossBackdrop=el("glossBackdrop"), glossPanel=el("glossPanel"),
       glossClose=el("glossClose"), glossSearch=el("glossSearch"), glossList=el("glossList");
@@ -5382,9 +5396,21 @@ function drawMag(){
   sgClearData(magCanvas);   // …and only a spectrogram view puts these back
   MAG_VIEWS[magKey].draw(ctx,w,h);
 }
+// Q4b: the expanded view carries the same controls, not copies of them. The live
+// nodes move into the modal head and come back to `sgramCtlHome` — one set of
+// elements, so every `el()` handle, handler and `syncSgHarmSel()` write still
+// lands, wherever the cluster happens to be standing.
+function syncMagCtls(key){
+  const home=(key!=="sga"&&key!=="sgb");
+  const want=home?sgramCtlHome.parentNode:magCtls;
+  if(sgramCtlMove.parentNode===want&&(!home||sgramCtlMove.nextSibling===sgramCtlHome)) return;
+  if(home) sgramCtlHome.parentNode.insertBefore(sgramCtlMove,sgramCtlHome);
+  else magCtls.appendChild(sgramCtlMove);
+}
 function openMag(key){
   if(!MAG_VIEWS[key]) return;
   magKey=key;
+  syncMagCtls(key);
   magModal.classList.add("open");
   document.body.classList.add("magopen");
   drawMag();
@@ -5393,6 +5419,7 @@ function closeMag(){
   magModal.classList.remove("open");
   document.body.classList.remove("magopen");
   magKey=null;
+  syncMagCtls(null);
 }
 
 // ---------- crosshair readouts ----------

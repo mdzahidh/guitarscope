@@ -1739,10 +1739,26 @@ Measured here through real headless Chrome, 2026-09-04:
 This is Chromium's own `AudioManagerMac` input clamp, not a constraint that can be lifted
 from the page — no combination of `ideal`/`exact` changes it, which is why `recOpen()`
 tries 32 → unconstrained → bare `{audio:true}` and then simply believes what arrives.
-Safari is the only browser that can plausibly surface all ten, and is **untested here**;
-the panel says so as a suggestion, not as a promise. The probe is what makes this
-survivable: when a browser *does* deliver ten channels, the picker offers ten without a
-single line changing.
+
+**Safari does the same thing by a different route — measured 2026-09-04 on the same
+device.** WebKit does not implement the `channelCount` constraint at all: it is absent
+from `getSettings()` *and* from `getCapabilities()`, and `channelCount:{exact:N}` **never
+rejects** for any N from 2 to 16. An unsupported constraint is ignored per spec, so the
+hard ask that should have proved a clamp resolves happily and returns the same stream —
+which is exactly why the app cannot ask. The observation settles it: on that stream a
+spec-fixed 32-way `ChannelSplitterNode` (`channelCount` 32, `explicit`, `discrete`, all
+read-only) and the probe's own `ScriptProcessorNode` report *identical* per-channel peaks,
+both finding exactly two non-zero channels with 3–32 at **hard zero**. Hard zero is the
+discrete-up-mix zero-fill signature, not a quiet input — a real converter input reads
+dither, not `0.0` for five seconds. Two independent censuses agreeing to six decimals also
+clears the probe itself: WebKit's `ScriptProcessorNode` handles 32 discrete channels
+correctly, so the shipped node is not what is losing the channels.
+
+So on macOS there is no browser route to channel 3, and the panel says that — with what to
+do instead (put the wanted input first in an Aggregate Device, or track it in a DAW and
+drop the file) — rather than pointing at a browser that will disappoint the same way. The
+probe is still what makes this survivable: when a platform *does* deliver ten channels, the
+picker offers ten without a single line changing.
 
 The lesson, written down because it generalises past M5: **do not ask a question the
 platform is free to answer wrongly — arrange for the answer to be observable.**
@@ -1889,14 +1905,19 @@ metrics) are carried as stored values and labeled as such.
   so a channel probe that trusts it measures 1 channel on every device. M5's headless
   checks use `--use-fake-ui-for-media-stream` (auto-grant) plus Chrome's built-in fake
   device tone; never the file variant.
-- **Chrome on macOS clamps microphone input to 2 channels regardless of the device.**
-  Measured 2026-09-04 across BlackHole 16ch, three Pro Tools aggregate bridges (16/32/64)
-  and the user's 10-channel Aggregate Device: all five report
+- **Both browsers on macOS clamp microphone input to 2 channels regardless of the
+  device.** Chrome, measured 2026-09-04 across BlackHole 16ch, three Pro Tools aggregate
+  bridges (16/32/64) and the user's 10-channel Aggregate Device: all five report
   `capabilities.channelCount {min:1,max:2}`, `settings.channelCount` 2, and deliver 2.
   It is Chromium's `AudioManagerMac` input clamp, not liftable by any constraint —
-  `{ideal:32}`, `{exact:10}` and no constraint at all give the same stream. Safari is the
-  only plausible route to a multi-channel take on this platform. See the M5 section:
-  the code never asks, it observes what actually arrives.
+  `{ideal:32}`, `{exact:10}` and no constraint at all give the same stream. **Safari, same
+  day, same device: no `channelCount` field anywhere** (absent from both `getSettings()`
+  and `getCapabilities()`), `{exact:N}` never rejecting for N ≤ 16 — an unsupported
+  constraint is ignored per spec, so even the hard ask cannot prove the clamp — and a
+  32-way `ChannelSplitterNode` and a 32-channel `ScriptProcessorNode` reading the same two
+  non-zero channels with 3–32 at hard zero. There is no browser route to a multi-channel
+  take on this platform. See the M5 section: the code never asks, it observes what
+  actually arrives — which is the only reason either of these was knowable.
 
 ## Testing strategy
 

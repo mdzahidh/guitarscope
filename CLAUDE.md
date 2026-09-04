@@ -669,10 +669,16 @@ build educational copy from it, never re-derive from scratch.
   and recorded rather than worked around: Chrome on macOS clamps every input device to 2
   channels** (`AudioManagerMac`) — BlackHole 16ch, three Pro Tools bridges (16/32/64) and the
   user's 10-channel Aggregate Device all report `{min:1,max:2}` and deliver 2, under any
-  constraint. Safari is the only plausible route to ten and is **untested here**; the panel
-  says so as a suggestion. Gate: steps 2–7 green, headless **69**, all four tamper guards
-  green; step 1 is the documented pre-existing red. **Awaiting the user's Safari test against
-  the real Aggregate Device.**
+  constraint. **Safari clamps too — the user ran the test 2026-09-04 on that same device.**
+  WebKit implements no `channelCount` constraint at all (absent from `getSettings()` *and*
+  `getCapabilities()`; `{exact:N}` never rejects for N ≤ 16 — an unsupported constraint is
+  ignored per spec), yet a spec-fixed 32-way `ChannelSplitterNode` and the probe's own
+  `ScriptProcessorNode` read **identical** peaks: two non-zero channels, 3–32 at hard zero,
+  i.e. zero-fill, not a quiet input. That agreement exonerates the probe and convicts the
+  platform on both engines, so the panel no longer points at another browser — it says the
+  clamp is the platform's and names the routes that work (wanted input first in an Aggregate
+  Device, or track it in a DAW and drop the file). Gate: steps 2–7 green, headless **69**, all
+  four tamper guards green; step 1 is the documented pre-existing red.
 - **NEXT — the user’s visual test.** R5 is closed; Q4a and Q4b are built, so nothing stands
   between here and R6. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math

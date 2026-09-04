@@ -2181,7 +2181,8 @@ spectrogram with title and zoom note sharing a row.
   states it when it observes ≤ 2 channels, and points at Safari as a
   **suggestion** — Safari is untested here, and only the user's own machine can
   settle whether their aggregate surfaces as 10 there. The probe is correct either
-  way: it reports what arrived.
+  way: it reports what arrived. *(Superseded the same day — the user ran the test and
+  Safari clamps identically; see the entry below.)*
 - Downstream, a take is a file: `finishSlotFromBuffer()` with `kind:"recording"`,
   `container:"Live input"`, `bitDepth:"32-bit float"`. One capture graph exists for
   the whole app (`recCap`); `recAbort(i)` runs at the head of `loadFileIntoSlot`,
@@ -2192,3 +2193,42 @@ spectrogram with title and zoom note sharing a row.
   **69**) and all four tamper guards green. Step 1 is the documented pre-existing
   red — `ok(mx < 1.0)` measuring 1.022 dB at `tests/dsp.test.js:547`, red on master
   since `ac65835` and untouched by this work.
+
+### 2026-09-04 — Safari clamps too: the "try Safari" advice retired
+- The user ran the M5 panel against their own **10-channel Aggregate Device** in
+  Safari and it offered **2**. Two possibilities, and they are distinguishable: either
+  WebKit clamps at the capture layer, or the probe under-counts. So rather than guess,
+  a standalone diagnostic asked the question three ways — the answer could only come
+  out one of two ways, and it came out clean.
+- **Safari does not implement the `channelCount` constraint at all.** The field is
+  absent from `getSettings()` *and* from `getCapabilities()` (settings carry only
+  deviceId/echoCancellation/groupId/sampleRate/volume; capabilities the same plus
+  ranges). `channelCount:{ideal:32}`, bare `32`, `{min:3}` and `{exact:N}` for
+  N ∈ {2,3,4,6,8,10,16} **all resolve, none rejects**. That is the spec's own rule
+  working against us: an unsupported constraint is ignored, even in `exact` form, so
+  the hard ask that should have proved a clamp proves nothing. **This is the whole
+  case for M5's observe-never-ask rule, stated by a browser rather than by us.**
+- **The observation is unambiguous.** On one stream, two independent censuses: a
+  `ChannelSplitterNode(32)` — whose `channelCount` 32, `channelCountMode "explicit"`
+  and `channelInterpretation "discrete"` are **fixed by spec and not settable**, so it
+  cannot be misconfigured — read out through one `AnalyserNode` per channel, and the
+  app's own 32-channel `ScriptProcessorNode` (`inputBuffer.numberOfChannels` really was
+  32 in WebKit). Both report **exactly two** non-zero channels, with identical peaks to
+  six decimals: ch1 0.021538, ch2 0.000035, **ch 3–32 at hard zero**. Hard zero is the
+  discrete-up-mix zero-fill signature — a real converter input reads dither, not `0.0`,
+  for five seconds.
+- **Two conclusions.** The probe is exonerated: two mechanisms that share no code agree
+  to six decimals, so `ScriptProcessorNode` is not what loses the channels. And the
+  platform is convicted on both engines: Chrome clamps in `AudioManagerMac`
+  (2026-09-03), Safari clamps in its own capture layer, and on macOS **no browser hands
+  a page channel 3**.
+- **So the copy changed, in the app and in three documents.** Pointing at another
+  browser was a promise the platform cannot keep. The panel now says what is true and
+  what to do instead: *"on macOS both Chrome and Safari hand a page only the first two
+  channels of an input device, whatever it carries — no setting lifts that. Put the
+  input you want first in an Aggregate Device, or record it in a DAW and drop the file
+  here."* No detection code changed — there was nothing wrong with it.
+- The lesson M5 opened with is now earned twice over: **do not ask a question the
+  platform is free to answer wrongly — arrange for the answer to be observable.** Here
+  the platform did not even answer wrongly; it declined to answer, cheerfully, in the
+  affirmative.

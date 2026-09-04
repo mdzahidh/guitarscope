@@ -6702,14 +6702,18 @@ function renderCard(i){
       const n=recState.chanByDevice[recChanKey(state.recDevice)]||0;
       // Silence proves nothing: a channel that stayed quiet during the probe looks
       // exactly like a channel that isn't there, so say so and offer another listen.
-      // Measured here on 2026-09-03: Chrome on macOS reports channelCount.max = 2 for a
-      // 16-channel BlackHole, three Pro Tools bridges (16/32/64) and the user's 10-channel
-      // Aggregate Device alike, and delivers two. That is Chromium's own clamp in
-      // AudioManagerMac, not something a constraint can lift — so when the count comes back
-      // small, say why it might be the browser rather than the device. Safari is a
-      // suggestion, not a claim: it is untested here.
+      // Measured here, both browsers, on the user's own 10-channel Aggregate Device:
+      // Chrome on macOS reports channelCount.max = 2 for a 16-channel BlackHole, three Pro
+      // Tools bridges (16/32/64) and that device alike (2026-09-03); Safari exposes no
+      // channelCount at all — absent from getSettings() AND getCapabilities(), and
+      // channelCount:{exact:N} never rejects for any N up to 16 — yet a spec-fixed
+      // 32-way ChannelSplitter and this probe's ScriptProcessor both read exactly two
+      // non-zero channels, 3–32 at hard zero, i.e. zero-fill, not a quiet input
+      // (2026-09-04). So the clamp is the platform's on both engines, no constraint lifts
+      // it, and pointing at another browser would be a false promise. Say what to do
+      // instead.
       const capped=n>0&&n<=2
-        ?" Expecting more? Chrome on macOS hands every input device to a page as stereo, whatever the device carries — try Safari if you need the individual channels."
+        ?" Expecting more? Measured here: on macOS both Chrome and Safari hand a page only the first two channels of an input device, whatever it carries — no setting lifts that. Put the input you want first in an Aggregate Device, or record it in a DAW and drop the file here."
         :"";
       const note=ui.checking?"Checking inputs — play something while it listens…"
         :(n?(n+" input channel"+(n===1?"":"s")+" heard on this device. Quiet channels can be missed — play something and re-check."+capped)
@@ -6785,7 +6789,7 @@ function renderCard(i){
 //     platform — getCapabilities().channelCount.max, getSettings().channelCount,
 //     channelCount:{ideal:64} — and a 10-input aggregate device never appeared as
 //     anything but mono in Safari, because an unsupported constraint is silently
-//     ignored per spec and Safari reports neither field reliably. So the probe opens
+//     ignored per spec and Safari reports neither field at all. So the probe opens
 //     the device for real and runs it through a 32-channel ScriptProcessorNode with
 //     `discrete` interpretation: discrete up-mixing ZERO-FILLS the channels the device
 //     did not supply, so any non-zero sample in channel c proves the device really

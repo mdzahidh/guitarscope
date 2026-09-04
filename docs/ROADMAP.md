@@ -1835,10 +1835,22 @@ Measured 2026-09-04 through real headless Chrome, on this machine:
 | **Aggregate Device (10 in)** | `{min:1,max:2}` | 2 | 2 |
 
 This is Chromium's own `AudioManagerMac` input clamp, not a constraint we can lift — no
-`channelCount` value, ideal or exact, changes any column. The panel therefore says so when it
-observes ≤ 2 channels on a device the user expects to be wider, and points at Safari as a
-**suggestion**, not a promise: Safari is untested here, and only the user's own machine can
-settle whether their 10-channel Aggregate Device surfaces as 10 there.
+`channelCount` value, ideal or exact, changes any column.
+
+**Safari clamps too — measured 2026-09-04 on the user's own Aggregate Device.** WebKit
+implements no `channelCount` constraint at all: the field is absent from `getSettings()` and
+from `getCapabilities()`, and `channelCount:{exact:N}` **never rejects** for any N from 2 to
+16 (an unsupported constraint is ignored per spec, so the hard ask that should have proved a
+clamp resolves happily). Only observation settles it, and two independent censuses on one
+stream agree to six decimals: a spec-fixed 32-way `ChannelSplitterNode` and the probe's own
+32-channel `ScriptProcessorNode` both find exactly two non-zero channels, 3–32 at **hard
+zero** — the discrete-up-mix zero-fill signature, not a quiet input (a real converter input
+reads dither, not `0.0`, for five seconds). That agreement also clears the probe: WebKit
+handles 32 discrete channels correctly.
+
+So the panel no longer points at another browser. When it observes ≤ 2 channels it says the
+platform is the limit and gives the route that works — put the wanted input first in an
+Aggregate Device, or track it in a DAW and drop the file.
 
 The probe is right either way — it reports what arrived. The clamp is a fact about the
 browser, and the app states it rather than pretending the device is mono.

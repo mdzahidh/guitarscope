@@ -1797,6 +1797,51 @@ picker offers ten without a single line changing.
 The lesson, written down because it generalises past M5: **do not ask a question the
 platform is free to answer wrongly — arrange for the answer to be observable.**
 
+## Recording meter + card transport (session 30): one walk, one timer, one stop path
+
+**The level meter reuses the walk the capture already did.** `_startCapture`'s
+`sp.onaudioprocess` scanned every sample to set `cap.heard` — M5's proof that the selected
+channel actually arrived, since discrete up-mixing zero-fills what the device never supplied.
+`peak > 0` is exactly that predicate, so the scan now also accumulates `mPk` (peak), `mSq`
+(sum of squares) and `mN`, and `cap.heard` falls out of `mPk > 0`. **No analyser node, no
+second pass, nothing added to the capture graph** — that graph *is* the recording, and every
+node in it is one more thing that could change what lands.
+
+The audio callback only accumulates; `paintLevel(cap, card)` drains. The elapsed clock's
+`setInterval` went 250 ms → 100 ms and now paints both, so there is still one timer per
+capture and `stopCapture`'s existing `clearInterval` is still the whole teardown.
+
+Geometry: width is **linear in dBFS over −60..0** (`meterPct`), and the printed peak is the
+same quantity, so bar and number cannot disagree. Fill = RMS of the interval, rider = a 1 s
+peak hold decaying 12 dB/s. Zones `--slot-c` / `--warn` (≥ −6) / `--err` (≥ −1); the palette
+has no green var and this is not the place to add one. `fmtDb()` is not used for the readout —
+its leading `+` reads as a *difference*, which a level below full scale is not.
+
+**The card transport.** `.fileacts` keeps ⟳ Replace and ✕ Clear (slot management); a new
+`.transport` row carries ▶/■, ‖, a native `accent-color` seek range, a tabular
+elapsed/duration readout, and ● Record. `syncTransport(i)` writes those nodes **in place** —
+a re-render during playback would rebuild the slider under the user's thumb.
+
+**An `AudioBufferSourceNode` cannot resume**, so pause is stop-plus-a-remembered-offset and
+seek is a restart at `src.start(0, off)`. `startPlayback(i,f0,f1,onstop,off)` gained `off`
+**last**, leaving the 4-argument region-audition call site byte-identical. Position while
+playing comes from `playCtx.currentTime - playCur.t0 + playCur.off` — the audio clock, not the
+100 ms UI timer, which only paints.
+
+**"Stop resets the slider" is a property of the stop path.** Every termination in the app
+(the button, `src.onended`, Esc, a data change, the level-match toggle, a popover closing, a
+region audition taking over) goes through `stopPlayback()` → the card's shared `onstop` →
+`cardPlayStopped(i)`, which zeroes `cardPos[i]` unless `playKeepPos` is up. Only
+`pauseCardPlay` and `startCardPlay` raise it. A new stop source inherits the reset for free;
+enumerating stop sources in the UI layer would not have. `playCur.card` marks a transport
+playback so it is distinguishable from a region audition of the same slot — the two
+`.playing` state machines (`setPopPlayUI` and the transport) stay independent.
+
+Seek previews on `input` and commits on `change`: keyboard arrows fire both, and restarting
+the source on every `input` would stutter arrow-key seeking. The card's click delegation
+exempts `select,input[type=range]` so a drag on the slider does not fall through to the file
+picker.
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never

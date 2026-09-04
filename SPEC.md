@@ -2306,3 +2306,60 @@ spectrogram with title and zoom note sharing a row.
   door into a known count — `ensureRecChannels()`'s success path, its `catch` path that assumes
   mono, and its early return when the count is already cached. Device *change* was already
   covered: that handler zeroes `recChannel` outright.
+
+## 2026-09-04 — a level meter while it records, and one transport per card
+
+The user asked for two things in one message: a live level meter in the recording panel, and
+the playback and record buttons grouped together with play/stop, pause and a seek slider that
+Stop resets.
+
+**The meter costs no extra node and no extra pass.** `onaudioprocess` already walked every
+captured sample for one reason: `cap.heard`, the "did this channel actually arrive" test that
+M5's refusal-to-land-a-silent-take rests on. `peak > 0` **is** that predicate, so the same walk
+now also accumulates peak and sum-of-squares, and `if(cap.mPk>0) cap.heard=true` replaces the
+old scan. Nothing samples the signal twice, and nothing new is inserted into the capture graph —
+which matters, because that graph is the recording: an analyser tapped off it would be one more
+thing that could change what lands.
+
+The accumulators drain in a paint tick, not in the audio callback. The elapsed clock already ran
+one at 250 ms; it now runs at 100 ms and paints the meter too, so there is still exactly one
+timer per capture and teardown stays free (`stopCapture` already clears it). Drawing from the
+audio thread would have coupled the UI's frame rate to the buffer size.
+
+**The bar is linear in dBFS over −60..0**, and the number beside it is the same quantity, so
+the picture and the printed peak cannot disagree. The fill is RMS (what the take's level
+actually is) and the thin rider is a 1 s peak hold falling at 12 dB/s (what nearly clipped).
+`fmtDb()` is deliberately **not** used for that readout — its leading `+` is right for a
+difference between two guitars and wrong for a level below full scale. Zones are `--slot-c` /
+`--warn` / `--err`: the palette has no green token, and a level meter is not the place to
+invent one.
+
+**The transport groups what makes sound and leaves slot management where it was.** ▶ Play and
+● Record move out of `.fileacts` into a new `.transport` row; ⟳ Replace and ✕ Clear stay up
+top, because they act on the *slot*, not on the sound. The row is play/stop, pause, a native
+`accent-color` range (the app's slider idiom — no pseudo-element skinning), an elapsed/duration
+readout in tabular numerals, and record.
+
+**Pause and seek are both built on an offset, because an `AudioBufferSourceNode` cannot
+resume.** Pause is stop-plus-a-remembered-position; seek is a restart at `src.start(0, off)`.
+`startPlayback` therefore gained an `off` parameter, appended **last** so the region-audition
+call site is byte-identical. Position while playing is derived from `playCtx.currentTime`, not
+counted by the timer — the clock that matters is the audio clock.
+
+**"Stop resets the slider" is a property of the stop path, not of the Stop button.** Every way
+playback ends in this app — the button, natural end, Esc, a data change, the level-match toggle,
+a popover closing, a region audition taking over — routes through `stopPlayback()`, and the
+card's shared `onstop` zeroes the position unless `playKeepPos` is up. Only pause and seek raise
+that flag. So the reset needs no enumeration of stop sources and cannot fall out of step with a
+new one. `playCur.card` distinguishes a card transport playback from a region audition of the
+same slot, which is what keeps the two `.playing` state machines independent.
+
+Seek commits on `change` and previews on `input` (the readout follows the thumb, playback does
+not restart until the drag ends) — keyboard arrows fire both, so restarting on `input` would
+have made arrow-key seeking stutter.
+
+*Verification, in proportion* (and the user's instruction in the same message to minimise it):
+`node --check` on all five script blocks, one `--dump-dom` of the demo pair to see the transport
+render, and a read-through of the spliced regions. **No new suite, no new `verify.sh` step, no
+new assertion, no new Chrome screenshot launch.** The feature is UI state with no math to pin,
+and the one invariant worth guarding — the single stop path — is guarded by there being only one.

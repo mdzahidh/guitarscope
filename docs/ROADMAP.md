@@ -170,6 +170,13 @@ testing and verification strategies as you seem to take a very long time and eff
   handler, not query-string text that also appears in prose and comments (the gate-3 lesson).
 - **Screenshots are for the reviewer's eye, not for the gate.** One both-themes pass at the
   end of a milestone, not per task.
+- **A pure-UI batch may ship with no assertion at all** (2026-09-04, the user restating the
+  instruction: "*can you minimize the amount of testing you do*"). The recording meter + card
+  transport shipped on `node --check` of all five blocks, one `--dump-dom` to see the row
+  render, and a read-through — **no new suite, no new `verify.sh` step, no new assertion, no
+  new Chrome launch.** The test to write is the one that guards a claim a future edit could
+  break silently; state machine with a single stop path is guarded by there being only one
+  path, and a `.transport` row that fails to render fails visibly on first use.
 
 **Per task, before you call it done**
 1. `./tests/verify.sh` — the gate: the DSP suite, the R3 contracts, the headless

@@ -687,6 +687,31 @@ build educational copy from it, never re-derive from scratch.
   clamp is the platform's and names the routes that work (wanted input first in an Aggregate
   Device, or track it in a DAW and drop the file). Gate: steps 2–7 green, headless **69**, all
   four tamper guards green; step 1 is the documented pre-existing red.
+- **Recording meter + card transport BUILT (session 30, reviewer; user request).** Two items
+  in one message. **(a) A live level meter in the recording panel**, costing **no extra node and
+  no extra pass**: `_startCapture`'s `onaudioprocess` already walked every sample to set
+  `cap.heard`, and `peak > 0` *is* that predicate, so the same walk now accumulates peak and
+  sum-of-squares and the capture graph is untouched (an analyser tapped off it would be one more
+  thing that could change what lands). The audio callback only accumulates; the elapsed clock's
+  timer (250 → **100 ms**, still one per capture, teardown still `stopCapture`'s existing
+  `clearInterval`) drains it in `paintLevel()`. The bar is **linear in dBFS over −60..0** and the
+  number beside it is the same quantity, so picture and readout cannot disagree — fill = RMS,
+  thin rider = a 1 s peak hold falling 12 dB/s. Zones `--slot-c` / `--warn` (≥ −6) / `--err`
+  (≥ −1): there is no green token in the palette and a level meter is not the place to invent
+  one. `fmtDb()` is deliberately **not** used for the readout — its leading `+` reads as a
+  difference, which a level below full scale is not. **(b) One transport per card:** ▶/■, ‖,
+  a native `accent-color` seek range, a tabular elapsed/duration readout and ● Record in one
+  `.transport` row; ⟳ Replace and ✕ Clear stay in `.fileacts`, because they act on the *slot*,
+  not on the sound. An `AudioBufferSourceNode` cannot resume, so **pause is stop-plus-an-offset
+  and seek is a restart** — `startPlayback` gained `off` **last**, leaving the region-audition
+  call site byte-identical; position comes from `playCtx.currentTime`, the audio clock, never the
+  UI timer. **“Stop resets the slider” is a property of the stop path, not the button:** every
+  termination in the app routes through `stopPlayback()` → the card's shared `onstop`, which
+  zeroes the position unless `playKeepPos` is up (only pause and seek raise it), so a new stop
+  source inherits the reset. Seek previews on `input`, commits on `change` (arrow keys fire both).
+  *Verification, in proportion*, per the user's instruction in the same message: `node --check` on
+  all five blocks, one `--dump-dom` to see the row render, a read-through — **no new suite, no new
+  `verify.sh` step, no new assertion, no new Chrome screenshot launch.**
 - **NEXT — the user’s visual test.** R5 is closed; Q4a and Q4b are built, so nothing stands
   between here and R6. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
@@ -867,6 +892,10 @@ build educational copy from it, never re-derive from scratch.
   looking like a recording. Nothing leaves the
   machine: a take stays in the page, like every file dropped on it. No realtime analysis —
   that is M3, still gated.
+  **While it captures, the panel meters the level** — from the walk `onaudioprocess` already
+  did for `cap.heard`, never a second pass or an added node: bar linear in dBFS over −60..0,
+  fill RMS, rider a 1 s peak hold at −12 dB/s, `--slot-c`/`--warn`/`--err`, drained by the
+  elapsed clock's own 100 ms tick.
 - **Every visible number defensible.** Analysis params live in the footer; smoothing
   state is always printed on the plot; dB re full-scale sine everywhere; glossary terms
   link each label to its formula with current values.
@@ -960,6 +989,15 @@ build educational copy from it, never re-derive from scratch.
   (printed on the card button); region audition band-passes with a 4th-order
   Butterworth. One playback at a time; stops on popover close, data change, lm
   toggle, Esc, or natural end.
+  **Each card carries one transport row** — play/stop, pause, a native `accent-color` seek
+  slider, elapsed/duration, and ● Record — while ⟳ Replace and ✕ Clear stay in `.fileacts`:
+  the transport is what makes sound, `.fileacts` is what manages the slot. A source node cannot
+  resume, so pause is stop-plus-a-remembered-offset and seek is a restart at
+  `startPlayback(…, off)` (`off` appended **last**, so region audition is unchanged); position
+  is read from `playCtx.currentTime`, never counted by the paint timer. **Stop resets the
+  slider because every stop path shares one `onstop`** — `cardPlayStopped` zeroes the position
+  unless `playKeepPos` is up, which only pause and seek raise; never enumerate stop sources in
+  the UI layer.
   Progressive disclosure: diff/bands/tone/eq/sgram/env fold to their header chevron
   (verdict + spectrum never fold; **eq/sgram/env start folded**); folded panels skip
   model + canvas work in `drawAll()`; localStorage `gsCollapse` stores only

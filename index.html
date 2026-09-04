@@ -383,6 +383,36 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .recnote.recwarn{ color:var(--mut); }
 .recdot{ color:var(--err); }
 .rectimer{ font-variant-numeric:tabular-nums; font-size:15px; color:var(--ink); font-weight:600; }
+/* Live level meter. Same idiom as .progressbar — a --raise track with a --slot-c fill —
+   but taller, because this one is read while it moves. Width is linear in dBFS over
+   -60..0: the bar and the printed peak then say the same thing. The hot/clip zones use
+   the palette's own warning colors; there is no green token, and a level meter is not
+   the place to invent one. The thin bar riding ahead of the fill is the peak hold. */
+.levelmeter{ display:flex; align-items:center; gap:8px; width:100%; max-width:300px; }
+.levelbar{
+  position:relative; flex:1; height:8px; border-radius:2px;
+  background:var(--raise); border:1px solid var(--hair); overflow:hidden;
+}
+.levelbar i{ display:block; height:100%; width:0%; background:var(--slot-c); transition:width 90ms linear; }
+.levelbar.hot i{ background:var(--warn); }
+.levelbar.clip i{ background:var(--err); }
+.levelbar b{
+  position:absolute; top:0; bottom:0; left:0; width:2px;
+  background:rgba(var(--ink-rgb),.5); transition:left 90ms linear;
+}
+.levelpeak{
+  font-variant-numeric:tabular-nums; font-size:11px; color:var(--mut);
+  flex:none; min-width:56px; text-align:right;
+}
+/* Transport: the sound-making controls of one card in a single row — play/stop, pause,
+   seek, record. Slot management (replace, clear) stays up in .fileacts. */
+.transport{ display:flex; align-items:center; gap:7px; margin-top:9px; flex-wrap:wrap; }
+.transport .seek{
+  flex:1 1 120px; min-width:100px; height:16px; accent-color:var(--slot-c); cursor:pointer;
+}
+.transport .ttime{ font-variant-numeric:tabular-nums; font-size:11px; color:var(--mut); flex:none; }
+.iconbtn:disabled{ opacity:.4; cursor:default; }
+.iconbtn:disabled:hover{ color:var(--mut); background:var(--raise); border-color:var(--hair); }
 .fileinfo{
   font-size:11.5px; color:var(--mut); margin-top:5px;
   font-variant-numeric:tabular-nums; letter-spacing:.01em;
@@ -6746,6 +6776,8 @@ function renderCard(i){
       '</span><span class="filename">Recording guitar '+letter+'…</span></div>'+
       '<div class="recpanel"><div class="recrow"><span class="recdot">●</span>'+
       '<span class="rectimer">'+fmtElapsed(Date.now()-(ui.t0||Date.now()))+'</span></div>'+
+      '<div class="recrow"><div class="levelmeter"><div class="levelbar"><i></i><b></b></div>'+
+      '<span class="levelpeak" title="Peak level of the channel being recorded, dB re full scale">—</span></div></div>'+
       '<div class="recnote">'+(ui.starting?"Opening the input…":bits.join(" · "))+'</div>'+
       '<div class="recrow"><button class="btn" data-act="recstop">■ Stop and measure</button>'+
       '<button class="iconbtn" data-act="recdiscard" title="Throw this take away">✕ Discard</button></div></div>';
@@ -6778,11 +6810,9 @@ function renderCard(i){
   card.innerHTML='<div class="filehead"><span class="slotchip" title="Guitar '+letter+' color — click to change">'+letter+'</span>'+
     '<span class="filename" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'+
     '<span class="fileacts">'+
-    (canPlay(i)?'<button class="iconbtn cardplay" data-act="play" title="Play the analyzed mono mix'+
-      (i===1?' — level-match gain applies when it’s on':'')+'">▶ Play</button>':"")+
     '<button class="iconbtn" data-act="replace" title="Replace with another file">⟳ Replace</button>'+
-    (recSupported()?'<button class="iconbtn" data-act="record" title="Record a new take into this slot">● Record</button>':"")+
     '<button class="iconbtn" data-act="clear" title="Clear this slot">✕ Clear</button></span></div>'+
+    transportHtml(i)+
     '<div class="fileinfo">'+parts.join('<span class="sep">·</span>')+'</div>'+
     '<div class="filemeta">'+chseg+chips.join("")+'</div>';
 }
@@ -7047,6 +7077,35 @@ function startCapture(i){
     renderCard(i);
   });
 }
+// ---------- live level meter ----------
+// The meter reads the samples the take is actually keeping — the picked channel, or the
+// same mix the analysis will see — so it can never flatter an input the recording will
+// not receive. Bar = RMS since the last paint; the thin tick = peak, held a second then
+// falling at 12 dB/s; the printed number is that peak. Width is linear in dB over
+// METER_FLOOR..0, so the bar and the number are saying the same thing.
+const METER_FLOOR=-60, METER_HOT=-6, METER_CLIP=-1;
+function meterPct(db){ return Math.max(0,Math.min(100,(db-METER_FLOOR)/-METER_FLOOR*100)); }
+function paintLevel(cap,card){
+  const t=card.querySelector(".rectimer");
+  if(t) t.textContent=fmtElapsed(Date.now()-cap.t0);
+  const bar=card.querySelector(".levelbar");
+  if(!bar) return;
+  const n=cap.mN, pk=cap.mPk, sq=cap.mSq;
+  cap.mN=0; cap.mPk=0; cap.mSq=0;
+  const rmsDb=n?20*Math.log10(Math.sqrt(sq/n)||1e-9):METER_FLOOR;
+  const pkDb=pk>0?20*Math.log10(pk):METER_FLOOR;
+  const now=Date.now(), dt=Math.max(0,(now-(cap.pkT||now))/1000);
+  cap.pkT=now;
+  if(pkDb>=cap.pkHold){ cap.pkHold=pkDb; cap.pkHoldT=now; }
+  else if(now-cap.pkHoldT>1000) cap.pkHold=Math.max(pkDb,cap.pkHold-12*dt);
+  const fill=bar.querySelector("i"), tick=bar.querySelector("b");
+  if(fill) fill.style.width=meterPct(rmsDb).toFixed(1)+"%";
+  if(tick) tick.style.left=meterPct(cap.pkHold).toFixed(1)+"%";
+  bar.classList.toggle("hot",cap.pkHold>=METER_HOT&&cap.pkHold<METER_CLIP);
+  bar.classList.toggle("clip",cap.pkHold>=METER_CLIP);
+  const out=card.querySelector(".levelpeak");
+  if(out) out.textContent=cap.pkHold<=METER_FLOOR?"—":cap.pkHold.toFixed(1)+" dB";
+}
 async function _startCapture(i,deviceId,sel,prev){
   const stream=await recOpen(deviceId);
   const inf=recTrackInfo(stream);
@@ -7065,7 +7124,8 @@ async function _startCapture(i,deviceId,sel,prev){
   const sink=ctx.createGain(); sink.gain.value=0;
   const cap={ i:i, prev:prev, sel:use, nch:nch, keep:(use>0?1:(nch<=2?nch:1)),
               stream:stream, ctx:ctx, src:src, sp:sp, sink:sink,
-              chunks:[], total:0, t0:Date.now(), timer:null, stopping:false, heard:false };
+              chunks:[], total:0, t0:Date.now(), timer:null, stopping:false, heard:false,
+              mPk:0, mSq:0, mN:0, pkHold:-100, pkHoldT:0 };
   // Reduce online, so a long take stays bounded: 10 ch x 48 kHz x 4 B is 1.9 MB/s.
   // With <=2 channels and no channel picked we keep both, so the Mid/L/R segment
   // behaves exactly as it does for a dropped stereo file.
@@ -7086,14 +7146,16 @@ async function _startCapture(i,deviceId,sel,prev){
       if(n>1) for(let k=0;k<N;k++) m[k]/=n;
       out.push(m);
     }
-    // Zero-fill is the platform saying "that channel never arrived" (M5's probe rests on
-    // the same fact). A take of hard zeros is not a quiet recording, it is no recording.
-    if(!cap.heard){
-      for(let c=0;c<out.length&&!cap.heard;c++){
-        const d=out[c];
-        for(let k=0;k<N;k++) if(d[k]!==0){ cap.heard=true; break; }
-      }
+    // One walk, two answers. Zero-fill is the platform saying "that channel never
+    // arrived" (M5's probe rests on the same fact): a take of hard zeros is not a quiet
+    // recording, it is no recording — and `peak > 0` is that same predicate, so the
+    // level meter costs no extra pass and no extra node. The paint tick drains these.
+    for(let c=0;c<out.length;c++){
+      const d=out[c];
+      for(let k=0;k<N;k++){ const v=d[k], a=v<0?-v:v; if(a>cap.mPk) cap.mPk=a; cap.mSq+=v*v; }
+      cap.mN+=N;
     }
+    if(cap.mPk>0) cap.heard=true;
     cap.chunks.push(out); cap.total+=N;
     const o=e.outputBuffer.getChannelData(0); for(let k=0;k<N;k++) o[k]=0;
   };
@@ -7107,10 +7169,10 @@ async function _startCapture(i,deviceId,sel,prev){
     cardUI[i].rate=ctx.sampleRate; cardUI[i].t0=cap.t0;
     renderCard(i);
   }
-  cap.timer=setInterval(()=>{
-    const t=cards[i].querySelector(".rectimer");
-    if(t) t.textContent=fmtElapsed(Date.now()-cap.t0);
-  },250);
+  // 100 ms, not 250: this tick now moves a bar as well as a clock, and a level meter
+  // that lags a pick attack is not telling you about the pick attack. The clock rounds
+  // to whole seconds, so writing it four times as often changes nothing it prints.
+  cap.timer=setInterval(()=>{ paintLevel(cap,cards[i]); },100);
 }
 function _takeBuffer(cap){
   const n=cap.total; if(!n) return null;
@@ -7191,7 +7253,7 @@ function stopPlayback(){
 // f0/f1 in Hz bound the audition band-pass; pass null for full-range playback.
 // The band edges are 4th-order Butterworth: two biquad sections per side with
 // Q 0.5412 / 1.3066 (poles at 22.5° and 67.5°), i.e. 24 dB/oct outside the band.
-function startPlayback(i,f0,f1,onstop){
+function startPlayback(i,f0,f1,onstop,off){
   stopPlayback();
   if(!canPlay(i)) return false;
   if(!playCtx){
@@ -7221,9 +7283,12 @@ function startPlayback(i,f0,f1,onstop){
   const g=playCtx.createGain();
   g.gain.value=Math.pow(10,playGainDb(i)/20);
   node.connect(g); g.connect(playCtx.destination);
-  playCur={src,onstop};
+  // An AudioBufferSourceNode plays once and cannot be resumed, so an offset is the
+  // only way to start anywhere but the beginning — pause and seek are both built on it.
+  const o=Math.max(0,Math.min(off||0,buf.duration));
+  playCur={src,onstop,i,off:o,t0:playCtx.currentTime};
   src.onended=()=>{ if(playCur&&playCur.src===src){ playCur=null; if(onstop) onstop(); } };
-  src.start();
+  src.start(0,o);
   return true;
 }
 // Region audition: any glossary key that is a vocabulary region gets ▶ buttons
@@ -7258,19 +7323,111 @@ function setPopPlayUI(btn){
   });
   if(btn){ btn.classList.add("playing"); btn.textContent="■ "+SLOT_LETTER[+btn.dataset.slot]; }
 }
-// Card playback: the whole take, full-range, through the same engine as the
-// region audition — level-match gain lands on B exactly as in the plots, and
-// the applied dB is printed on the button for the duration of playback.
-function toggleCardPlay(i,btn){
-  if(btn.classList.contains("playing")){ stopPlayback(); return; }
-  const reset=()=>{
-    const b=cards[i].querySelector(".cardplay");
-    if(b){ b.classList.remove("playing"); b.textContent="▶ Play"; }
-  };
-  if(!startPlayback(i,null,null,reset)) return;
-  const g=playGainDb(i);
-  btn.classList.add("playing");
-  btn.textContent=g?"■ Stop · "+fmtDb(g,1):"■ Stop";
+// Card transport: play/stop, pause and a seek slider, all on the same engine as
+// the region audition — level-match gain lands on B exactly as in the plots, and
+// the applied dB is printed on the button while it sounds.
+// A source node cannot resume, so pause is stop-plus-a-remembered-offset and seek
+// is a restart at a new one; `playKeepPos` is how the shared onstop tells those two
+// apart from a real Stop. Stop, natural end, Esc, a data change and the lm toggle
+// all arrive through stopPlayback() with the flag down, so they all reset the slider.
+const cardPos=[0,0], cardSeek=[false,false];
+let playKeepPos=false, playTick=null;
+function cardDur(i){
+  const s=state.slots[i];
+  return canPlay(i)?s.samples.length/s.info.sampleRate:0;
+}
+function cardPlaying(i){ return !!(playCur&&playCur.card&&playCur.i===i); }
+function cardPosNow(i){
+  if(!cardPlaying(i)) return cardPos[i]||0;
+  return Math.min(cardDur(i),playCur.off+(playCtx.currentTime-playCur.t0));
+}
+// Built fresh on every renderCard, so a re-render restores the live position
+// instead of snapping the slider back to zero under a playing take.
+function transportHtml(i){
+  const rec=recSupported()
+    ?'<button class="iconbtn" data-act="record" title="Record a new take into this slot">● Record</button>':"";
+  if(!canPlay(i)) return rec?'<div class="transport">'+rec+'</div>':"";
+  const dur=cardDur(i), pos=Math.min(dur,cardPosNow(i)), on=cardPlaying(i), g=playGainDb(i);
+  return '<div class="transport">'+
+    '<button class="iconbtn cardplay'+(on?" playing":"")+'" data-act="play" title="Play the analyzed mono mix'+
+      (i===1?' — level-match gain applies when it’s on':'')+'">'+
+      (on?(g?"■ Stop · "+fmtDb(g,1):"■ Stop"):"▶ Play")+'</button>'+
+    '<button class="iconbtn cardpause" data-act="pause" title="Pause — the slider keeps its place"'+
+      (on?"":" disabled")+'>⏸ Pause</button>'+
+    '<input type="range" class="seek" data-seek min="0" max="1000" step="1" value="'+
+      (dur>0?Math.round(pos/dur*1000):0)+'" title="Seek — play starts from here">'+
+    '<span class="ttime">'+fmtElapsed(pos*1000)+" / "+fmtElapsed(dur*1000)+'</span>'+
+    rec+'</div>';
+}
+// In place, never a re-render: the tick runs 10× a second and renderCard rebuilds
+// the record panel's selects along with everything else.
+function syncTransport(i){
+  const card=cards[i], tr=card&&card.querySelector(".transport");
+  if(!tr) return;
+  const on=cardPlaying(i), dur=cardDur(i), pos=Math.min(dur,cardPosNow(i));
+  const b=tr.querySelector(".cardplay");
+  if(b){
+    const g=playGainDb(i);
+    b.classList.toggle("playing",on);
+    b.textContent=on?(g?"■ Stop · "+fmtDb(g,1):"■ Stop"):"▶ Play";
+  }
+  const pb=tr.querySelector(".cardpause");
+  if(pb) pb.disabled=!on;
+  const sk=tr.querySelector(".seek");
+  if(sk&&!cardSeek[i]) sk.value=dur>0?Math.round(pos/dur*1000):0;
+  const tt=tr.querySelector(".ttime");
+  if(tt) tt.textContent=fmtElapsed(pos*1000)+" / "+fmtElapsed(dur*1000);
+}
+function stopPlayTick(){ if(playTick){ clearInterval(playTick); playTick=null; } }
+function startPlayTick(){
+  stopPlayTick();
+  playTick=setInterval(()=>{
+    if(!playCur||!playCur.card) return stopPlayTick();
+    syncTransport(playCur.i);
+  },100);
+}
+function cardPlayStopped(i){
+  stopPlayTick();
+  if(!playKeepPos) cardPos[i]=0;
+  playKeepPos=false;
+  syncTransport(i);
+}
+function startCardPlay(i,off){
+  const dur=cardDur(i);
+  let o=Math.max(0,Math.min(off||0,dur));
+  if(dur>0&&dur-o<0.02) o=0;      // ▶ at the very end starts the take over
+  playKeepPos=true;               // the stop inside startPlayback is not a Stop
+  const ok=startPlayback(i,null,null,()=>cardPlayStopped(i),o);
+  playKeepPos=false;
+  if(!ok) return;
+  playCur.card=true;              // a region audition of the same slot is not this
+  cardPos[i]=o;
+  startPlayTick();
+  syncTransport(i);
+}
+function toggleCardPlay(i){
+  if(cardPlaying(i)){ stopPlayback(); return; }   // onstop zeroes the slider
+  startCardPlay(i,cardPos[i]);
+}
+function pauseCardPlay(i){
+  if(!cardPlaying(i)) return;
+  const pos=cardPosNow(i);        // read before the clock stops
+  playKeepPos=true;
+  stopPlayback();
+  cardPos[i]=Math.max(0,Math.min(pos,cardDur(i)));
+  syncTransport(i);
+}
+// input while dragging (cheap, no restart), change on release or a keyboard arrow.
+function seekCard(i,el,commit){
+  const dur=cardDur(i);
+  const pos=dur*Math.max(0,Math.min(1,(+el.value||0)/1000));
+  cardSeek[i]=!commit;
+  cardPos[i]=pos;
+  const tt=cards[i].querySelector(".ttime");
+  if(tt) tt.textContent=fmtElapsed(pos*1000)+" / "+fmtElapsed(dur*1000);
+  if(!commit) return;
+  if(cardPlaying(i)) startCardPlay(i,pos);
+  else syncTransport(i);
 }
 
 // ---------- glossary & popover ----------
@@ -9030,12 +9187,13 @@ function boot(){
         else openColorPop(i,chip);
         return;
       }
-      if(e.target.closest("select")) return;   // the record panel's own controls
+      if(e.target.closest("select,input[type=range]")) return;   // the record panel's own controls, the seek slider
       const act=e.target.closest("[data-act]");
       if(act){
         const a=act.dataset.act;
         if(a==="replace") fileInputs[i].click();
-        else if(a==="play") toggleCardPlay(i,act);
+        else if(a==="play") toggleCardPlay(i);
+        else if(a==="pause") pauseCardPlay(i);
         else if(a==="record") armRecording(i);
         else if(a==="recperm") requestMicAccess(i);
         else if(a==="recheck") recheckRecChannels(i);
@@ -9056,7 +9214,13 @@ function boot(){
         fileInputs[i].click();
       }
     });
+    card.addEventListener("input",e=>{
+      const sk=e.target.closest("[data-seek]");
+      if(sk) seekCard(i,sk,false);
+    });
     card.addEventListener("change",e=>{
+      const sk=e.target.closest("[data-seek]");
+      if(sk){ seekCard(i,sk,true); return; }
       const dv=e.target.closest("[data-recdev]");
       if(dv){ state.recDevice=dv.value||null; state.recChannel=0; saveSettings(); renderCard(i); ensureRecChannels(i); return; }
       const cn=e.target.closest("[data-recchan]");

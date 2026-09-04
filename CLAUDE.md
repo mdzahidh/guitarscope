@@ -658,12 +658,14 @@ build educational copy from it, never re-derive from scratch.
   device didn't supply, so a non-zero sample in channel *c* proves channel *c* arrived.
   `n = max(heard, claimed, 1)`, `claimed` from `getSettings()` **only** (capabilities would
   size the graph by what the device *could* do and make "Mix" a mean over zero-fill).
-  **Silence proves nothing** — hence the panel's play-something prompt and its ↻ Re-check,
-  and hence (user request 2026-09-04) the picker offering **every** channel 1–32 with the
-  unheard ones merely *labelled* `— not heard yet`: gating the list on the probe hid real
-  channels whenever the player wasn't strumming. `_startCapture()` sizes the node to
-  `max(known, claimed, sel)` so the pick is always a real input rather than a silent
-  downgrade to the mix, and `stopCapture()` **refuses an all-zero take** with
+  **Silence proves nothing** — hence the panel's play-something prompt and its ↻ Re-check.
+  The picker lists `1..n`, the channels actually heard (an all-32 list was tried on 2026-09-04
+  and reversed the same day by the user: 30 of those options come back as digital silence on
+  every platform measured here, and an unprovable claim reads better as a sentence than as 30
+  dead menu entries). The sentence is the panel's **unconditional** warning line; the stale
+  remembered pick a capped list can strand is dropped to 0 by `clampRecChannel()` at every door
+  into a known count. `_startCapture()` still sizes the node to `max(known, claimed, sel)`, and
+  `stopCapture()` still **refuses an all-zero take** with
   *"Channel N came back as digital silence"* instead of landing one.
   `ScriptProcessorNode` over `AudioWorkletNode` because `addModule()` needs a fetch a
   `file://` null origin can't be relied on to allow; it routes through a **gain of 0** so
@@ -850,12 +852,16 @@ build educational copy from it, never re-derive from scratch.
   capture context's rate, which is data like any file's rate. **Channel count is observed,
   never asked**: probe with a discrete 32-channel node and believe only non-zero samples
   (`n = max(heard, claimed, 1)`); a device's own claim may be silently wrong, and silence
-  proves nothing — so offer a re-check rather than a final answer. **The probe describes,
-  it does not gate** (user request 2026-09-04): the picker offers **all 32 channels**
-  always, because a probe that heard two channels is evidence about the 700 ms it listened
-  to, not about the device — silence hides a real channel exactly as it hides an absent
-  one. What the probe earns is the *label* (`Channel 7 — not heard yet`) and the panel's
-  advice, never the ceiling. The other half of the same honesty: a take that is **entirely
+  proves nothing — so offer a re-check rather than a final answer. **The picker lists the
+  channels the probe heard, and the browser's limit is stated in words** (user request
+  2026-09-04, reversing an all-32 list built earlier the same day): a probe that heard two
+  channels is evidence about the 700 ms it listened to, but 32 options of which 30 return
+  digital silence is a promise the browser does not keep, so the unprovable half is said in
+  a sentence — an always-present warning that a browser opens only some devices and hands
+  the page only a few of their channels (macOS Chrome and Safari: the first two, whatever
+  the device carries), naming the routes that work (Aggregate Device ordering, or a DAW and
+  a dropped file). A remembered pick above the list is dropped to *All channels* by
+  `clampRecChannel()`. The other half of the same honesty: a take that is **entirely
   zero samples is refused, not landed** — hard zero is the platform saying the channel
   never arrived, and an unmeasurable silence must not reach `finishSlotFromBuffer()`
   looking like a recording. Nothing leaves the

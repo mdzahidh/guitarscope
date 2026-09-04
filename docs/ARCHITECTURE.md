@@ -1694,11 +1694,25 @@ delivering 10 channels of nothing measures as 1. So the panel asks the user to p
 something while it probes, and offers a **↻ Re-check** button (`recheckRecChannels()`)
 rather than pretending the first answer is final.
 
-**And therefore the probe does not gate the picker** (user request, 2026-09-04). The same
-limit read in the other direction: capping the channel list at `n` claims those channels do
-not exist, which the probe cannot know. `recChanOptions()` offers `Channel 1 … Channel 32`
-unconditionally; `n` survives as the *label* (`Channel 7 — not heard yet`) and as the panel's
-advice. The honesty moves from the list to the take:
+**The picker lists `1..n`, and the shortfall is stated in words** (user request,
+2026-09-04, reversing an all-32 list built earlier the same day). The unprovability cuts
+both ways and neither direction is free: capping at `n` claims channels the probe cannot
+disprove are absent, while offering all 32 hands the user 30 options that come back as
+digital silence on every platform measured here. **An unprovable claim is better said in a
+sentence than encoded as 30 dead menu entries** — so `recChanOptions()` loops `1..n` again,
+the select is `disabled` until the probe answers, and the panel carries a second,
+**unconditional** line: a browser opens only some input devices and hands the page only a
+few of their channels, macOS Chrome and Safari both stop at two, and the routes that do work
+(Aggregate Device ordering, or a DAW and a dropped file) are named. Unconditional because the
+claim is about the browser, not about the device in the list.
+
+Because a capped list can go stale against a remembered pick — `gsSettings` accepts
+`recChannel` 0–32 — `clampRecChannel()` drops the pick to 0 whenever it exceeds the known
+count, at every door into that count (`ensureRecChannels()`'s success path, its `catch` that
+assumes mono, and its early return on a cached count). A `disabled` select offers the user no
+way to fix it themselves. Device *change* was already covered: that handler zeroes the pick.
+
+The take's own honesty is unchanged, and is where it belongs:
 
 - `_startCapture()` sizes the node to `max(known, claimed, sel)` — the pick widens the graph,
   so channel 7 is either the device's channel 7 or the discrete zero-fill standing in for it.

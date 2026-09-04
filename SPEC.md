@@ -2266,3 +2266,43 @@ spectrogram with title and zoom note sharing a row.
   *pretend* a silent take is a recording. Detection guides; the take is the evidence.
 - The recording card prints `channel 7`, not `channel 7 of 7`: `nch` is now partly a
   consequence of the pick, so quoting it as a device width would be inventing a number.
+
+## 2026-09-04 — the picker lists what was heard again, and the panel says why that is short
+
+- **User request:** *"lets get back to the previous method of populating channels that we can
+  detect and write down a warning that on the browser the recording maybe possible on limited
+  channels and devices."* This reverses the picker half of the entry above, hours after it
+  landed, and the reversal is the better call — for a reason the earlier entry did not weigh.
+- **Both entries are right about the epistemics and disagree about the product.** "Silence
+  proves nothing" remains true: a 700 ms probe cannot prove channel 7 is absent. But the
+  earlier entry answered that by offering 32 channels, and on every platform measured here 30
+  of them come back as digital silence and land in `stopCapture()`'s refusal. A list of 32
+  options where 30 fail is a promise the browser does not keep. **An unprovable claim is better
+  said in words than encoded as 30 dead menu entries.**
+- **What changed back.** `recChanOptions()` loops `1..n` again (`n` from
+  `recState.chanByDevice`, defaulting to 1); the select is `disabled` until the probe has an
+  answer; the note reverts to *"N input channels heard on this device. Quiet channels can be
+  missed — play something and re-check."*; the status line prints `channel 3 of 6` again, safe
+  because a capped picker guarantees `sel <= n`.
+- **What the words now carry.** A second, always-present line in the arming panel:
+  *"Recording in a browser is limited: only some input devices can be opened, and only a few of
+  their channels reach the page. Measured here on macOS — both Chrome and Safari hand a page
+  the first two channels of an input device, whatever it carries, and no setting lifts that. If
+  the channel you want isn't listed, put that input first in an Aggregate Device, or record it
+  in a DAW and drop the file here."* It is **unconditional**, not gated on `n <= 2`, because the
+  claim is about the browser and not about this device. It names the measured half so a reader
+  can tell a limit from a bug, and names the two routes that do work.
+- **What was kept from the reversed entry**, because each costs nothing under a capped picker
+  and each is a guard rather than a policy: `_startCapture()`'s `max(known, claimed, sel)`
+  width (collapses to `max(known, claimed)` when `sel <= known`), the explicit
+  `idx < n ? getChannelData(idx) : zeros` read, and `stopCapture()`'s refusal of an all-zero
+  take. The silent downgrade-to-the-mix toast is **not** restored: recording the mix under a
+  channel's name was always the wrong repair.
+- **The hole the reversal reopened, and its fix.** With the list capped again, a `gsSettings`
+  `recChannel` of 7 (the loader accepts 0–32, and one may be stored from the hours the app
+  offered 32) would have no option to sit in: the select would show *All channels* while the
+  state still said 7, and a `disabled` select gives the user no way to correct it.
+  `clampRecChannel()` drops the pick to 0 whenever it exceeds the known count, called at every
+  door into a known count — `ensureRecChannels()`'s success path, its `catch` path that assumes
+  mono, and its early return when the count is already cached. Device *change* was already
+  covered: that handler zeroes `recChannel` outright.

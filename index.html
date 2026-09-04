@@ -380,6 +380,7 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
   border:1px solid var(--hair); border-radius:6px; padding:3px 6px; max-width:230px;
 }
 .recnote{ font-size:11px; color:var(--faint); line-height:1.45; text-align:center; }
+.recnote.recwarn{ color:var(--mut); }
 .recdot{ color:var(--err); }
 .rectimer{ font-variant-numeric:tabular-nums; font-size:15px; color:var(--ink); font-weight:600; }
 .fileinfo{
@@ -6712,18 +6713,25 @@ function renderCard(i){
       // (2026-09-04). So the clamp is the platform's on both engines, no constraint lifts
       // it, and pointing at another browser would be a false promise. Say what to do
       // instead.
-      const capped=n>0&&n<=2
-        ?" Expecting more? Measured here: on macOS both Chrome and Safari hand a page only the first two channels of an input device, whatever it carries — no setting lifts that, so a higher channel will come back as digital silence and the take will be refused rather than saved. Put the input you want first in an Aggregate Device, or record it in a DAW and drop the file here."
-        :"";
       const note=ui.checking?"Checking inputs — play something while it listens…"
-        :(n?(n+" input channel"+(n===1?"":"s")+" heard on this device. Quiet channels can be missed, so every channel stays selectable — play something and re-check to confirm one."+capped)
-           :"Channels not checked yet — pick any channel, or re-check with something playing.");
+        :(n?(n+" input channel"+(n===1?"":"s")+" heard on this device. Quiet channels can be missed — play something and re-check.")
+           :"Channels not checked yet.");
+      // The warning stands whatever the probe heard, because it is about the browser and
+      // not about this device: a page is handed a subset of what the machine carries.
+      // The measured half is named so the reader can tell a limit from a bug, and the
+      // two routes that do work are named beside it.
+      const warn="Recording in a browser is limited: only some input devices can be opened, "+
+        "and only a few of their channels reach the page. Measured here on macOS — both Chrome "+
+        "and Safari hand a page the first two channels of an input device, whatever it carries, "+
+        "and no setting lifts that. If the channel you want isn't listed, put that input first in "+
+        "an Aggregate Device, or record it in a DAW and drop the file here.";
       body='<div class="recrow"><label for="recdev'+i+'">Input</label>'+
           '<select id="recdev'+i+'" data-recdev>'+recDevOptions()+'</select></div>'+
         '<div class="recrow"><label for="recchan'+i+'">Record</label>'+
-          '<select id="recchan'+i+'" data-recchan>'+recChanOptions()+'</select>'+
+          '<select id="recchan'+i+'" data-recchan'+(n?"":" disabled")+'>'+recChanOptions()+'</select>'+
           '<button class="iconbtn" data-act="recheck" title="Listen again for the channels this device carries">↻ Re-check</button></div>'+
         '<div class="recnote">'+esc(note)+'</div>'+
+        '<div class="recnote recwarn">'+esc(warn)+'</div>'+
         '<div class="recrow"><button class="btn" data-act="recstart">● Start recording</button></div>';
     }
     card.innerHTML=head+'<div class="recpanel">'+body+'</div>';
@@ -6731,8 +6739,8 @@ function renderCard(i){
   }
   if(ui.mode==="recording"){
     const bits=[esc(ui.device||"Input")];
-    if(ui.ch>0) bits.push("channel "+ui.ch);
-    else if(ui.nch) bits.push(ui.nch>2?("mix of "+ui.nch+" channels"):(ui.nch===2?"stereo":"mono"));
+    if(ui.nch) bits.push(ui.ch>0?("channel "+ui.ch+" of "+ui.nch)
+      :(ui.nch>2?("mix of "+ui.nch+" channels"):(ui.nch===2?"stereo":"mono")));
     if(ui.rate) bits.push(rateK(ui.rate));
     card.innerHTML='<div class="filehead"><span class="slotchip" title="Guitar '+letter+' color — click to change">'+letter+
       '</span><span class="filename">Recording guitar '+letter+'…</span></div>'+
@@ -6960,14 +6968,23 @@ function recPermMessage(err){
   if(n==="NotReadableError") return "The audio device is busy — another app may have it open.";
   return (err&&err.message)||"The microphone could not be opened.";
 }
+// The picker lists only what was heard, so a channel remembered from a richer device —
+// or from before a re-check heard fewer — would have no option to sit in: the select
+// would show "All channels" while state still said 7, and the disabled select gives the
+// user no way to correct it. Fall back to the mix at every door into a known count.
+function clampRecChannel(){
+  const n=recState.chanByDevice[recChanKey(state.recDevice)]||0;
+  if(n&&state.recChannel>n){ state.recChannel=0; saveSettings(); }
+}
 async function ensureRecChannels(i){
   const key=recChanKey(state.recDevice);
-  if(recState.chanByDevice[key]||recState.probing) return;
+  if(recState.chanByDevice[key]||recState.probing){ clampRecChannel(); return; }
   recState.probing=true;
   if(cardUI[i].mode==="arming"){ cardUI[i].checking=true; renderCard(i); }
   try{ await probeDeviceChannels(state.recDevice); }
   catch(_err){ recState.chanByDevice[key]=1; }
   finally{ recState.probing=false; }
+  clampRecChannel();
   for(let k=0;k<2;k++) if(cardUI[k].mode==="arming"){ cardUI[k].checking=false; renderCard(k); }
 }
 async function recheckRecChannels(i){
@@ -7000,20 +7017,19 @@ function recDevOptions(){
   }
   return h;
 }
-// Every channel the app can record is offered, always — the probe describes the
-// device, it does not gate the picker (user request 2026-09-04). Silence proves
-// nothing, so a probe that heard two channels is not evidence that channel seven is
-// absent; it is only evidence that channel seven stayed quiet while we listened. What
-// the probe earns is the label: channels it heard are stated plainly, the rest are
-// marked "not heard yet" so the user knows which ones are a bet. A bet that comes back
-// empty is refused at stopCapture() rather than landed as a silent take.
+// The picker lists the channels the probe actually heard (user request 2026-09-04,
+// reversing the day's earlier all-32 list). An unheard channel is a bet that comes back
+// as digital silence on every platform measured here, so offering 32 of them read as a
+// promise the browser does not keep. What the probe cannot claim — that a quiet channel
+// is an absent one — is said in words instead: the panel's warning states that a browser
+// hands a page only some devices and only a few of their channels, and the ↻ Re-check
+// invites another listen with something playing.
 function recChanOptions(){
-  const n=recState.chanByDevice[recChanKey(state.recDevice)]||0;
+  const n=recState.chanByDevice[recChanKey(state.recDevice)]||1;
   let h='<option value="0"'+(state.recChannel?"":" selected")+'>'+
         (n>2?"Mix (all "+n+" channels)":"All channels")+'</option>';
-  for(let c=1;c<=REC_MAX_CH;c++)
-    h+='<option value="'+c+'"'+(state.recChannel===c?" selected":"")+'>Channel '+c+
-       (n&&c>n?" — not heard yet":"")+'</option>';
+  for(let c=1;c<=n;c++)
+    h+='<option value="'+c+'"'+(state.recChannel===c?" selected":"")+'>Channel '+c+'</option>';
   return h;
 }
 

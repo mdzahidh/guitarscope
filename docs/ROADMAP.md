@@ -1829,9 +1829,44 @@ Two changes keep that from becoming a lie:
   guard the take rather than to size the graph. It matters immediately: on macOS **both**
   engines clamp to 2 channels, so on this platform every pick above 2 lands here.
 
-The recording card's status line prints `channel 7`, not `channel 7 of 7` — `nch` is now
-partly a consequence of the user's pick, so quoting it as a device width would be inventing a
-number.
+The recording card's status line prints `channel 7`, not `channel 7 of 7` — `nch` was then
+partly a consequence of the user's pick, so quoting it as a device width would have been
+inventing a number. **M5.2c below reverses the picker half of this section and restores that
+`of nch`; the two guards and the deleted downgrade survive.**
+
+### M5.2c — the list is what was heard; the shortfall is a sentence. BUILT 2026-09-04 (user request).
+
+*"Lets get back to the previous method of populating channels that we can detect and write down
+a warning that on the browser the recording maybe possible on limited channels and devices."* —
+the same day, reversing M5.2b's picker.
+
+M5.2b's epistemics stand and its product call does not. A 700 ms probe still cannot prove
+channel 7 is absent; but on every platform measured here 30 of M5.2b's 32 options come back as
+digital silence and land in `stopCapture()`'s refusal, so the list promised what the browser
+does not deliver. **An unprovable claim is better said in words than encoded as 30 dead menu
+entries.**
+
+Reverted: `recChanOptions()` loops `1..n` (`recState.chanByDevice`, default 1); the select is
+`disabled` until the probe answers; the note reads *"N input channels heard on this device.
+Quiet channels can be missed — play something and re-check."*; the status line prints
+`channel 3 of 6` again, safe because a capped picker guarantees `sel <= n`.
+
+Added: a second `.recnote.recwarn` line, **always present** — a browser opens only some input
+devices and hands the page only a few of their channels; macOS Chrome and Safari both stop at
+the first two whatever the device carries; if the wanted channel isn't listed, put that input
+first in an Aggregate Device or track it in a DAW and drop the file. Unconditional rather than
+gated on `n <= 2`, because the claim is about the browser and not about the device in the list.
+
+Kept from M5.2b — guards, not policy, and each free under a capped picker: `_startCapture()`'s
+`max(known, claimed, sel)` width, the `idx < n ? getChannelData(idx) : zeros` read, and the
+all-zero refusal. The silent downgrade-to-the-mix toast stays deleted.
+
+New: **`clampRecChannel()`**. A capped list can go stale against a remembered pick — the
+settings loader accepts `recChannel` 0–32, and one may be stored from the hours the app offered
+32 — leaving the select on *All channels* while state says 7, with no way for the user to
+correct a `disabled` select. It drops the pick to 0 whenever it exceeds the known count, called
+at every door into that count: `ensureRecChannels()`'s success path, its `catch` that assumes
+mono, and its early return on a cached count. Device *change* was already covered.
 
 ### M5.3 — land as a take. BUILT.
 

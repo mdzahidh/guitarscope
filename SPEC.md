@@ -2232,3 +2232,37 @@ spectrogram with title and zoom note sharing a row.
   platform is free to answer wrongly — arrange for the answer to be observable.** Here
   the platform did not even answer wrongly; it declined to answer, cheerfully, in the
   affirmative.
+
+## 2026-09-04 — the channel picker offers all 32; the probe labels, it does not gate
+
+- **User request:** *"how about we try just giving user an option for putting any of the 32
+  channels without detecting."* Granted, and the M5 house rule survives it intact — because
+  the rule was never "detect before offering", it was **"silence proves nothing"**.
+- **The picker was making the claim it forbids.** `recChanOptions()` looped `1..n` from
+  `probeDeviceChannels()`, so a probe that heard two channels *asserted* that channels 3–32
+  are absent. The probe cannot know that. It listened for 700 ms; a player who wasn't
+  strumming, or who strummed only the low string, measures `n = 2` on a device carrying ten.
+  Capping the list on that reading is the same unjustified confidence M5.2a was written to
+  avoid, pointed the other way.
+- **What changed.** `Channel 1 … Channel 32` (`REC_MAX_CH`) always; the select is never
+  `disabled`; a stored `recChannel` is clamped to `REC_MAX_CH` on load. The probe's number is
+  now **labelling** — channels above `n` read `— not heard yet` — plus the note's advice to
+  play something and re-check. Nothing about the probe itself changed; there was nothing wrong
+  with it.
+- **Two guards, so the freedom doesn't become a lie.** (1) `_startCapture()` sizes the
+  `ScriptProcessorNode` to `max(known, claimed, sel)`, so the pick widens the graph and
+  discrete up-mixing either delivers channel 7 or zero-fills it; the old silent downgrade to
+  the mix is deleted, and the per-block read is `idx < n ? getChannelData(idx) : zeros` rather
+  than `getChannelData(min(idx, n-1))` — a clamp there would have recorded the last channel
+  under the requested channel's name. (2) `stopCapture()` **refuses a take whose every sample
+  is 0.0** (`cap.heard`), saying *"Channel N came back as digital silence — this device didn't
+  hand the page that channel, so nothing was saved."* `_takeBuffer()` only ever guarded
+  `total === 0`; an all-zero buffer would have landed through `finishSlotFromBuffer()` and been
+  analysed into a −∞ LTAS and a verdict about silence.
+- **The measured consequence, stated rather than hidden.** On macOS both engines clamp input
+  capture to 2 channels (2026-09-03/04, above), so on this platform every pick above 2 reaches
+  that refusal. The panel says so before the user picks. That is the trade the user asked for
+  and it is the right one: the app now refuses to *decide* which channels exist, and refuses to
+  *pretend* a silent take is a recording. Detection guides; the take is the evidence.
+- The recording card prints `channel 7`, not `channel 7 of 7`: `nch` is now partly a
+  consequence of the pick, so quoting it as a device width would be inventing a number.

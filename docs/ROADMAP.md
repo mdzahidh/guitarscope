@@ -1799,6 +1799,40 @@ it makes `Mix` a mean over zero-filled channels — 10 real channels out of 32 r
 **Silence proves nothing.** A probe that heard nothing has learned nothing, so the panel says
 so and offers **↻ Re-check** rather than quietly claiming mono.
 
+### M5.2b — the probe describes, it does not gate. BUILT 2026-09-04 (user request).
+
+*"How about we try just giving user an option for putting any of the 32 channels without
+detecting."* — and the reasoning behind M5.2a says yes. **Silence proves nothing cuts both
+ways.** M5.2a used it to refuse to *claim* channels; the picker was still capping its list at
+`n`, which is the same unjustified claim in the other direction: a player who wasn't strumming
+during the 700 ms window measures `n = 2` on a device carrying ten channels, and the app then
+hid eight channels that exist.
+
+So the ceiling is gone. `recChanOptions()` emits `Channel 1 … Channel 32` (`REC_MAX_CH`)
+whatever the probe found, the select is never `disabled`, and the probe's result survives as
+**labelling**: channels above `n` read `Channel 7 — not heard yet`, the note says every channel
+stays selectable, and a stored `recChannel` is clamped to `REC_MAX_CH` on load.
+
+Two changes keep that from becoming a lie:
+
+- **The pick is part of the graph's width.** `_startCapture()` sizes the
+  `ScriptProcessorNode` to `max(known, claimed, sel)` (clamped to `REC_MAX_CH`), and the
+  old silent downgrade — `if(use>nch){ use=0; toast("Channel N isn't there — recording the
+  mix.") }` — is deleted. Asking for channel 7 now records channel 7 or the zero-fill in its
+  place; it never records the mix under channel 7's name, and it never records channel 2
+  wearing channel 7's label (the old `Math.min(sel-1, n-1)` would have done exactly that once
+  high channels became selectable — it now reads out zeros instead).
+- **An all-zero take is refused.** `cap.heard` is set by the first non-zero sample kept;
+  `stopCapture()` discards a take that never saw one, with *"Channel N came back as digital
+  silence — this device didn't hand the page that channel, so nothing was saved."* This is the
+  same fact M5.2a's probe rests on — discrete up-mixing zero-fills what never arrived — used to
+  guard the take rather than to size the graph. It matters immediately: on macOS **both**
+  engines clamp to 2 channels, so on this platform every pick above 2 lands here.
+
+The recording card's status line prints `channel 7`, not `channel 7 of 7` — `nch` is now
+partly a consequence of the user's pick, so quoting it as a device width would be inventing a
+number.
+
 ### M5.3 — land as a take. BUILT.
 
 The `AudioBuffer` is built **while the capture context is still alive**, at that context's own

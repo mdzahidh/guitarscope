@@ -1694,6 +1694,26 @@ delivering 10 channels of nothing measures as 1. So the panel asks the user to p
 something while it probes, and offers a **↻ Re-check** button (`recheckRecChannels()`)
 rather than pretending the first answer is final.
 
+**And therefore the probe does not gate the picker** (user request, 2026-09-04). The same
+limit read in the other direction: capping the channel list at `n` claims those channels do
+not exist, which the probe cannot know. `recChanOptions()` offers `Channel 1 … Channel 32`
+unconditionally; `n` survives as the *label* (`Channel 7 — not heard yet`) and as the panel's
+advice. The honesty moves from the list to the take:
+
+- `_startCapture()` sizes the node to `max(known, claimed, sel)` — the pick widens the graph,
+  so channel 7 is either the device's channel 7 or the discrete zero-fill standing in for it.
+  The old `if(use>nch) use=0` downgrade to the mix is gone: recording the mix under a
+  channel's name is worse than recording nothing. For the same reason the per-block read is
+  `idx < n ? getChannelData(idx) : zeros`, never `getChannelData(min(idx, n-1))` — the clamp
+  would hand back the last channel wearing the requested one's label.
+- `stopCapture()` **refuses a take with no non-zero sample** (`cap.heard`), naming the channel.
+  `_takeBuffer()`'s own guard is `total === 0` — samples arrived but every one of them is
+  `0.0` is a different failure, and on macOS it is the *expected* one for any pick above 2.
+
+An all-zero buffer would otherwise pass `finishSlotFromBuffer()` and be analysed: a −∞ LTAS,
+an empty band table, a verdict about silence. Refusing it is the same rule as refusing a file
+whose sample rate cannot be determined.
+
 **`ScriptProcessorNode` over `AudioWorkletNode`, deliberately.** `addModule()` must fetch
 a module URL, and a `file://` page (null origin) cannot be relied on to allow that; M5
 runs no realtime analysis, so a deprecated node doing 700 ms of arithmetic is the right

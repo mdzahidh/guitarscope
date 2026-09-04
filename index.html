@@ -6713,15 +6713,15 @@ function renderCard(i){
       // it, and pointing at another browser would be a false promise. Say what to do
       // instead.
       const capped=n>0&&n<=2
-        ?" Expecting more? Measured here: on macOS both Chrome and Safari hand a page only the first two channels of an input device, whatever it carries — no setting lifts that. Put the input you want first in an Aggregate Device, or record it in a DAW and drop the file here."
+        ?" Expecting more? Measured here: on macOS both Chrome and Safari hand a page only the first two channels of an input device, whatever it carries — no setting lifts that, so a higher channel will come back as digital silence and the take will be refused rather than saved. Put the input you want first in an Aggregate Device, or record it in a DAW and drop the file here."
         :"";
       const note=ui.checking?"Checking inputs — play something while it listens…"
-        :(n?(n+" input channel"+(n===1?"":"s")+" heard on this device. Quiet channels can be missed — play something and re-check."+capped)
-           :"Channels not checked yet.");
+        :(n?(n+" input channel"+(n===1?"":"s")+" heard on this device. Quiet channels can be missed, so every channel stays selectable — play something and re-check to confirm one."+capped)
+           :"Channels not checked yet — pick any channel, or re-check with something playing.");
       body='<div class="recrow"><label for="recdev'+i+'">Input</label>'+
           '<select id="recdev'+i+'" data-recdev>'+recDevOptions()+'</select></div>'+
         '<div class="recrow"><label for="recchan'+i+'">Record</label>'+
-          '<select id="recchan'+i+'" data-recchan'+(n?"":" disabled")+'>'+recChanOptions()+'</select>'+
+          '<select id="recchan'+i+'" data-recchan>'+recChanOptions()+'</select>'+
           '<button class="iconbtn" data-act="recheck" title="Listen again for the channels this device carries">↻ Re-check</button></div>'+
         '<div class="recnote">'+esc(note)+'</div>'+
         '<div class="recrow"><button class="btn" data-act="recstart">● Start recording</button></div>';
@@ -6731,8 +6731,8 @@ function renderCard(i){
   }
   if(ui.mode==="recording"){
     const bits=[esc(ui.device||"Input")];
-    if(ui.nch) bits.push(ui.ch>0?("channel "+ui.ch+" of "+ui.nch)
-      :(ui.nch>2?("mix of "+ui.nch+" channels"):(ui.nch===2?"stereo":"mono")));
+    if(ui.ch>0) bits.push("channel "+ui.ch);
+    else if(ui.nch) bits.push(ui.nch>2?("mix of "+ui.nch+" channels"):(ui.nch===2?"stereo":"mono"));
     if(ui.rate) bits.push(rateK(ui.rate));
     card.innerHTML='<div class="filehead"><span class="slotchip" title="Guitar '+letter+' color — click to change">'+letter+
       '</span><span class="filename">Recording guitar '+letter+'…</span></div>'+
@@ -7000,12 +7000,20 @@ function recDevOptions(){
   }
   return h;
 }
+// Every channel the app can record is offered, always — the probe describes the
+// device, it does not gate the picker (user request 2026-09-04). Silence proves
+// nothing, so a probe that heard two channels is not evidence that channel seven is
+// absent; it is only evidence that channel seven stayed quiet while we listened. What
+// the probe earns is the label: channels it heard are stated plainly, the rest are
+// marked "not heard yet" so the user knows which ones are a bet. A bet that comes back
+// empty is refused at stopCapture() rather than landed as a silent take.
 function recChanOptions(){
-  const n=recState.chanByDevice[recChanKey(state.recDevice)]||1;
+  const n=recState.chanByDevice[recChanKey(state.recDevice)]||0;
   let h='<option value="0"'+(state.recChannel?"":" selected")+'>'+
         (n>2?"Mix (all "+n+" channels)":"All channels")+'</option>';
-  for(let c=1;c<=n;c++)
-    h+='<option value="'+c+'"'+(state.recChannel===c?" selected":"")+'>Channel '+c+'</option>';
+  for(let c=1;c<=REC_MAX_CH;c++)
+    h+='<option value="'+c+'"'+(state.recChannel===c?" selected":"")+'>Channel '+c+
+       (n&&c>n?" — not heard yet":"")+'</option>';
   return h;
 }
 
@@ -7029,16 +7037,19 @@ async function _startCapture(i,deviceId,sel,prev){
   const ctx=recCtxFor(inf.rate);
   if(ctx.state==="suspended"){ try{ await ctx.resume(); }catch(_e){} }
   const known=recState.chanByDevice[recChanKey(deviceId)]||0;
-  const nch=Math.max(1,Math.min(REC_MAX_CH,Math.max(known,inf.claimed)));
-  let use=sel;
-  if(use>nch){ use=0; toast("Channel "+sel+" isn't there on this device — recording the mix.",true); }
+  // The pick is part of the width: asking for channel 7 sizes the node to 7 inputs, so
+  // discrete up-mixing either hands us the device's channel 7 or zero-fills it. Either
+  // way we record what actually arrived and judge it afterwards — never the mix under
+  // channel 7's name, and never channel 2 wearing channel 7's label.
+  const use=sel;
+  const nch=Math.max(1,Math.min(REC_MAX_CH,Math.max(known,inf.claimed,use)));
   const src=ctx.createMediaStreamSource(stream);
   const sp=ctx.createScriptProcessor(4096,nch,1);
   sp.channelInterpretation="discrete";
   const sink=ctx.createGain(); sink.gain.value=0;
   const cap={ i:i, prev:prev, sel:use, nch:nch, keep:(use>0?1:(nch<=2?nch:1)),
               stream:stream, ctx:ctx, src:src, sp:sp, sink:sink,
-              chunks:[], total:0, t0:Date.now(), timer:null, stopping:false };
+              chunks:[], total:0, t0:Date.now(), timer:null, stopping:false, heard:false };
   // Reduce online, so a long take stays bounded: 10 ch x 48 kHz x 4 B is 1.9 MB/s.
   // With <=2 channels and no channel picked we keep both, so the Mid/L/R segment
   // behaves exactly as it does for a dropped stereo file.
@@ -7046,7 +7057,11 @@ async function _startCapture(i,deviceId,sel,prev){
     if(cap.stopping) return;
     const b=e.inputBuffer, N=b.length, n=b.numberOfChannels, out=[];
     if(cap.sel>0){
-      out.push(new Float32Array(b.getChannelData(Math.min(cap.sel-1,n-1))));
+      // The node was sized to include the pick, so the index is normally there. If a
+      // browser hands back fewer inputs anyway, record silence rather than the last
+      // channel wearing this one's name — stopCapture() then refuses the take.
+      const idx=cap.sel-1;
+      out.push(idx<n?new Float32Array(b.getChannelData(idx)):new Float32Array(N));
     } else if(cap.keep>1){
       for(let c=0;c<cap.keep;c++) out.push(new Float32Array(b.getChannelData(Math.min(c,n-1))));
     } else {
@@ -7054,6 +7069,14 @@ async function _startCapture(i,deviceId,sel,prev){
       for(let c=0;c<n;c++){ const d=b.getChannelData(c); for(let k=0;k<N;k++) m[k]+=d[k]; }
       if(n>1) for(let k=0;k<N;k++) m[k]/=n;
       out.push(m);
+    }
+    // Zero-fill is the platform saying "that channel never arrived" (M5's probe rests on
+    // the same fact). A take of hard zeros is not a quiet recording, it is no recording.
+    if(!cap.heard){
+      for(let c=0;c<out.length&&!cap.heard;c++){
+        const d=out[c];
+        for(let k=0;k<N;k++) if(d[k]!==0){ cap.heard=true; break; }
+      }
     }
     cap.chunks.push(out); cap.total+=N;
     const o=e.outputBuffer.getChannelData(0); for(let k=0;k<N;k++) o[k]=0;
@@ -7093,14 +7116,16 @@ function stopCapture(save){
   const i=cap.i;
   // Built while the capture context is still alive: its rate is the rate that made
   // these samples, so nothing has to be re-decoded or resampled.
-  const buf=save?_takeBuffer(cap):null;
+  const buf=(save&&cap.heard)?_takeBuffer(cap):null;
   try{ cap.ctx.close(); }catch(_e){}
   cap.chunks.length=0;
   if(!buf){
     loadSeq[i]++;   // nothing partial survives a discard
     cardUI[i]=(cap.prev&&cap.prev.mode)?cap.prev:{mode:"empty"};
     renderCard(i);
-    if(save) toast("Nothing was captured — the input stayed silent.",true);
+    if(save) toast(cap.sel>0
+      ? "Channel "+cap.sel+" came back as digital silence — this device didn't hand the page that channel, so nothing was saved."
+      : "Nothing was captured — the input stayed silent.",true);
     return;
   }
   landRecording(i,buf);
@@ -8298,7 +8323,7 @@ function loadSettings(){
         // M5: the remembered input. No version bump — these keys are simply absent
         // in a v4 payload written before M5, and absent means "the default input".
         if(typeof j.recDevice==="string"&&j.recDevice) state.recDevice=j.recDevice;
-        if(isFinite(j.recChannel)&&j.recChannel>=0) state.recChannel=j.recChannel|0;
+        if(isFinite(j.recChannel)&&j.recChannel>=0&&j.recChannel<=REC_MAX_CH) state.recChannel=j.recChannel|0;
         // v1 had harmonics:boolean, v2 has stringHarmonics:6x4
         if(Array.isArray(j.stringHarmonics) && j.stringHarmonics.length===6){
           for(let i=0;i<6;i++) for(let k=0;k<HARM_SLOTS;k++) state.stringHarmonics[i][k]=!!(j.stringHarmonics[i]&&j.stringHarmonics[i][k]);

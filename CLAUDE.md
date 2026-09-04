@@ -658,7 +658,13 @@ build educational copy from it, never re-derive from scratch.
   device didn't supply, so a non-zero sample in channel *c* proves channel *c* arrived.
   `n = max(heard, claimed, 1)`, `claimed` from `getSettings()` **only** (capabilities would
   size the graph by what the device *could* do and make "Mix" a mean over zero-fill).
-  **Silence proves nothing** — hence the panel's play-something prompt and its ↻ Re-check.
+  **Silence proves nothing** — hence the panel's play-something prompt and its ↻ Re-check,
+  and hence (user request 2026-09-04) the picker offering **every** channel 1–32 with the
+  unheard ones merely *labelled* `— not heard yet`: gating the list on the probe hid real
+  channels whenever the player wasn't strumming. `_startCapture()` sizes the node to
+  `max(known, claimed, sel)` so the pick is always a real input rather than a silent
+  downgrade to the mix, and `stopCapture()` **refuses an all-zero take** with
+  *"Channel N came back as digital silence"* instead of landing one.
   `ScriptProcessorNode` over `AudioWorkletNode` because `addModule()` needs a fetch a
   `file://` null origin can't be relied on to allow; it routes through a **gain of 0** so
   nothing is monitored back. All three processing blocks off. One `recCap` for the whole app;
@@ -844,7 +850,15 @@ build educational copy from it, never re-derive from scratch.
   capture context's rate, which is data like any file's rate. **Channel count is observed,
   never asked**: probe with a discrete 32-channel node and believe only non-zero samples
   (`n = max(heard, claimed, 1)`); a device's own claim may be silently wrong, and silence
-  proves nothing — so offer a re-check rather than a final answer. Nothing leaves the
+  proves nothing — so offer a re-check rather than a final answer. **The probe describes,
+  it does not gate** (user request 2026-09-04): the picker offers **all 32 channels**
+  always, because a probe that heard two channels is evidence about the 700 ms it listened
+  to, not about the device — silence hides a real channel exactly as it hides an absent
+  one. What the probe earns is the *label* (`Channel 7 — not heard yet`) and the panel's
+  advice, never the ceiling. The other half of the same honesty: a take that is **entirely
+  zero samples is refused, not landed** — hard zero is the platform saying the channel
+  never arrived, and an unmeasurable silence must not reach `finishSlotFromBuffer()`
+  looking like a recording. Nothing leaves the
   machine: a take stays in the page, like every file dropped on it. No realtime analysis —
   that is M3, still gated.
 - **Every visible number defensible.** Analysis params live in the footer; smoothing

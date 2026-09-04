@@ -7346,6 +7346,11 @@ function cardPosNow(i){
 function transportHtml(i){
   const rec=recSupported()
     ?'<button class="iconbtn" data-act="record" title="Record a new take into this slot">● Record</button>':"";
+  // Only a take needs saving — a dropped file is already on disk, and a demo or
+  // snapshot slot has no captured audio behind it.
+  const sl=state.slots[i];
+  const save=(sl&&sl.kind==="recording"&&sl.audioBuf)
+    ?'<button class="iconbtn" data-act="save" title="Save this take as a 32-bit float WAV at its own sample rate">⭳ Save</button>':"";
   if(!canPlay(i)) return rec?'<div class="transport">'+rec+'</div>':"";
   const dur=cardDur(i), pos=Math.min(dur,cardPosNow(i)), on=cardPlaying(i), g=playGainDb(i);
   return '<div class="transport">'+
@@ -7357,7 +7362,7 @@ function transportHtml(i){
     '<input type="range" class="seek" data-seek min="0" max="1000" step="1" value="'+
       (dur>0?Math.round(pos/dur*1000):0)+'" title="Seek — play starts from here">'+
     '<span class="ttime">'+fmtElapsed(pos*1000)+" / "+fmtElapsed(dur*1000)+'</span>'+
-    rec+'</div>';
+    rec+save+'</div>';
 }
 // In place, never a re-render: the tick runs 10× a second and renderCard rebuilds
 // the record panel's selects along with everything else.
@@ -8087,6 +8092,37 @@ function download(blob,name){
   a.click();
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+// A recorded take exists only in this page until it is saved. It is written back out
+// as exactly what was captured — 32-bit float PCM, every channel, at the capture
+// context's own rate — so the saved file, dropped back on the app, sniffs to the same
+// rate/channels/depth the take reported. A codec here would make the round trip lossy
+// and the numbers indefensible, which is the same reason capture never uses
+// MediaRecorder. WAVE_FORMAT_IEEE_FLOAT (3) carries an 18-byte fmt chunk (cbSize = 0),
+// as the spec requires for non-PCM formats.
+function encodeWavFloat32(ab){
+  const ch=ab.numberOfChannels, n=ab.length, rate=ab.sampleRate;
+  const dataBytes=n*ch*4, buf=new ArrayBuffer(12+8+18+8+dataBytes), dv=new DataView(buf);
+  let o=0;
+  const str=t=>{ for(let k=0;k<t.length;k++) dv.setUint8(o+k,t.charCodeAt(k)); o+=t.length; };
+  const u32=v=>{ dv.setUint32(o,v,true); o+=4; };
+  const u16=v=>{ dv.setUint16(o,v,true); o+=2; };
+  str("RIFF"); u32(buf.byteLength-8); str("WAVE");
+  str("fmt "); u32(18); u16(3); u16(ch); u32(rate); u32(rate*ch*4); u16(ch*4); u16(32); u16(0);
+  str("data"); u32(dataBytes);
+  const src=[]; for(let c=0;c<ch;c++) src.push(ab.getChannelData(c));
+  for(let k=0;k<n;k++) for(let c=0;c<ch;c++){ dv.setFloat32(o,src[c][k],true); o+=4; }
+  return new Blob([buf],{type:"audio/wav"});
+}
+function saveTake(i){
+  const s=state.slots[i];
+  if(!s||!s.audioBuf){ toast("There is no captured audio in this slot to save.",true); return; }
+  try{
+    download(encodeWavFloat32(s.audioBuf),"rameau_"+sanitizeName(s.name)+".wav");
+    toast("Take saved as a "+s.audioBuf.sampleRate+" Hz 32-bit float WAV.");
+  }catch(err){
+    toast("The take could not be written out: "+((err&&err.message)||"unknown error"),true);
+  }
 }
 function sanitizeName(x){
   return String(x).replace(/\.[a-z0-9]{2,5}$/i,"").replace(/[^\w.\-]+/g,"-")
@@ -9195,6 +9231,7 @@ function boot(){
         else if(a==="play") toggleCardPlay(i);
         else if(a==="pause") pauseCardPlay(i);
         else if(a==="record") armRecording(i);
+        else if(a==="save") saveTake(i);
         else if(a==="recperm") requestMicAccess(i);
         else if(a==="recheck") recheckRecChannels(i);
         else if(a==="recstart") startCapture(i);

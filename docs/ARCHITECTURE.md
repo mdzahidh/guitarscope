@@ -3,10 +3,12 @@
 Implementation knowledge that is not obvious from reading the code. For scope decisions
 and their dates see SPEC.md's changelog; for the working brief see CLAUDE.md.
 
-## Module boundaries (five script blocks inside index.html)
+## Module boundaries (five numbered script blocks inside index.html)
 
-`index.html` is the only shipped artifact — no bundler, no imports. It contains five
-`<script>` blocks whose order is a dependency order:
+`index.html` is the only shipped artifact — no bundler, no imports. It carries **six**
+`<script>` tags: the GA4 visitor tag in `<head>` (lines 10–30, added 2026-09-03 —
+DNT-aware, injects nothing when offline, and touches no app state), then the five whose
+order is a dependency order and which everything else in these docs numbers 0–4:
 
 | # | Role | Key contents |
 |---|------|-------------|
@@ -1642,6 +1644,109 @@ sites, `node --check` on all five script blocks, and headless screenshots of
 resolution and read — including the spectrum with open-string names directly above its new
 title, and the zoomed spectrogram with title and zoom note sharing a row.
 
+## M5 (session 29): record into a slot — observe the channel count, never ask for it
+
+A take is recorded into a guitar slot and lands through the **existing** pipeline:
+`landRecording()` calls the same `finishSlotFromBuffer()` a dropped file reaches, with
+`{kind:"recording", container:"Live input", bitDepth:"32-bit float"}`. Downstream —
+Welch, spectrogram, envelope, EQ fit, exports, snapshots — nothing knows the difference,
+which is the whole design constraint: *a recorded take must be indistinguishable,
+downstream, from a dropped file.* M5 is **not** M3: nothing is analysed in realtime, the
+capture graph produces no picture, and M3 (live input) stays gated.
+
+**Raw Web Audio PCM, never `MediaRecorder`.** The first attempt (reverted the same day,
+recovery ref `refs/tbh/recovery/before-discard/20260904T011041Z-45812`) recorded through
+`MediaRecorder` into Opus/WebM and decoded that back. This app integrates an LTAS to
+20 kHz and prints dB re full-scale sine; a perceptual codec that discards exactly the
+quiet high-frequency content the app is built to measure makes every number on the page
+indefensible. The capture graph now keeps `Float32Array` blocks and builds the
+`AudioBuffer` itself, so no `decodeAtNativeRate` and no header sniffer is involved — the
+one thing this rewrite *deletes* rather than adds.
+
+### How many channels? Observe, never ask
+
+The user's device is a macOS **"Aggregate Device" with 10 input channels**, and that is
+the case that broke attempt one, because it asked two questions the platform is free to
+answer wrongly:
+
+- `getSettings().channelCount` / `getCapabilities().channelCount.max` — an unsupported
+  constraint is **silently ignored** per spec, so even `{exact:N}` can be accepted and
+  not honoured. A claim is not a delivery.
+- `createMediaStreamSource(stream).channelCount` — that node has no inputs, so the spec
+  default (2) is what it reports, forever, regardless of the stream.
+
+So the code observes instead. `probeDeviceChannels()` opens the device, runs it into a
+**32-channel `ScriptProcessorNode` with `channelInterpretation="discrete"`** for 700 ms,
+and scans every channel for a non-zero sample. Discrete up-mixing **zero-fills** channels
+the device did not supply, so a non-zero sample in channel *c* is proof that channel *c*
+was delivered:
+
+```
+n = max(heard, claimed, 1)      // clamped to REC_MAX_CH = 32
+```
+
+`claimed` is `getSettings()` **only** — `getCapabilities()` was deliberately dropped from
+that max. Capabilities say what the device *could* do; sizing the graph by it would make
+the "Mix" a mean over zero-filled channels (10 real of 32 requested is −10 dB of nothing).
+
+**Silence proves nothing**, which is the honest limit of the method: a device that is
+delivering 10 channels of nothing measures as 1. So the panel asks the user to play
+something while it probes, and offers a **↻ Re-check** button (`recheckRecChannels()`)
+rather than pretending the first answer is final.
+
+**`ScriptProcessorNode` over `AudioWorkletNode`, deliberately.** `addModule()` must fetch
+a module URL, and a `file://` page (null origin) cannot be relied on to allow that; M5
+runs no realtime analysis, so a deprecated node doing 700 ms of arithmetic is the right
+trade. The node only runs while it reaches `destination`, so it routes through a gain of
+**0** — nothing is monitored back into the room and into the mic.
+
+Every processing block is off (`echoCancellation:false, noiseSuppression:false,
+autoGainControl:false`). None of the three belongs near a spectrum measurement, and in
+Chrome multi-channel is only ever delivered with the APM disabled.
+
+### Reducing online, and landing
+
+`_startCapture` fixes the reduction once, at open: `sel>0` keeps channel `sel-1`; Mix
+with `nch<=2` keeps **both** (so the Mid/L/R segment behaves exactly as it does for a
+dropped stereo file); Mix with `nch>2` keeps the mono mean. Reducing in the audio callback
+is what keeps a long take bounded — 10 ch × 48 kHz × 4 B is 1.9 MB/s. `_takeBuffer()`
+builds the `AudioBuffer` **while the capture context is still alive**, at that context's
+rate: the rate that made these samples, so nothing is re-decoded or resampled. A rate
+outside 8–384 kHz is refused through `slotLoadError()` with the device-settings fix.
+
+There is **at most one** `recCap` for the whole app. `recAbort(i)` runs at the *head* of
+`loadFileIntoSlot`/`applySnapshot`/`loadDemo` — not the end — because a capture left
+running would keep a `● Recording` card alive over the new file and then land its take on
+top of it. A discard bumps `loadSeq[i]`, so nothing partial can arrive late.
+
+Device enumeration is **lazy** and never runs from `boot()`: `enumerateDevices()` wakes
+the OS audio service and raced the demo decode. `refreshRecDevices()` re-runs on
+`devicechange`. `state.recDevice`/`state.recChannel` persist in `gsSettings`, which stays
+**v4** — the two keys are additive, and `tests/dsp.test.js` pins `SETTINGS_VER = 4`.
+
+### Chrome on macOS clamps every input device to 2 channels
+
+Measured here through real headless Chrome, 2026-09-04:
+
+| Device | `capabilities.channelCount` | `settings.channelCount` | delivered |
+|---|---|---|---|
+| BlackHole 16ch | `{min:1,max:2}` | 2 | 2 |
+| Pro Tools Aggregate I/O (16) | `{min:1,max:2}` | 2 | 2 |
+| Pro Tools Aggregate I/O (32) | `{min:1,max:2}` | 2 | 2 |
+| Pro Tools Aggregate I/O (64) | `{min:1,max:2}` | 2 | 2 |
+| Aggregate Device (10 in) | `{min:1,max:2}` | 2 | 2 |
+
+This is Chromium's own `AudioManagerMac` input clamp, not a constraint that can be lifted
+from the page — no combination of `ideal`/`exact` changes it, which is why `recOpen()`
+tries 32 → unconstrained → bare `{audio:true}` and then simply believes what arrives.
+Safari is the only browser that can plausibly surface all ten, and is **untested here**;
+the panel says so as a suggestion, not as a promise. The probe is what makes this
+survivable: when a browser *does* deliver ten channels, the picker offers ten without a
+single line changing.
+
+The lesson, written down because it generalises past M5: **do not ask a question the
+platform is free to answer wrongly — arrange for the answer to be observable.**
+
 ## Hard-won correctness notes (dead ends — do not retry)
 
 - **Absolute attack thresholds are wrong for phrases.** 10 %/90 %-of-peak is never
@@ -1779,6 +1884,19 @@ metrics) are carried as stored values and labeled as such.
   `<select>` is *not* a source of this — it is sized by its widest option and holds
   width across selections. Watch for the same pattern if another card's `.cardsub`
   ever becomes control-dependent.
+- **`--use-file-for-fake-audio-capture` yields silence in this Chrome build.** The flag is
+  accepted, `getUserMedia` resolves, the track reports `live` — and every sample is zero,
+  so a channel probe that trusts it measures 1 channel on every device. M5's headless
+  checks use `--use-fake-ui-for-media-stream` (auto-grant) plus Chrome's built-in fake
+  device tone; never the file variant.
+- **Chrome on macOS clamps microphone input to 2 channels regardless of the device.**
+  Measured 2026-09-04 across BlackHole 16ch, three Pro Tools aggregate bridges (16/32/64)
+  and the user's 10-channel Aggregate Device: all five report
+  `capabilities.channelCount {min:1,max:2}`, `settings.channelCount` 2, and deliver 2.
+  It is Chromium's `AudioManagerMac` input clamp, not liftable by any constraint —
+  `{ideal:32}`, `{exact:10}` and no constraint at all give the same stream. Safari is the
+  only plausible route to a multi-channel take on this platform. See the M5 section:
+  the code never asks, it observes what actually arrives.
 
 ## Testing strategy
 

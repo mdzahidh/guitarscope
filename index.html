@@ -371,6 +371,17 @@ input[type=number]::-webkit-inner-spin-button{ opacity:.4; }
 .iconbtn.cardplay{ font-variant-numeric:tabular-nums; }
 .iconbtn.cardplay.playing{ color:var(--ink); border-color:var(--hair2); }
 .emptyinner .openbtn{ margin:2px 0 1px; }
+.btnrow{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:2px 0 1px; }
+.recpanel{ display:flex; flex-direction:column; gap:8px; padding:2px 0 1px; }
+.recpanel .recrow{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }
+.recpanel .recrow label{ font-size:11px; color:var(--mut); }
+.recpanel select{
+  font:inherit; font-size:11.5px; color:var(--ink); background:var(--raise);
+  border:1px solid var(--hair); border-radius:6px; padding:3px 6px; max-width:230px;
+}
+.recnote{ font-size:11px; color:var(--faint); line-height:1.45; text-align:center; }
+.recdot{ color:var(--err); }
+.rectimer{ font-variant-numeric:tabular-nums; font-size:15px; color:var(--ink); font-weight:600; }
 .fileinfo{
   font-size:11.5px; color:var(--mut); margin-top:5px;
   font-variant-numeric:tabular-nums; letter-spacing:.01em;
@@ -1162,7 +1173,7 @@ kbd{
         <span>Claude Rameau · offline · files never leave this page</span>
       </div>
       <div class="settingsFoot" id="settingsFoot">
-        <span class="sfInfo">Remembered: tuning · A4 · EQ device · smoothing · Strings · Harmonics — not level-match · <button class="linkish" id="resetSettingsBtn">Reset saved settings</button></span>
+        <span class="sfInfo">Remembered: tuning · A4 · EQ device · smoothing · Strings · Harmonics · Input — not level-match · <button class="linkish" id="resetSettingsBtn">Reset saved settings</button></span>
       </div>
     </footer>
 
@@ -4699,7 +4710,10 @@ const state={ slots:[null,null], tuning:"estd", customOffset:0,
               // The look of the picture and of the lines drawn on it. Same class as
               // the R5.6 keys above: view state, not analysis — unpersisted, never
               // exported, and not part of the refine cache key.
-              sgCmap:"parula", sgTrack:"white", sgDash:"dash", sgHue:false, sgTriad:null };
+              sgCmap:"parula", sgTrack:"white", sgDash:"dash", sgHue:false, sgTriad:null,
+              // M5 recording: persisted in gsSettings v4 — new keys default when absent,
+              // so no version bump (tests/dsp.test.js pins SETTINGS_VER=4).
+              recDevice:null, recChannel:0 };
 // M2.7: gate hook — ?refine=0 disables the zoom refine (never persisted, no UI)
 const _refineEnabled = !/[?&]refine=0(?:&|$)/i.test(location.search);
 // A pan or a wheel writes ZOOMS and redraws on every event, so the refine waits
@@ -4787,7 +4801,32 @@ function setCardProgress(i,label,frac){
   if(lb) lb.textContent=label;
 }
 
+// Shared tail for every way audio reaches a slot — a dropped file, and (M5) a take
+// recorded into it. Everything downstream (analysis, exports, playback, re-record)
+// sees one shape, so a take is indistinguishable from a file.
+async function finishSlotFromBuffer(i,audioBuf,meta,seq){
+  const slot={
+    name:meta.name, kind:meta.kind||"file",
+    info:{ container:meta.container,
+           sampleRate:meta.sampleRate!=null?meta.sampleRate:audioBuf.sampleRate,
+           channels:meta.channels!=null?meta.channels:audioBuf.numberOfChannels,
+           bitDepth:meta.bitDepth },
+    duration:audioBuf.duration, samples:null, audioBuf,
+    channelMode:meta.channelMode||"mid", metrics:{}
+  };
+  await analyzeSlot(i,slot,seq);
+}
+function slotLoadError(i,name,err,fallback,hintFallback){
+  state.slots[i]=null;
+  cardUI[i]={mode:"error",name:name,
+    message:(err&&err.message)||fallback,
+    hint:(err&&err.hint)||hintFallback};
+  renderCard(i);
+  afterDataChange(true);
+}
+
 async function loadFileIntoSlot(i,file){
+  recAbort(i);
   if(/\.json$/i.test(file.name)||file.type==="application/json"){
     try{ await loadSnapshotFile(file); }
     catch(err){ toast("Snapshot: "+(err.message||"could not be read."),true); }
@@ -4808,23 +4847,15 @@ async function loadFileIntoSlot(i,file){
     setCardProgress(i,"Decoding at "+sniffed.sampleRate+" Hz…",0.08);
     const audioBuf=await decodeAtNativeRate(buf,sniffed);
     if(seq!==loadSeq[i]) return;
-    const slot={
-      name:file.name, kind:"file",
-      info:{ container:sniffed.container, sampleRate:sniffed.sampleRate,
-             channels:sniffed.channels!=null?sniffed.channels:audioBuf.numberOfChannels,
-             bitDepth:sniffed.bitDepth },
-      duration:audioBuf.duration, samples:null, audioBuf,
-      channelMode:"mid", metrics:{}
-    };
-    await analyzeSlot(i,slot,seq);
+    await finishSlotFromBuffer(i,audioBuf,{
+      name:file.name, kind:"file", container:sniffed.container,
+      sampleRate:sniffed.sampleRate,
+      channels:sniffed.channels!=null?sniffed.channels:audioBuf.numberOfChannels,
+      bitDepth:sniffed.bitDepth, channelMode:"mid" },seq);
   }catch(err){
     if(seq!==loadSeq[i]) return;
-    state.slots[i]=null;
-    cardUI[i]={mode:"error",name:file.name,
-      message:err.message||"This file could not be decoded.",
-      hint:err.hint||"Try a different export of the same recording."};
-    renderCard(i);
-    afterDataChange(true);
+    slotLoadError(i,file.name,err,"This file could not be decoded.",
+      "Try a different export of the same recording.");
   }
 }
 
@@ -6633,7 +6664,9 @@ function renderCard(i){
   if(ui.mode==="empty"){
     card.innerHTML='<div class="emptyinner"><div class="big">Drop <b>guitar '+letter+
       '</b> audio anywhere on this card</div>'+
-      '<button class="btn openbtn" data-act="replace">Open file…</button>'+
+      '<div class="btnrow"><button class="btn openbtn" data-act="replace">Open file…</button>'+
+      (recSupported()?'<button class="btn openbtn" data-act="record" title="Record a take straight into this slot">● Record…</button>':"")+
+      '</div>'+
       '<div class="fmts">WAV · AIFF · FLAC · MP3 · M4A · snapshot JSON</div></div>';
     return;
   }
@@ -6652,6 +6685,58 @@ function renderCard(i){
       '<button class="iconbtn" data-act="clear" title="Dismiss">✕ Clear</button></span></div>'+
       '<div class="errbox">'+esc(ui.message)+
       (ui.hint?'<span class="hint">'+esc(ui.hint)+'</span>':"")+'</div>';
+    return;
+  }
+  if(ui.mode==="arming"){
+    const head='<div class="filehead"><span class="slotchip" title="Guitar '+letter+' color — click to change">'+letter+
+      '</span><span class="filename">Record into guitar '+letter+'</span>'+
+      '<span class="fileacts"><button class="iconbtn" data-act="reccancel" title="Back">✕ Cancel</button></span></div>';
+    let body;
+    if(ui.perm==="denied"||ui.msg){
+      body='<div class="recnote">'+esc(ui.msg||"Microphone access is blocked for this page.")+'</div>'+
+        '<div class="recrow"><button class="btn" data-act="recperm">Try again</button></div>';
+    } else if(ui.perm!=="granted"){
+      body='<div class="recnote">Rameau needs the microphone to record a take. The audio is measured here and never leaves this machine.</div>'+
+        '<div class="recrow"><button class="btn" data-act="recperm">Allow microphone…</button></div>';
+    } else {
+      const n=recState.chanByDevice[recChanKey(state.recDevice)]||0;
+      // Silence proves nothing: a channel that stayed quiet during the probe looks
+      // exactly like a channel that isn't there, so say so and offer another listen.
+      // Measured here on 2026-09-03: Chrome on macOS reports channelCount.max = 2 for a
+      // 16-channel BlackHole, three Pro Tools bridges (16/32/64) and the user's 10-channel
+      // Aggregate Device alike, and delivers two. That is Chromium's own clamp in
+      // AudioManagerMac, not something a constraint can lift — so when the count comes back
+      // small, say why it might be the browser rather than the device. Safari is a
+      // suggestion, not a claim: it is untested here.
+      const capped=n>0&&n<=2
+        ?" Expecting more? Chrome on macOS hands every input device to a page as stereo, whatever the device carries — try Safari if you need the individual channels."
+        :"";
+      const note=ui.checking?"Checking inputs — play something while it listens…"
+        :(n?(n+" input channel"+(n===1?"":"s")+" heard on this device. Quiet channels can be missed — play something and re-check."+capped)
+           :"Channels not checked yet.");
+      body='<div class="recrow"><label for="recdev'+i+'">Input</label>'+
+          '<select id="recdev'+i+'" data-recdev>'+recDevOptions()+'</select></div>'+
+        '<div class="recrow"><label for="recchan'+i+'">Record</label>'+
+          '<select id="recchan'+i+'" data-recchan'+(n?"":" disabled")+'>'+recChanOptions()+'</select>'+
+          '<button class="iconbtn" data-act="recheck" title="Listen again for the channels this device carries">↻ Re-check</button></div>'+
+        '<div class="recnote">'+esc(note)+'</div>'+
+        '<div class="recrow"><button class="btn" data-act="recstart">● Start recording</button></div>';
+    }
+    card.innerHTML=head+'<div class="recpanel">'+body+'</div>';
+    return;
+  }
+  if(ui.mode==="recording"){
+    const bits=[esc(ui.device||"Input")];
+    if(ui.nch) bits.push(ui.ch>0?("channel "+ui.ch+" of "+ui.nch)
+      :(ui.nch>2?("mix of "+ui.nch+" channels"):(ui.nch===2?"stereo":"mono")));
+    if(ui.rate) bits.push(rateK(ui.rate));
+    card.innerHTML='<div class="filehead"><span class="slotchip" title="Guitar '+letter+' color — click to change">'+letter+
+      '</span><span class="filename">Recording guitar '+letter+'…</span></div>'+
+      '<div class="recpanel"><div class="recrow"><span class="recdot">●</span>'+
+      '<span class="rectimer">'+fmtElapsed(Date.now()-(ui.t0||Date.now()))+'</span></div>'+
+      '<div class="recnote">'+(ui.starting?"Opening the input…":bits.join(" · "))+'</div>'+
+      '<div class="recrow"><button class="btn" data-act="recstop">■ Stop and measure</button>'+
+      '<button class="iconbtn" data-act="recdiscard" title="Throw this take away">✕ Discard</button></div></div>';
     return;
   }
   // loaded
@@ -6684,9 +6769,357 @@ function renderCard(i){
     (canPlay(i)?'<button class="iconbtn cardplay" data-act="play" title="Play the analyzed mono mix'+
       (i===1?' — level-match gain applies when it’s on':'')+'">▶ Play</button>':"")+
     '<button class="iconbtn" data-act="replace" title="Replace with another file">⟳ Replace</button>'+
+    (recSupported()?'<button class="iconbtn" data-act="record" title="Record a new take into this slot">● Record</button>':"")+
     '<button class="iconbtn" data-act="clear" title="Clear this slot">✕ Clear</button></span></div>'+
     '<div class="fileinfo">'+parts.join('<span class="sep">·</span>')+'</div>'+
     '<div class="filemeta">'+chseg+chips.join("")+'</div>';
+}
+
+// ---------- M5: record a take straight into a slot ----------
+// Two decisions carry this whole section.
+// (1) Capture is raw PCM through Web Audio, never MediaRecorder: MediaRecorder only
+//     ever hands back a lossy codec (Opus, or mp4/AAC on Safari), and this app
+//     integrates an LTAS out to 20 kHz. A take must be the same kind of evidence a
+//     dropped WAV is.
+// (2) The channel count is OBSERVED, never asked for. An earlier attempt asked the
+//     platform — getCapabilities().channelCount.max, getSettings().channelCount,
+//     channelCount:{ideal:64} — and a 10-input aggregate device never appeared as
+//     anything but mono in Safari, because an unsupported constraint is silently
+//     ignored per spec and Safari reports neither field reliably. So the probe opens
+//     the device for real and runs it through a 32-channel ScriptProcessorNode with
+//     `discrete` interpretation: discrete up-mixing ZERO-FILLS the channels the device
+//     did not supply, so any non-zero sample in channel c proves the device really
+//     delivered channel c. Silence proves nothing, which is why the panel asks the user
+//     to play something and offers a re-check.
+// ScriptProcessorNode is deliberate over AudioWorklet: addModule() needs to fetch a
+// module URL, which a file:// page (null origin) cannot be relied on to allow, and M5
+// runs no realtime analysis — a deprecated node doing 700 ms of arithmetic is fine.
+const REC_MAX_CH=32;
+const REC_PROBE_MS=700;
+const recState={ devices:[], devInit:false, active:null, probing:false, chanByDevice:{} };
+let recCap=null;  // the live capture graph — at most one for the whole app
+
+function recSupported(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia &&
+            (window.AudioContext||window.webkitAudioContext));
+}
+function recSecure(){ return window.isSecureContext!==false; }
+function recAC(){ return window.AudioContext||window.webkitAudioContext; }
+function recChanKey(id){ return id||"__default__"; }
+function fmtElapsed(ms){
+  const t=Math.max(0,Math.round(ms/1000));
+  return Math.floor(t/60)+":"+String(t%60).padStart(2,"0");
+}
+function recDeviceLabel(id){
+  if(!id) return "Default input";
+  const d=recState.devices.find(d=>d.deviceId===id);
+  return (d&&d.label)||"Input device";
+}
+function recTakeName(){
+  const d=new Date(), p=x=>String(x).padStart(2,"0");
+  return "Take "+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
+}
+
+// Measurement capture: every processing block off. Chrome only ever delivers more than
+// one channel with the APM disabled, and none of the three belongs anywhere near a
+// spectrum measurement.
+function recConstraints(deviceId,wantChannels){
+  const a={ echoCancellation:false, noiseSuppression:false, autoGainControl:false };
+  if(deviceId) a.deviceId={exact:deviceId};
+  if(wantChannels) a.channelCount={ideal:wantChannels};
+  return {audio:a};
+}
+async function recOpen(deviceId){
+  const tries=[recConstraints(deviceId,REC_MAX_CH), recConstraints(deviceId,0),
+               {audio: deviceId?{deviceId:{exact:deviceId}}:true}];
+  let last=null;
+  for(const c of tries){
+    try{ return await navigator.mediaDevices.getUserMedia(c); }
+    catch(err){ last=err; if(err&&(err.name==="NotAllowedError"||err.name==="SecurityError")) throw err; }
+  }
+  throw last||new Error("No audio input could be opened.");
+}
+// `claimed` is getSettings() only. capabilities.max is what the device COULD do; sizing
+// the graph by it would make the Mix a mean over zero-filled channels (10 real of 32
+// requested is −10 dB of nothing).
+function recTrackInfo(stream){
+  const t=stream.getAudioTracks()[0]||null;
+  const set=(t&&t.getSettings)?(t.getSettings()||{}):{};
+  return {track:t, rate:(set.sampleRate>0?set.sampleRate:0),
+          claimed:Math.max(set.channelCount|0,1)};
+}
+function recCtxFor(rate){
+  const AC=recAC();
+  if(rate>0){ try{ return new AC({sampleRate:rate}); }catch(_e){} }
+  return new AC();
+}
+
+async function probeDeviceChannels(deviceId){
+  let stream=null, ctx=null;
+  try{
+    stream=await recOpen(deviceId);
+    const inf=recTrackInfo(stream);
+    let heard=0;
+    try{
+      ctx=recCtxFor(inf.rate);
+      if(ctx.state==="suspended"){ try{ await ctx.resume(); }catch(_e){} }
+      const src=ctx.createMediaStreamSource(stream);
+      const sp=ctx.createScriptProcessor(4096,REC_MAX_CH,1);
+      sp.channelInterpretation="discrete";
+      sp.onaudioprocess=e=>{
+        const b=e.inputBuffer;
+        for(let c=b.numberOfChannels-1;c>=heard;c--){
+          const d=b.getChannelData(c);
+          let live=false;
+          for(let k=0;k<d.length;k++){ if(d[k]!==0){ live=true; break; } }
+          if(live){ heard=c+1; break; }
+        }
+        const o=e.outputBuffer.getChannelData(0); for(let k=0;k<o.length;k++) o[k]=0;
+      };
+      const sink=ctx.createGain(); sink.gain.value=0;
+      src.connect(sp); sp.connect(sink); sink.connect(ctx.destination);
+      await new Promise(r=>setTimeout(r,REC_PROBE_MS));
+      sp.onaudioprocess=null;
+      try{ src.disconnect(); sp.disconnect(); sink.disconnect(); }catch(_e){}
+    }catch(_e){}
+    const n=Math.max(1,Math.min(REC_MAX_CH,Math.max(heard,inf.claimed)));
+    recState.chanByDevice[recChanKey(deviceId)]=n;
+    return n;
+  } finally {
+    if(stream) stream.getTracks().forEach(t=>{ try{ t.stop(); }catch(_e){} });
+    if(ctx){ try{ ctx.close(); }catch(_e){} }
+  }
+}
+
+async function refreshRecDevices(){
+  if(!recSupported()||!navigator.mediaDevices.enumerateDevices) return;
+  let list=[];
+  try{ list=await navigator.mediaDevices.enumerateDevices(); }catch(_e){ return; }
+  recState.devices=list.filter(d=>d.kind==="audioinput")
+                       .map(d=>({deviceId:d.deviceId,label:d.label||""}));
+  // A remembered device that has been unplugged must not keep being named.
+  if(state.recDevice && !recState.devices.some(d=>d.deviceId===state.recDevice)) state.recDevice=null;
+  for(let i=0;i<2;i++) if(cardUI[i].mode==="arming") renderCard(i);
+}
+function initRecDevices(){
+  if(recState.devInit||!recSupported()) return;
+  recState.devInit=true;
+  refreshRecDevices();
+  if(navigator.mediaDevices.addEventListener)
+    navigator.mediaDevices.addEventListener("devicechange",refreshRecDevices);
+}
+function armRecording(i){
+  if(!recSupported()){ toast("This browser can't record audio.",true); return; }
+  if(recState.active!=null){ toast("Guitar "+SLOT_LETTER[recState.active]+" is recording — stop it first.",true); return; }
+  // First arm builds the device list. Deliberately not at boot: enumerateDevices()
+  // wakes the browser's audio service, and a page that never records should never
+  // pay for that — nor race the demo decode for the CPU while it happens.
+  try{ initRecDevices(); }catch(_e){}
+  cardUI[i]={mode:"arming",prev:cardUI[i],perm:"unknown",msg:null,checking:false};
+  renderCard(i);
+  queryRecPerm(i);
+}
+async function queryRecPerm(i){
+  let st="unknown";
+  try{
+    if(navigator.permissions&&navigator.permissions.query)
+      st=(await navigator.permissions.query({name:"microphone"})).state;
+  }catch(_e){ st="unknown"; }   // Safari has no "microphone" permission name
+  // Labels only exist once permission is granted; without them a 10-input aggregate is
+  // indistinguishable from the built-in mic.
+  if(st==="granted") await refreshRecDevices();
+  if(cardUI[i].mode!=="arming") return;
+  cardUI[i].perm=st; renderCard(i);
+  if(st==="granted") ensureRecChannels(i);
+}
+async function requestMicAccess(i){
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({audio:true});
+    s.getTracks().forEach(t=>{ try{ t.stop(); }catch(_e){} });
+  }catch(err){
+    if(cardUI[i].mode==="arming"){ cardUI[i].perm="denied"; cardUI[i].msg=recPermMessage(err); renderCard(i); }
+    return;
+  }
+  await refreshRecDevices();
+  if(cardUI[i].mode!=="arming") return;
+  cardUI[i].perm="granted"; cardUI[i].msg=null; renderCard(i);
+  ensureRecChannels(i);
+}
+function recPermMessage(err){
+  const n=err&&err.name;
+  if(n==="NotAllowedError"||n==="SecurityError"){
+    return recSecure()
+      ? "Microphone access was refused. Allow it for this page in your browser's site settings, then try again."
+      : "This page isn't in a secure context, so the browser won't grant microphone access. Open it over http://localhost or https://.";
+  }
+  if(n==="NotFoundError") return "No audio input device was found.";
+  if(n==="NotReadableError") return "The audio device is busy — another app may have it open.";
+  return (err&&err.message)||"The microphone could not be opened.";
+}
+async function ensureRecChannels(i){
+  const key=recChanKey(state.recDevice);
+  if(recState.chanByDevice[key]||recState.probing) return;
+  recState.probing=true;
+  if(cardUI[i].mode==="arming"){ cardUI[i].checking=true; renderCard(i); }
+  try{ await probeDeviceChannels(state.recDevice); }
+  catch(_err){ recState.chanByDevice[key]=1; }
+  finally{ recState.probing=false; }
+  for(let k=0;k<2;k++) if(cardUI[k].mode==="arming"){ cardUI[k].checking=false; renderCard(k); }
+}
+async function recheckRecChannels(i){
+  delete recState.chanByDevice[recChanKey(state.recDevice)];
+  await ensureRecChannels(i);
+}
+function cancelArming(i){
+  const ui=cardUI[i];
+  if(!ui||ui.mode!=="arming") return;
+  cardUI[i]=(ui.prev&&ui.prev.mode)?ui.prev:{mode:"empty"};
+  renderCard(i);
+}
+// Any other route into a slot — a dropped file, a snapshot, the demo pair — wins over
+// a take in progress. Torn down at the START of the load, not the end: a capture left
+// running would keep a `● Recording` card alive over the new file and then land its take
+// on top of it when the user finally pressed stop.
+function recAbort(i){
+  if(recState.active===i) stopCapture(false);
+  if(cardUI[i]&&cardUI[i].mode==="arming") cancelArming(i);
+}
+
+// "Default input" is a real entry, not an empty first row: the select must never show
+// one device while state names another.
+function recDevOptions(){
+  let h='<option value=""'+(state.recDevice?"":" selected")+'>Default input</option>';
+  for(const d of recState.devices){
+    if(!d.deviceId) continue;
+    const lb=d.label||("Input "+d.deviceId.slice(0,6));
+    h+='<option value="'+esc(d.deviceId)+'"'+(state.recDevice===d.deviceId?" selected":"")+'>'+esc(lb)+'</option>';
+  }
+  return h;
+}
+function recChanOptions(){
+  const n=recState.chanByDevice[recChanKey(state.recDevice)]||1;
+  let h='<option value="0"'+(state.recChannel?"":" selected")+'>'+
+        (n>2?"Mix (all "+n+" channels)":"All channels")+'</option>';
+  for(let c=1;c<=n;c++)
+    h+='<option value="'+c+'"'+(state.recChannel===c?" selected":"")+'>Channel '+c+'</option>';
+  return h;
+}
+
+function startCapture(i){
+  if(recState.active!=null) return;
+  const ui=cardUI[i];
+  const prev=(ui&&ui.mode==="arming")?ui.prev:{mode:"empty"};
+  const deviceId=state.recDevice, sel=state.recChannel|0;
+  cardUI[i]={mode:"recording",device:recDeviceLabel(deviceId),t0:Date.now(),ch:sel,nch:0,rate:0,starting:true};
+  renderCard(i);
+  recState.active=i;
+  _startCapture(i,deviceId,sel,prev).catch(err=>{
+    recState.active=null; recCap=null;
+    cardUI[i]={mode:"arming",prev:prev,perm:"granted",msg:recPermMessage(err),checking:false};
+    renderCard(i);
+  });
+}
+async function _startCapture(i,deviceId,sel,prev){
+  const stream=await recOpen(deviceId);
+  const inf=recTrackInfo(stream);
+  const ctx=recCtxFor(inf.rate);
+  if(ctx.state==="suspended"){ try{ await ctx.resume(); }catch(_e){} }
+  const known=recState.chanByDevice[recChanKey(deviceId)]||0;
+  const nch=Math.max(1,Math.min(REC_MAX_CH,Math.max(known,inf.claimed)));
+  let use=sel;
+  if(use>nch){ use=0; toast("Channel "+sel+" isn't there on this device — recording the mix.",true); }
+  const src=ctx.createMediaStreamSource(stream);
+  const sp=ctx.createScriptProcessor(4096,nch,1);
+  sp.channelInterpretation="discrete";
+  const sink=ctx.createGain(); sink.gain.value=0;
+  const cap={ i:i, prev:prev, sel:use, nch:nch, keep:(use>0?1:(nch<=2?nch:1)),
+              stream:stream, ctx:ctx, src:src, sp:sp, sink:sink,
+              chunks:[], total:0, t0:Date.now(), timer:null, stopping:false };
+  // Reduce online, so a long take stays bounded: 10 ch x 48 kHz x 4 B is 1.9 MB/s.
+  // With <=2 channels and no channel picked we keep both, so the Mid/L/R segment
+  // behaves exactly as it does for a dropped stereo file.
+  sp.onaudioprocess=e=>{
+    if(cap.stopping) return;
+    const b=e.inputBuffer, N=b.length, n=b.numberOfChannels, out=[];
+    if(cap.sel>0){
+      out.push(new Float32Array(b.getChannelData(Math.min(cap.sel-1,n-1))));
+    } else if(cap.keep>1){
+      for(let c=0;c<cap.keep;c++) out.push(new Float32Array(b.getChannelData(Math.min(c,n-1))));
+    } else {
+      const m=new Float32Array(N);
+      for(let c=0;c<n;c++){ const d=b.getChannelData(c); for(let k=0;k<N;k++) m[k]+=d[k]; }
+      if(n>1) for(let k=0;k<N;k++) m[k]/=n;
+      out.push(m);
+    }
+    cap.chunks.push(out); cap.total+=N;
+    const o=e.outputBuffer.getChannelData(0); for(let k=0;k<N;k++) o[k]=0;
+  };
+  // A ScriptProcessorNode only runs while it reaches the destination; the gain is zero
+  // so nothing is monitored back through the speakers into the mic.
+  src.connect(sp); sp.connect(sink); sink.connect(ctx.destination);
+  if(inf.track) inf.track.onended=()=>{ if(recCap===cap) stopCapture(true); };
+  recCap=cap;
+  if(cardUI[i].mode==="recording"){
+    cardUI[i].starting=false; cardUI[i].nch=nch; cardUI[i].ch=use;
+    cardUI[i].rate=ctx.sampleRate; cardUI[i].t0=cap.t0;
+    renderCard(i);
+  }
+  cap.timer=setInterval(()=>{
+    const t=cards[i].querySelector(".rectimer");
+    if(t) t.textContent=fmtElapsed(Date.now()-cap.t0);
+  },250);
+}
+function _takeBuffer(cap){
+  const n=cap.total; if(!n) return null;
+  const ch=cap.chunks.length?cap.chunks[0].length:1;
+  const buf=cap.ctx.createBuffer(ch,n,cap.ctx.sampleRate);
+  for(let c=0;c<ch;c++){
+    const dst=buf.getChannelData(c); let off=0;
+    for(const blk of cap.chunks){ const s=blk[Math.min(c,blk.length-1)]; dst.set(s,off); off+=s.length; }
+  }
+  return buf;
+}
+function stopCapture(save){
+  const cap=recCap; if(!cap) return;
+  cap.stopping=true; recCap=null; recState.active=null;
+  if(cap.timer) clearInterval(cap.timer);
+  try{ cap.sp.onaudioprocess=null; }catch(_e){}
+  try{ cap.src.disconnect(); cap.sp.disconnect(); cap.sink.disconnect(); }catch(_e){}
+  try{ cap.stream.getTracks().forEach(t=>{ t.onended=null; t.stop(); }); }catch(_e){}
+  const i=cap.i;
+  // Built while the capture context is still alive: its rate is the rate that made
+  // these samples, so nothing has to be re-decoded or resampled.
+  const buf=save?_takeBuffer(cap):null;
+  try{ cap.ctx.close(); }catch(_e){}
+  cap.chunks.length=0;
+  if(!buf){
+    loadSeq[i]++;   // nothing partial survives a discard
+    cardUI[i]=(cap.prev&&cap.prev.mode)?cap.prev:{mode:"empty"};
+    renderCard(i);
+    if(save) toast("Nothing was captured — the input stayed silent.",true);
+    return;
+  }
+  landRecording(i,buf);
+}
+async function landRecording(i,buf){
+  const seq=++loadSeq[i];
+  const name=recTakeName();
+  if(!(buf.sampleRate>=8000&&buf.sampleRate<=384000)){
+    slotLoadError(i,name,null,
+      "The recording came back at "+Math.round(buf.sampleRate)+" Hz, outside the range this app measures.",
+      "Change the device's rate in your system audio settings and record again.");
+    return;
+  }
+  cardUI[i]={mode:"loading",name:name,label:"Measuring take…",frac:0.35};
+  renderCard(i);
+  try{
+    await finishSlotFromBuffer(i,buf,{ name:name, kind:"recording", container:"Live input",
+      sampleRate:buf.sampleRate, channels:buf.numberOfChannels,
+      bitDepth:"32-bit float", channelMode:"mid" },seq);
+  }catch(err){
+    if(seq!==loadSeq[i]) return;
+    slotLoadError(i,name,err,"The take could not be measured.","Try recording again.");
+  }
 }
 
 // ---------- audio playback (region audition; card play reuses this) ----------
@@ -7825,7 +8258,8 @@ function _settingsPayload(){
   return {v:SETTINGS_VER, tuning:state.tuning, customOffset:state.customOffset,
     a4:state.a4, smooth:state.smooth, eqDevice:state.eqDevice, eqDir:state.eqDir,
     vocab:state.vocab, strings:state.strings, stringHarmonics:state.stringHarmonics.map(a=>a.slice()),
-    stringColors:(state.stringColors||STRING_COLORS).slice()};
+    stringColors:(state.stringColors||STRING_COLORS).slice(),
+    recDevice:state.recDevice, recChannel:state.recChannel};
 }
 function saveSettings(){
   try{ localStorage.setItem("gsSettings", JSON.stringify(_settingsPayload())); }catch(_e){}
@@ -7857,6 +8291,10 @@ function loadSettings(){
         if(typeof j.vocab==="string"&&VOCAB_BY_ID[j.vocab]) state.vocab=j.vocab;
         if(typeof j.strings==="boolean") state.strings=j.strings;
         if(Array.isArray(j.stringColors)) for(let i=0;i<6;i++) if(/^#[0-9a-f]{6}$/i.test(j.stringColors[i]||"")) state.stringColors[i]=j.stringColors[i];
+        // M5: the remembered input. No version bump — these keys are simply absent
+        // in a v4 payload written before M5, and absent means "the default input".
+        if(typeof j.recDevice==="string"&&j.recDevice) state.recDevice=j.recDevice;
+        if(isFinite(j.recChannel)&&j.recChannel>=0) state.recChannel=j.recChannel|0;
         // v1 had harmonics:boolean, v2 has stringHarmonics:6x4
         if(Array.isArray(j.stringHarmonics) && j.stringHarmonics.length===6){
           for(let i=0;i<6;i++) for(let k=0;k<HARM_SLOTS;k++) state.stringHarmonics[i][k]=!!(j.stringHarmonics[i]&&j.stringHarmonics[i][k]);
@@ -7904,6 +8342,7 @@ function resetSettings(){
   state.tuning="estd"; state.customOffset=0; state.a4=440;
   state.smooth=6; state.eqDevice="ge7"; state.eqDir=0; state.vocab="mix";
   state.strings=false; _clearAllHarmonics(); state.stringColors=STRING_COLORS.slice();
+  state.recDevice=null; state.recChannel=0;
   tuningSel.value=state.tuning; customOffsetWrap.style.display="none"; customOffsetEl.value=state.customOffset;
   a4Input.value=state.a4;
   setSmoothUI(state.smooth);
@@ -7915,6 +8354,7 @@ function resetSettings(){
   toast("Saved settings reset to defaults.");
 }
 function applySnapshot(snap){
+  recAbort(0); recAbort(1);
   const st=snap.settings||{};
   // older snapshots carry st.mode (electric/acoustic) — deliberately ignored, the
   // instrument selector is gone and never changed any analysis.
@@ -8025,6 +8465,7 @@ function loadDemo(only){
     {name:"Demo — Warm",   rate:48000, damping:0.9900, lp:true,  seed:20260820, gain:0.55},
   ];
   const idxs=only==="a"?[0]:only==="b"?[1]:[0,1];
+  idxs.forEach(recAbort);
   return Promise.all(idxs.map(i=>{
     const sp=specs[i];
     const samples=makeDemoSamples(sp.rate,sp.damping,sp.lp,sp.seed,sp.gain);
@@ -8544,10 +8985,19 @@ function boot(){
         else openColorPop(i,chip);
         return;
       }
+      if(e.target.closest("select")) return;   // the record panel's own controls
       const act=e.target.closest("[data-act]");
       if(act){
-        if(act.dataset.act==="replace") fileInputs[i].click();
-        else if(act.dataset.act==="play") toggleCardPlay(i,act);
+        const a=act.dataset.act;
+        if(a==="replace") fileInputs[i].click();
+        else if(a==="play") toggleCardPlay(i,act);
+        else if(a==="record") armRecording(i);
+        else if(a==="recperm") requestMicAccess(i);
+        else if(a==="recheck") recheckRecChannels(i);
+        else if(a==="recstart") startCapture(i);
+        else if(a==="recstop") stopCapture(true);
+        else if(a==="recdiscard") stopCapture(false);
+        else if(a==="reccancel") cancelArming(i);
         else clearSlot(i);
         return;
       }
@@ -8560,6 +9010,12 @@ function boot(){
         e.preventDefault();
         fileInputs[i].click();
       }
+    });
+    card.addEventListener("change",e=>{
+      const dv=e.target.closest("[data-recdev]");
+      if(dv){ state.recDevice=dv.value||null; state.recChannel=0; saveSettings(); renderCard(i); ensureRecChannels(i); return; }
+      const cn=e.target.closest("[data-recchan]");
+      if(cn){ state.recChannel=+cn.value||0; saveSettings(); return; }
     });
     fileInputs[i].addEventListener("change",()=>{
       const f=fileInputs[i].files[0];

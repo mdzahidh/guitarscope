@@ -2061,3 +2061,134 @@ blocks, and a headless run of `?demo&open=all&strings=1&zoom=sga:0.5,1.5` with e
 five plots cropped at full resolution and read — deliberately the two hardest cases included:
 the spectrum with its open-string names sitting directly above the new title, and the zoomed
 spectrogram with title and zoom note sharing a row.
+
+### 2026-09-04 — M5 proposed: record directly into a slot (user request)
+- **New milestone, unbuilt:** capture a take per guitar through a device picker
+  and land it in the slot as if dropped as a file, decoded through the existing
+  block-1 path at the take's own rate. Explicitly **not** M3's realtime FFT /
+  max-hold; no live analysis of any kind. Detail in `docs/ROADMAP.md`
+  `# M5 — Record directly into a slot`.
+- **"Port" clarified at proposal time:** browsers expose input *devices*, not
+  ports — interface ports surface as devices or channels, covered by the picker
+  plus the existing channel/mid selection.
+- Recording stays local (no network), consistent with the offline stance; mic
+  permission needs a secure context, `file://` behaviour to be verified before
+  building.
+
+### 2026-09-04 — M5 built (user request: "build it")
+- **Arming before capture:** `● Record…` (empty card) / `● Record` (loaded
+  card's fileacts = the re-record path) opens an in-card arming panel with the
+  shared input selector + Start/Cancel; Start grabs the mic with all
+  processing disabled (`echoCancellation/noiseSuppression/autoGainControl`
+  off — a measurement capture, not a call). One active recording; Cancel
+  restores the card's previous mode, slot untouched.
+- **Shared tail:** `loadFileIntoSlot` now ends in `finishSlotFromBuffer`, which
+  the recorded take joins after `decodeAtNativeRate` at the mic track's own
+  rate; errors share `slotLoadError`. `kind:"rec"` flows through snapshot save
+  and every export unchanged (the saver stores `kind` generically).
+- Verified: all five script blocks `node --check`, `tests/dsp.test.js`
+  unchanged at 192/1 (the 1 is the known pre-existing EQ bound), plus a node
+  harness executing the real `renderCard` arming/recording branches and
+  `recDevOptions` out of `index.html` (`/tmp` scratch, shipped source
+  untouched). Headless Chrome is blocked in this session (exit 134, sandboxed
+  seatbelt — the ROADMAP diagnosis), so both-themes screenshots and a live
+  mic pass are unverified and owed before release.
+
+### 2026-09-04 — M5 refinements (user request)
+- Record sits beside Open file with a red-circle icon; Start carries the same
+  circle, Cancel/Stop carry ■. Permission first: the panel shows Allow
+  microphone until granted (one throwaway stream unlocks labels + the channel
+  offer, stopped at once, never analysed).
+- Device + input-channel selectors, both remembered (gsSettings v4, defaulted
+  when absent — no version bump, the gate pins v4). Channel N demands ≥N via
+  `channelCount:{min}` and refuses honestly; ch 1/2 fold into the left/right
+  path, above 2 lands mono. Counts are per-device and probed by briefly
+  opening the device (`enumerateDevices` carries none — never a flat 2, and the
+  probe asks `channelCount:{ideal:64}` so a quiet default open can't
+  under-report, then degrades to the same open without it for browsers that
+  reject the constraint (Safari) — both carrying the capture flags, so the
+  probe reflects what Start will do); a null choice probes the system default
+  under its real id, unknown lists Mix only. The picker opens on an explicit Default entry so the
+  shown device and the captured one can't disagree. A failed probe names
+  itself in the panel (`Channel list unavailable (OverconstrainedError)`),
+  because a silent catch at the platform boundary helps nobody. Footer
+  "Remembered" names Input.
+- Play last take (arming panel, analysed mix) + an explicit ■ Stop beside
+  every ▶ Play — Play already toggled into Stop, now both are visible.
+
+### 2026-09-04 — M5 implementation reverted (user request: "not working, discard")
+- The per-device channel probe never listed the user's 10-channel aggregate
+  on Safari — panel stayed on Mix only through three iterations (assumed-2,
+  open-to-query with ideal:64, degrading fallback). Root cause unproven from
+  here (no mic-capable browser in the sandbox); rather than ship blind
+  against the platform boundary, all M5 code was reverted out of `index.html`.
+- The milestone spec in `docs/ROADMAP.md` is retained and parked, not deleted:
+  the design (arming before capture, shared decode tail, persisted
+  device+channel) still stands for a session with a live aggregate to test
+  against. Recovery snapshot before the discard:
+  `refs/tbh/recovery/before-discard/20260904T011041Z-45812`.
+
+### 2026-09-04 — M5 rebuilt on raw PCM: observe the channel count, never ask for it (user request: "make this work for Safari and Chrome, across all platforms; one of my devices is an Aggregate Device with 10 input channels")
+- **Second attempt, from a different premise.** The reverted implementation asked
+  the platform two questions and believed both answers: `channelCount:{ideal:64}`
+  on the open, `getSettings()`/`getCapabilities()` on the read. An unsupported
+  constraint is silently ignored per spec, so *even `{exact:N}` can be accepted and
+  not honoured*, and both fields can report a count the device never delivers. That
+  is the whole failure. The rule this milestone leaves behind: **do not ask a
+  question the platform is free to answer wrongly — arrange for the answer to be
+  observable.**
+- **The observation.** `probeDeviceChannels()` connects the stream to a 32-channel
+  `ScriptProcessorNode` with `channelInterpretation = "discrete"`. Discrete
+  up-mixing **zero-fills** channels the source did not supply, so a non-zero sample
+  in channel *c* is proof that channel *c* arrived. After `REC_PROBE_MS` (700 ms)
+  the count is `n = max(heard, claimed, 1)`.
+- **`getCapabilities()` was dropped from that max on purpose.** `capabilities.max`
+  is what the device *could* do; sizing the capture node by it makes `Mix` a mean
+  over zero-filled channels — 10 real channels of 32 requested is −10 dB of
+  nothing. `claimed` is `getSettings().channelCount` only, and it can only raise
+  the count above what was heard, never above what the device stated.
+- **Silence proves nothing.** A probe that heard no signal has learned nothing, so
+  the panel says so and offers **↻ Re-check** instead of quietly claiming mono.
+- **Raw PCM, not `MediaRecorder`.** The LTAS integrates to 20 kHz and prints dB re
+  full-scale sine; a codec's own high-frequency decisions would be
+  indistinguishable, in the plot, from the guitar's. A `ScriptProcessorNode` keeps
+  Float32 blocks and the take is built as an `AudioBuffer` at the capture context's
+  own rate. Reduced **online** — 10 ch × 48 kHz × 4 B is 1.9 MB/s — so a selected
+  channel keeps one channel, and `Mix` keeps both at ≤ 2 channels and the mono mean
+  above.
+- **`ScriptProcessorNode` over `AudioWorkletNode`,** deprecation notwithstanding:
+  `addModule()` must fetch a module and this app runs from `file://`, whose null
+  origin cannot be relied on to allow that. The node routes to `destination`
+  through a gain of 0 (it must reach the destination to fire; nothing is monitored
+  back).
+- **M5.3 needs no `decodeAtNativeRate` and no sniffer** — the one line the rewrite
+  deletes from the original design. Those recover a rate from *file bytes*; a take
+  is already PCM at a rate the context states. The house rule is unchanged and met
+  more directly: the rate comes from the data and is never asked of the user. A
+  rate outside 8–384 kHz is refused through `slotLoadError()`, the same door a bad
+  file uses.
+- **Enumeration is lazy, never from `boot()`.** `enumerateDevices()` wakes the OS
+  audio service and raced the demo decode here; the first arm builds the list, and
+  `devicechange` rebuilds it. Device + channel selections persist in `gsSettings`
+  at **v4** — additive keys, and every existing reader ignores what it doesn't
+  know, so no version bump.
+- **Measured, and it is the browser: Chrome on macOS clamps every input device to
+  2 channels.** Through real headless Chrome on this machine, a 16-channel
+  BlackHole, three Pro Tools aggregate bridges (16/32/64) and the user's
+  **10-channel Aggregate Device** all report `capabilities.channelCount
+  {min:1,max:2}`, `settings.channelCount` 2, and deliver 2. That is Chromium's own
+  `AudioManagerMac` input clamp; no constraint value moves any column. The panel
+  states it when it observes ≤ 2 channels, and points at Safari as a
+  **suggestion** — Safari is untested here, and only the user's own machine can
+  settle whether their aggregate surfaces as 10 there. The probe is correct either
+  way: it reports what arrived.
+- Downstream, a take is a file: `finishSlotFromBuffer()` with `kind:"recording"`,
+  `container:"Live input"`, `bitDepth:"32-bit float"`. One capture graph exists for
+  the whole app (`recCap`); `recAbort(i)` runs at the head of `loadFileIntoSlot`,
+  `applySnapshot` and `loadDemo`, and a discarded take bumps `loadSeq[i]` so a take
+  that lands after a drop cannot overwrite it. No realtime analysis — the meter is
+  a peak number. A live analyser is M3, which stays gated.
+- Gate: `./tests/verify.sh` steps 2–7 green (r3 42, r4 60, m27 51, r5 324, headless
+  **69**) and all four tamper guards green. Step 1 is the documented pre-existing
+  red — `ok(mx < 1.0)` measuring 1.022 dB at `tests/dsp.test.js:547`, red on master
+  since `ac65835` and untouched by this work.

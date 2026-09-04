@@ -64,6 +64,7 @@ CLAUDE.md status list and the SPEC.md changelog.
 | **Q3** | Near-floor disclosure carried into the **Band Energy** table and the **At-a-glance** strip — one predicate, three cards. | ✅ done | `### Q3 — the same floor in three cards` |
 | **Q4a** | The **expanded view, truly expanded** (1/2) — collision-mark clicks and Hold-Fade work in the magnify overlay. | ✅ done | `#### Q4a — the two interactions` |
 | **Q4b** | The **expanded view, truly expanded** (2/2) — the overlay carries the sgram card head's Overlay / Colors / Legibility controls. | ✅ done | `#### Q4b — the controls in the expanded view` |
+| **M5** | **Record directly into a slot** — capture a take per guitar through a device picker, landed through the existing pipeline; no realtime analysis. | ✅ built 2026-09-04 (raw-PCM rewrite of the reverted MediaRecorder attempt) | `# M5 — Record directly into a slot` |
 | **R6** | **Interval consonance explainer** — joint period, comb alignment, Plomp–Levelt/Sethares roughness. Now also carries **R6.4**, the overlay's time bound (was R5.4). | ⏸ blocked: two `docs/THEORY.md` §2.5 numeric caveats are unresolved (R6.4 is not blocked) | `# R6 — Interval consonance explainer` |
 | **Warped sgram difference** | Replace the removed pixel-wise spectrogram difference with an onset-warped / DTW one. | ⏸ deferred until after R6 | `### Deferred — warped spectrogram difference` |
 | **M3** | Live input; still owes the task-based entry points deferred from M2. | 🚫 gated on explicit user go-ahead | `# Gated` |
@@ -1711,6 +1712,149 @@ Source: `docs/THEORY.md` §2.5 (roughness) and §2.6 (consonance definitions).
 - **Blocked on the user resolving the two §2.5 numeric caveats** (the "~30–40 Hz in the
   guitar's mid-register" figure and the ERB-vs-Bark critical-band inconsistency) before
   any of those numbers appear in copy.
+
+---
+
+# M5 — Record directly into a slot
+
+*(Not M3. M3 is **live input** — a running analyser fed by the microphone, with the
+task-based entry points deferred from M2. M5 is far smaller and does not unblock it: press
+record, get a take, and hand that take to the pipeline that already exists. Nothing is
+analysed while the meter runs.)*
+
+**Built 2026-09-04**, as a second attempt. The first attempt — `MediaRecorder`-based — was
+reverted the same day; see "The first attempt, and why it was replaced" at the end of this
+section.
+
+The whole milestone is one sentence: **a recorded take must be indistinguishable, downstream,
+from a dropped file.** Everything below follows from that. It lands through
+`finishSlotFromBuffer()`, so every view, export, snapshot and metric that works for a file
+works for a take with no further code.
+
+### M5.1 — device picker. BUILT.
+
+- A `● Record…` button on each empty slot (`● Record` once a slot is full — the take
+  replaces what is there, like a second drop would).
+- The panel is **permission-first**: the device `<select>` is empty until the user arms
+  recording, because `enumerateDevices()` returns unlabelled stubs before a `getUserMedia()`
+  grant. Arming is what fills it.
+- Two selectors, shared by both slots and remembered in `gsSettings` (**still v4** — the two
+  keys are additive and every existing reader ignores what it doesn't know, so no bump):
+  the input **device** and the input **channel** (`Mix`, or one channel by number).
+- Enumeration is **lazy — never from `boot()`**. `enumerateDevices()` wakes the OS audio
+  service, and on this machine that raced the demo decode. The first arm builds the list;
+  `refreshRecDevices()` rebuilds it on `devicechange`.
+
+### M5.2 — capture. BUILT.
+
+- `getUserMedia` with `echoCancellation:false, noiseSuppression:false, autoGainControl:false`.
+  This is a measurement instrument; the three processors are all designed to alter the
+  spectrum of what they hear.
+- **Raw PCM, explicitly not `MediaRecorder`.** A `ScriptProcessorNode` copies Float32 blocks
+  out of the graph and keeps them. The LTAS integrates to 20 kHz and prints dB re full-scale
+  sine; a lossy codec's own high-frequency decisions would be indistinguishable, in the plot,
+  from the guitar's.
+- **No realtime analysis.** The meter is a peak number, not a spectrum. M3 is where a live
+  analyser belongs.
+- **One capture graph for the whole app** (`recCap`). Recording into B while A is recording
+  is not a state this app has to represent; the second arm aborts the first.
+- `recAbort(i)` runs at the head of `loadFileIntoSlot`, `applySnapshot` and `loadDemo`, and a
+  discarded take bumps `loadSeq[i]` — a take that lands after a drop has been superseded and
+  must not overwrite it.
+- **Reduced online, not at the end.** 10 channels × 48 kHz × 4 bytes is 1.9 MB/s; a ten-minute
+  take of a 10-channel device would otherwise be over a gigabyte of retained Float32. So a
+  selected channel keeps one channel, and `Mix` keeps both when the device gives one or two and
+  the mono mean when it gives more.
+
+### M5.2a — how many channels? Observe, never ask. BUILT.
+
+This is what sank the first attempt, so it is written down at length.
+
+`getSettings().channelCount` and `getCapabilities().channelCount.max` are **not answers**.
+An unsupported constraint is silently ignored per spec, so even `{exact:N}` can be accepted
+and then not honoured, and both fields can report a number the device never delivers.
+`createMediaStreamSource(stream).channelCount` is not ground truth either — that node has no
+inputs, so the spec default of 2 is what it reports no matter what is upstream.
+
+The mechanism that *is* ground truth: connect the stream to a **32-channel
+`ScriptProcessorNode` with `channelInterpretation = "discrete"`**. Discrete up-mixing
+**zero-fills** channels the source did not supply. So a non-zero sample in channel *c* is
+proof that channel *c* was delivered — no API is being asked anything. `probeDeviceChannels()`
+listens for `REC_PROBE_MS` and takes
+
+```
+n = max(heard, claimed, 1)
+```
+
+where `claimed` is `getSettings().channelCount` **only**. The capabilities read was dropped
+deliberately: `capabilities.max` is what the device *could* do, and sizing the capture node by
+it makes `Mix` a mean over zero-filled channels — 10 real channels out of 32 requested is
+−10 dB of nothing.
+
+`ScriptProcessorNode`, not `AudioWorkletNode`: `addModule()` needs to fetch a module, and a
+`file://` page has a null origin that cannot be relied on to allow that. The app runs from
+`file://`. The node must reach `destination` to fire at all, so it routes through a gain of 0
+— nothing is monitored back to the speakers.
+
+**Silence proves nothing.** A probe that heard nothing has learned nothing, so the panel says
+so and offers **↻ Re-check** rather than quietly claiming mono.
+
+### M5.3 — land as a take. BUILT.
+
+The `AudioBuffer` is built **while the capture context is still alive**, at that context's own
+sample rate, and handed to `finishSlotFromBuffer()` with
+`kind:"recording", container:"Live input", bitDepth:"32-bit float"`.
+
+**No `decodeAtNativeRate` and no sniffer** — that is the one line this rewrite deletes from
+the original M5.3. Those exist to recover a rate from *file bytes*; a take is already PCM at a
+rate the context states. The house rule is unchanged and satisfied more directly: the rate
+still comes from the data, and is never asked of the user. A rate outside 8–384 kHz is refused
+through `slotLoadError()`, the same door a bad file uses.
+
+### Scope notes (do not re-litigate)
+
+- **There is no port or interface to choose.** A browser exposes input *devices*; the
+  aggregate/interface/port layer is the OS's, and is what the device list already reflects.
+- **Rate is data, not a control.** The capture context's rate is read, printed and used; it is
+  not offered as a setting.
+- **Local only.** A recording is Float32 in memory, it lands in a slot, and nothing about it
+  reaches the network — the app has none.
+- `file://` **is a secure context**, so `getUserMedia` is available with no server. Verified by
+  driving the real browser, not by reading the spec.
+
+### Chrome on macOS clamps every input device to 2 channels
+
+Measured 2026-09-04 through real headless Chrome, on this machine:
+
+| Device | `capabilities.channelCount` | `settings.channelCount` | delivered |
+|---|---|---|---|
+| BlackHole 16ch | `{min:1,max:2}` | 2 | 2 |
+| Pro Tools Aggregate I/O (16) | `{min:1,max:2}` | 2 | 2 |
+| Pro Tools Aggregate I/O (32) | `{min:1,max:2}` | 2 | 2 |
+| Pro Tools Aggregate I/O (64) | `{min:1,max:2}` | 2 | 2 |
+| **Aggregate Device (10 in)** | `{min:1,max:2}` | 2 | 2 |
+
+This is Chromium's own `AudioManagerMac` input clamp, not a constraint we can lift — no
+`channelCount` value, ideal or exact, changes any column. The panel therefore says so when it
+observes ≤ 2 channels on a device the user expects to be wider, and points at Safari as a
+**suggestion**, not a promise: Safari is untested here, and only the user's own machine can
+settle whether their 10-channel Aggregate Device surfaces as 10 there.
+
+The probe is right either way — it reports what arrived. The clamp is a fact about the
+browser, and the app states it rather than pretending the device is mono.
+
+### The first attempt, and why it was replaced (reverted 2026-09-04)
+
+The first implementation asked `getUserMedia` for `channelCount:{ideal:64}`, read
+`getSettings()` back, believed it, and encoded with `MediaRecorder`. It failed twice over: the
+answer it trusted was wrong, and the format it produced was lossy in exactly the band the app
+measures.
+
+The lesson, which is why this section is so long: **do not ask a question the platform is free
+to answer wrongly — arrange for the answer to be observable.** The zero-fill probe is that
+arrangement.
+
+The reverted work is recoverable at `refs/tbh/recovery/before-discard/20260904T011041Z-45812`.
 
 ---
 

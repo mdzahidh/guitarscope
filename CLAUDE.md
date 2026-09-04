@@ -637,6 +637,42 @@ build educational copy from it, never re-derive from scratch.
   moved:** nothing in `tests/` asserted an axis unit or `PLOT.mB`, gate counts unchanged;
   verified by the eight call sites, `node --check` on all five blocks, and full-resolution crops
   of `?demo&open=all&strings=1&zoom=sga:0.5,1.5`.
+- **M5 record directly into a slot BUILT (session 29, reviewer; user request: "make this
+  work for Safari and Chrome at least, across all platforms" — one of their devices is an
+  **Aggregate Device with 10 input channels**).** Each guitar card gains `● Record…`; a
+  permission-first panel picks the input device and the channel, and the take lands through
+  **`finishSlotFromBuffer()`** — the same function a dropped file reaches — as
+  `{kind:"recording", container:"Live input", bitDepth:"32-bit float"}`. The governing rule:
+  *a recorded take must be indistinguishable, downstream, from a dropped file.* **This is not
+  M3**: nothing is analysed in realtime and M3 stays gated. **Raw Web Audio PCM, never
+  `MediaRecorder`** — the reverted first attempt encoded to Opus/WebM, and a perceptual codec
+  that discards quiet high-frequency content makes every number on a page that integrates an
+  LTAS to 20 kHz indefensible. Because the take is already PCM, M5 needs **no
+  `decodeAtNativeRate` and no sniffer**: `_takeBuffer()` builds the `AudioBuffer` while the
+  capture context is alive, at that context's rate (outside 8–384 kHz → `slotLoadError()`).
+  **Channel count is observed, never asked** — `getSettings()`/`getCapabilities()` may be
+  silently wrong (an unsupported constraint is ignored per spec) and
+  `createMediaStreamSource().channelCount` is always the spec default 2 — so
+  `probeDeviceChannels()` runs the device into a 32-channel `ScriptProcessorNode` with
+  `channelInterpretation="discrete"` for 700 ms: discrete up-mixing **zero-fills** what the
+  device didn't supply, so a non-zero sample in channel *c* proves channel *c* arrived.
+  `n = max(heard, claimed, 1)`, `claimed` from `getSettings()` **only** (capabilities would
+  size the graph by what the device *could* do and make "Mix" a mean over zero-fill).
+  **Silence proves nothing** — hence the panel's play-something prompt and its ↻ Re-check.
+  `ScriptProcessorNode` over `AudioWorkletNode` because `addModule()` needs a fetch a
+  `file://` null origin can't be relied on to allow; it routes through a **gain of 0** so
+  nothing is monitored back. All three processing blocks off. One `recCap` for the whole app;
+  `recAbort(i)` at the **head** of `loadFileIntoSlot`/`applySnapshot`/`loadDemo`; a discard
+  bumps `loadSeq[i]`. Enumeration is **lazy and never from `boot()`** (`enumerateDevices()`
+  wakes the OS audio service and raced the demo decode), refreshed on `devicechange`;
+  `recDevice`/`recChannel` are additive keys in `gsSettings`, which **stays v4**. **Measured
+  and recorded rather than worked around: Chrome on macOS clamps every input device to 2
+  channels** (`AudioManagerMac`) — BlackHole 16ch, three Pro Tools bridges (16/32/64) and the
+  user's 10-channel Aggregate Device all report `{min:1,max:2}` and deliver 2, under any
+  constraint. Safari is the only plausible route to ten and is **untested here**; the panel
+  says so as a suggestion. Gate: steps 2–7 green, headless **69**, all four tamper guards
+  green; step 1 is the documented pre-existing red. **Awaiting the user's Safari test against
+  the real Aggregate Device.**
 - **NEXT — the user’s visual test.** R5 is closed; Q4a and Q4b are built, so nothing stands
   between here and R6. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
@@ -672,7 +708,8 @@ build educational copy from it, never re-derive from scratch.
 ## File map
 
 - `index.html` — the entire app, the only shipped artifact. No build step, no server, no
-  network. Five `<script>` blocks in order: **0** DSP (pure functions, node-safe — tests
+  network. Six `<script>` tags: the DNT-aware GA4 visitor tag in `<head>` (inert offline,
+  touches no app state), then five numbered blocks in dependency order: **0** DSP (pure functions, node-safe — tests
   import this block by extraction), **1** audio decode/sniffing glue, **2** glossary data
   + popovers, **3** canvas rendering, **4** app state/UI/synth/exports.
 - `tests/dsp.test.js` — extracts script block 0 from index.html, runs it under node.
@@ -795,6 +832,15 @@ build educational copy from it, never re-derive from scratch.
   because it changed nothing in the analysis (see ARCHITECTURE.md "Why instrument mode
   was removed"); acoustic body resonances are still measured and reported in the
   glossary, and acoustic mic technique lives in the recording guide.
+- **A recording is a source, not a mode.** `● Record…` captures raw Float32 PCM through
+  the Web Audio graph and lands it via `finishSlotFromBuffer()` exactly as a dropped file
+  lands — never `MediaRecorder`, never a codec, never a resample. The take's rate is the
+  capture context's rate, which is data like any file's rate. **Channel count is observed,
+  never asked**: probe with a discrete 32-channel node and believe only non-zero samples
+  (`n = max(heard, claimed, 1)`); a device's own claim may be silently wrong, and silence
+  proves nothing — so offer a re-check rather than a final answer. Nothing leaves the
+  machine: a take stays in the page, like every file dropped on it. No realtime analysis —
+  that is M3, still gated.
 - **Every visible number defensible.** Analysis params live in the footer; smoothing
   state is always printed on the plot; dB re full-scale sine everywhere; glossary terms
   link each label to its formula with current values.

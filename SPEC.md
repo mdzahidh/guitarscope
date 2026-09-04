@@ -2363,3 +2363,44 @@ have made arrow-key seeking stutter.
 render, and a read-through of the spliced regions. **No new suite, no new `verify.sh` step, no
 new assertion, no new Chrome screenshot launch.** The feature is UI state with no math to pin,
 and the one invariant worth guarding — the single stop path — is guarded by there being only one.
+
+---
+
+## Odd harmonics only (session 31, user request)
+
+> "add an option to show only the Harmonic 1, 3 and 5 in the spectogram"
+
+The Overlay harmonic selector's last entry is now `Harmonics 1, 3, 5 (odd only)`.
+
+**A filter over the series, never a different series.** `notePartials()` takes an optional
+fourth argument `oddOnly` and skips even `harm`; everything it emits still carries the harmonic
+number it truly is. That is what keeps the rest of R5 unaware of the change:
+`partialLabel()` still prints `E2 ×5 ≈ G♯4` (the 5th harmonic is still the 5th, still 14 ¢
+under the tempered note), `partialClusters()`/`clusterRatio()` still read the ratio off `h_i`,
+and `_sgTrackAt()` asks the same question the model asked. A "1, 3, 5" series renumbered
+1, 2, 3 would have made every one of those lie.
+
+**One door.** `setSgHarm(v)` parses `"6"` and `"odd5"` alike into `state.sgHarm` +
+`state.sgHarmOdd`, clamps 1–16, and writes the select back. The `?sgharm=odd5` hook and the
+change handler both go through it, so the control, the URL, the drawn comb and the status chip
+cannot disagree. The chip prints `sgHarmLabel()`, which **enumerates** what is drawn
+(`harmonics 1, 3, 5 (odd only)`) rather than printing a range it does not draw — the same rule
+as R5.5's "the footnote prints the measured floor".
+
+**No physics was added.** docs/THEORY.md covers the harmonic series but says nothing about
+odd-harmonic spectra (a stopped pipe, a square wave, a clipped amp), so the tooltip describes
+the control — "The odd-only entry draws 1, 3 and 5 and leaves the even harmonics out" — and
+stops. The gap is flagged here rather than filled by improvising acoustics.
+
+`state.sgHarmOdd` is view state like `sgFrets`/`sgHarm`: unpersisted, unexported, and not in
+the refine cache key (an inverted assertion still pins that).
+
+*Verification, in proportion.* `tests/r5.test.js` 324 → **330**: three block-0 math assertions
+(odd-only at N=5 yields harm 1, 3, 5 at their true frequencies; an absent or false flag still
+gives 36 partials for six strings at N=6) and three source-read contracts (the chip goes through
+`sgHarmLabel()`; that function enumerates rather than ranges; **every** caller that reads
+`state.sgHarm` reads `state.sgHarmOdd` beside it). All six mutation-checked — the last one was
+added *because* a mutation that dropped the flag from `sgramModelFor()` survived the first pass,
+which would have shipped an inert menu entry. One existing Chrome launch re-run rather than a new
+one: `?sgchord=E&sgharm=odd5` → `data-sgcomb="18"` (6 × 3), chip `E · harmonics 1, 3, 5 (odd
+only)`, and no ×2 or ×4 label on the pane. No new suite, no new `verify.sh` step.

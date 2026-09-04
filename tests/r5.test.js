@@ -106,6 +106,17 @@ section("R5.0 — notePartials(): the user's note set, expanded");
     return k.join(",") === "f,harm,key,midi";
   });
   okf("six strings at N=6 is 36 partials", () => NP(ESTD, 6).length === 36);
+  // odd-only is a filter over the same series, never a different one: the partials
+  // it keeps carry their true harm numbers, so every downstream reader is unchanged.
+  okf("odd-only at N=5 keeps 1, 3, 5", () =>
+    D.notePartials([40, null, null, null, null, null], 5, 440, true)
+      .map(p => p.harm).join(",") === "1,3,5");
+  okf("…at their true frequencies — h x f0, not a renumbered series", () => {
+    const p = D.notePartials([null, 45, null, null, null, null], 5, 440, true);
+    return Math.abs(p[1].f - 330) < 1e-9 && Math.abs(p[2].f - 550) < 1e-9;
+  });
+  okf("…and off by default: the fourth argument absent draws every harmonic", () =>
+    NP(ESTD, 6).length === 36 && D.notePartials(ESTD, 6, 440, false).length === 36);
   okf("no frequency clipping — block 3 owns FMIN/FMAX, block 0 must not", () => {
     const p = NP([40, null, null, null, null, null], 300);
     return p.length === 300 && p[299].f > 24000;
@@ -302,6 +313,14 @@ section("R5.1 — the model carries the comb, and does not disturb M2.7's refine
     return /state\.sgFrets/.test(w) && /state\.sgHarm/.test(w);
   });
   ok(fed, "the comb is notePartials() over state.sgFrets at state.sgHarm — the user's note set");
+  // The odd-only choice is a fourth argument, so every caller that asks for the
+  // limit must also carry the flag; a caller that drops it draws even harmonics
+  // the chip has already promised are gone.
+  const harmCalls = [...s.matchAll(/notePartials\s*\(([\s\S]{0,400}?)\)\s*[,;)\n]/g)]
+    .map(m => m[1]).filter(a => /state\.sgHarm\b/.test(a));
+  ok(harmCalls.length >= 3 && harmCalls.every(a => /state\.sgHarmOdd/.test(a)),
+    "…and every caller that reads state.sgHarm reads state.sgHarmOdd beside it",
+    harmCalls.length + " call(s)");
   // …and it is the whole six-slot set, not the one note that happens to be picked:
   // key is the index into the array notePartials() was handed, and key is what
   // chooses the track's hue, so a one-note array paints every string STRING_COLORS[0].
@@ -324,7 +343,12 @@ section("R5.1 — the model carries the comb, and does not disturb M2.7's refine
   ok(keyLines.length >= 2, "both cache keys are still built here", String(keyLines.length));
   ok(keyLines.length >= 2 && !/sgFrets|sgHarm/.test(keyLines.join("\n")),
     "neither cache key mentions the overlay — changing it must not re-run the STFT");
-  ok(/harmonics 1–/.test(body), "the status chip names the overlay it drew");
+  ok(/sgHarmLabel\(\)/.test(body), "the status chip names the overlay it drew");
+  // …through one function, so the chip cannot claim a range the comb does not draw.
+  const iL = s.indexOf("function sgHarmLabel(");
+  const lab = iL < 0 ? "" : s.slice(iL, s.indexOf("\n}", iL) + 2);
+  ok(/harmonics 1–/.test(lab) && /state\.sgHarmOdd/.test(lab) && /h\s*\+=\s*2/.test(lab),
+    "…and that name is a range only while every harmonic is drawn — odd-only prints the harmonics it actually draws");
 }
 
 section("R5.1/R5.7 — the tracks are drawn in the plot, their labels outside it");
@@ -480,14 +504,16 @@ section("R5.1 — the pane is tall enough to read, and the controls say what the
   ok(!!nar && Number(nar[1]) >= 250 && Number(nar[1]) < h,
     "…and the narrow viewport gets its own height, shorter than the wide one but not the old one");
 
-  const sel = /<select id="sgHarmSel"[\s\S]{0,600}?<\/select>/.exec(html);
+  const sel = /<select id="sgHarmSel"[\s\S]{0,1200}?<\/select>/.exec(html);
   const selSrc = sel ? sel[0] : "";
   ok(selSrc !== "", "the overlay's harmonic select is in the markup");
   ok(/\bdisabled\b/.test(selSrc.slice(0, selSrc.indexOf(">"))),
     "…and ships disabled — the limit means nothing until a note is overlaid");
   const opts = selSrc.match(/<option\b[^>]*>([^<]*)<\/option>/g) || [];
-  ok(opts.length >= 2 && opts.every(o => /Harmonics\s*1[–-]\d|1st harmonic only/.test(o)),
+  ok(opts.length >= 2 && opts.every(o => /Harmonics\s*1[–-]\d|Harmonics\s*1,\s*3,\s*5|1st harmonic only/.test(o)),
     "…and every one of its options names what it counts, not a bare number");
+  const oddOpt = opts.find(o => /odd/i.test(o));
+  ok(!!oddOpt && /value="odd5"/.test(selSrc), "…including an odd-only entry, 1, 3, 5", String(oddOpt));
   const noteSel = /<select id="sgNoteSel"[\s\S]{0,600}?<\/select>/.exec(html);
   for (const [nm, src] of [["string", noteSel ? noteSel[0] : ""], ["harmonic", selSrc]]) {
     ok(/title="[^"]{20,}"/.test(src.slice(0, src.indexOf(">"))),

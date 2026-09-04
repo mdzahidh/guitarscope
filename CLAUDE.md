@@ -712,6 +712,23 @@ build educational copy from it, never re-derive from scratch.
   *Verification, in proportion*, per the user's instruction in the same message: `node --check` on
   all five blocks, one `--dump-dom` to see the row render, a read-through — **no new suite, no new
   `verify.sh` step, no new assertion, no new Chrome screenshot launch.**
+- **Odd-harmonics-only overlay BUILT (session 31, reviewer; user request: "an option to show
+  only the Harmonic 1, 3 and 5 in the spectrogram").** The Overlay harmonic selector gains
+  **`Harmonics 1, 3, 5 (odd only)`**. It is a **filter over the existing series**, not a second
+  series: `notePartials(midis, nHarm, a4, oddOnly)` skips even `harm` and every partial it
+  emits still carries its true harmonic number, so `partialLabel()` still prints `E2 ×5 ≈ G♯4`,
+  `partialClusters()` still reads the same ratios and `_sgTrackAt()` still hit-tests the same
+  question. Parsing lives in **one door**, `setSgHarm(v)` — the select, the `?sgharm=` hook and
+  the status chip cannot disagree about what was drawn — and the chip prints `sgHarmLabel()`,
+  which enumerates the harmonics (`harmonics 1, 3, 5 (odd only)`) rather than claiming a range
+  it does not draw. `state.sgHarmOdd` is view state like every other overlay key: unpersisted,
+  unexported, not in the refine cache key. **No physics claim was added** — docs/THEORY.md says
+  nothing about odd-harmonic spectra, so the tooltip describes the control and stops (house
+  rule: flag the gap, don't improvise). *Verification, in proportion:* `tests/r5.test.js`
+  324 → **330** (3 block-0 math + 3 source-read, all mutation-checked — one caught a caller
+  that read `state.sgHarm` without the flag), no new suite, no new `verify.sh` step, and the
+  existing `?sgchord=E` shape re-run once through real Chrome (`data-sgcomb` 36 → **18**, chip
+  reads `E · harmonics 1, 3, 5 (odd only)`, no ×2/×4 label anywhere).
 - **NEXT — the user’s visual test.** R5 is closed; Q4a and Q4b are built, so nothing stands
   between here and R6. (Tasks + gates in
   docs/ROADMAP.md — start at its **Milestones at a glance** table; specs in docs/STORY.md, math
@@ -725,7 +742,7 @@ build educational copy from it, never re-derive from scratch.
   first, never lecture — curiosity clicks the ✦. **Delegation shape, proven at gates 3, 4
   and 7: write the physics copy myself, freeze it by sentinel + SHA, hand the builder only
   the plumbing (Sonnet — via exec for milestones, sub-agents for small tweaks per 2026-08-26).**
-- The gate: `./tests/verify.sh` — dsp **193**, r3 42, r4 60, m27 51, r5 324, headless 69.
+- The gate: `./tests/verify.sh` — dsp **193**, r3 42, r4 60, m27 51, r5 **330**, headless 69.
   **Step 1 is red on master and has been since `ac65835` "EQ match: fit
   each band inside its neighbours, in increasing frequency"** — the single-peak recovery bound
   `ok(mx < 1.0)` at [tests/dsp.test.js:547](tests/dsp.test.js#L547) went 0.999 → 1.022 dB there
@@ -814,10 +831,11 @@ build educational copy from it, never re-derive from scratch.
   `?sgnote=<all|0-5>` (spectrogram harmonic overlay: pick one open string, or `all` for every
   open string; out of range selects nothing — and **nothing is the default**, R5.7), `?sgchord=<name>` (one of the eight stocked open chords — `E|Em|A|Am|C|D|Dm|G`;
   an unstocked name overlays nothing, because the hook mutes all six strings before it
-  resolves) and `?sgharm=<n>` (harmonics 1–N, clamped 1–16) — **gate hooks only**,
+  resolves) and `?sgharm=<n>` (harmonics 1–N, clamped 1–16; `?sgharm=odd<n>` — e.g. `odd5` —
+  draws only the **odd** harmonics 1, 3, 5 … up to N) — **gate hooks only**,
   unpersisted; each sgram pane canvas carries `data-sgcomb="<count>"`, the number of partial
-  tracks in that pane's overlay (sounding strings × the harmonic limit), absent when the
-  overlay is off,
+  tracks in that pane's overlay (sounding strings × the harmonics the limit admits), absent
+  when the overlay is off,
   `?sgscrim=<0-90>` / `?sgdim=<0-95>` (R5.6's scrim opacity and unfocused-comb dimming, as
   percentages — these *do* have UI ranges in the sgram card head; the hooks exist so the gate
   can set them) and `?sgfocus=<0-5>` (hold one string's comb without a mouse; out of range
@@ -1015,7 +1033,10 @@ build educational copy from it, never re-derive from scratch.
   **Harmonic-track overlay (R5.1):** the sgram card's `Overlay` controls pick one open
   string and a harmonic limit into `state.sgFrets`/`state.sgHarm` — the spectrogram's **own**
   note state, deliberately separate from the frequency plots' Strings/harmonics, unpersisted,
-  never exported, and **not part of the refine cache key**. `sgramModelFor()` publishes the
+  never exported, and **not part of the refine cache key**. The limit's last entry is
+  **odd only** (`state.sgHarmOdd`, a fourth `oddOnly` argument to `notePartials()`): a
+  *filter over the same series*, never a different series, so every partial it returns keeps
+  its true `harm` number and the labels, clusters and hit test read unchanged. `sgramModelFor()` publishes the
   flat `notePartials()` array as `comb` (unclipped — the draw pass clips); a fourth pass in
   `drawSpectrogramScene()` draws each partial full-width at `yOfF(f)`: a 5 px black halo at
   alpha 0.75, then 2.5 px of `_trackColor(key)` — `STRING_COLORS[key]` lifted to 0.62 L,

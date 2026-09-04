@@ -2404,3 +2404,43 @@ added *because* a mutation that dropped the flag from `sgramModelFor()` survived
 which would have shipped an inert menu entry. One existing Chrome launch re-run rather than a new
 one: `?sgchord=E&sgharm=odd5` → `data-sgcomb="18"` (6 × 3), chip `E · harmonics 1, 3, 5 (odd
 only)`, and no ×2 or ×4 label on the pane. No new suite, no new `verify.sh` step.
+
+---
+
+## 2026-09-04 — Overlay: the triad only (user request)
+
+*"with very little testing add an option to show only the Triad of the chord (Root, 3rd note,
+5th note) in the spectogram."*
+
+Six interleaved combs is a lot of picture. A `Triad only` checkbox in the sgram card's
+**Overlay** group mutes every string that is not the chord's root, third or fifth — an E shape
+goes from 6 combs to 3, from 36 tracks to 18.
+
+**A filter over the notes, not a second series** — the same shape as R5.8's odd-only limit one
+level up: `triadOnly(midis)` in block 0 returns a **same-length** array with the non-triad slots
+nulled, so every surviving partial keeps its string index and `key` still picks its hue (the
+R5.1 trap). Nothing downstream learns a new concept.
+
+**A stricter sibling of `triadDegrees()`, not a reuse of it.** That function is a *coloring*: it
+paints every sounding string and spreads leftover intervals across the third's and fifth's hues.
+A filter cannot do that — it has to answer *which strings are the root, the third and the fifth*
+and silence the rest. Only intervals 0, 3 or 4, and 7 above the lowest sounding note count;
+anything else is dropped rather than reassigned. A doubled degree keeps its **lowest** string,
+because the octave above draws a subset of the same partials (THEORY §1). No new physics claim
+was added; the tooltip describes the control.
+
+**One door for the drawn notes.** `sgSoundingMidis()` (block 4) is now the only place tuning +
+frets + this filter are combined, and the three former construction sites — `sgramModelFor()`,
+`_sgTrackAt()`'s hit test, and the `?pop=clu<N>` hook — all read it. Two of them building the
+set separately is exactly how the pixels and the click targets come to disagree.
+`syncSgHarmSel()` also clears a held focus through it: under the filter a held string can stop
+sounding without the shape changing, and a focus on a comb that is gone would dim the rest
+forever. `state.sgTriadOnly` is view state like every other overlay key — unpersisted,
+unexported, not in the refine cache key — and the chip prints `· triad only`.
+
+*Verification, in proportion*, per the request: `node --check` on all five blocks, block 0's
+`triadOnly()` exercised in node against four sets by hand (open E standard → the E-minor triad
+E2/G3/B3; the E shape → E2/B2/G♯3, keeping the lowest fifth; Am → A2/E3/C4; a single note → its
+own root), and **one** Chrome `--dump-dom` at `?sgchord=E&sgtriadonly=1`: `data-sgcomb` 36 →
+**18**, the checkbox no longer `disabled`. No new suite, no new `verify.sh` step, no new
+assertion, no new screenshot launch.

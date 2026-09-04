@@ -1099,6 +1099,9 @@ kbd{
                 <option value="8">Harmonics 1–8</option>
                 <option value="odd5">Harmonics 1, 3, 5 (odd only)</option>
               </select>
+              <label class="chklbl" title="Draw only the three notes of the chord — its root, its third and its fifth — and leave out any string that doubles one of them or sits outside the triad.">
+                <input type="checkbox" id="sgTriadOnlyChk" disabled aria-label="Overlay the triad only"> Triad only
+              </label>
             </div>
             <div class="ctlgroup">
               <span>Colors</span>
@@ -1776,6 +1779,33 @@ function triadDegrees(midis){
     if(!seen.has(iv)) seen.set(iv, 1 + (k++ % 2));
     out[i] = seen.get(iv);
   }
+  return out;
+}
+
+// The triad alone. triadDegrees() paints every sounding string a chord color,
+// spreading any leftover interval across the third's and fifth's hues; this asks
+// the stricter question — which strings ARE the root, the third and the fifth —
+// and mutes the rest, so six interleaved combs come down to three. Only the
+// intervals a triad has count: 0, a minor or major third (3 or 4), a fifth (7);
+// anything else is silenced rather than reassigned. A doubled degree keeps its
+// lowest string, because the octave above it draws nothing the lower one does not
+// (its partials are a subset — docs/THEORY.md §1). Returns a new array of the same
+// length, so every downstream `key` is still a string index.
+function triadOnly(midis){
+  const out = midis.map(() => null);
+  const idx = midis.map((m, i) => i).filter(i => midis[i] != null);
+  if(!idx.length) return out;
+  let lo = idx[0];
+  for(const i of idx) if(midis[i] < midis[lo]) lo = i;
+  const rootPc = ((midis[lo] % 12) + 12) % 12;
+  const pick = [null, null, null];
+  for(const i of idx){
+    const iv = ((midis[i] - rootPc) % 12 + 12) % 12;
+    const deg = iv === 0 ? 0 : (iv === 3 || iv === 4) ? 1 : iv === 7 ? 2 : -1;
+    if(deg < 0) continue;
+    if(pick[deg] == null || midis[i] < midis[pick[deg]]) pick[deg] = i;
+  }
+  for(const i of pick) if(i != null) out[i] = midis[i];
   return out;
 }
 
@@ -4738,7 +4768,7 @@ const state={ slots:[null,null], tuning:"estd", customOffset:0,
               // is declared (block 4, below), overridable by the user and persisted
               stringColors:null,
               sgAlign:"off", eqDir:0, eqDevice:"ge7", vocab:"mix",
-              sgFrets:[null,null,null,null,null,null], sgHarm:6, sgHarmOdd:false,
+              sgFrets:[null,null,null,null,null,null], sgHarm:6, sgHarmOdd:false, sgTriadOnly:false,
               // R5.6 legibility: the sheet under the tracks, how far an unheld comb
               // recedes, and which comb is being held right now. Debugging aids and a
               // transient gesture — never persisted, never exported (see saveSettings).
@@ -4797,7 +4827,7 @@ const sgramCard=el("sgramCard"), sgramNote=el("sgramNote"), sgramSub=el("sgramSu
       sgramXlines=[el("sgramXlineA"),el("sgramXlineB")],
       sgramReadouts=[el("sgramReadoutA"),el("sgramReadoutB")];
 const sgAlignSeg=el("sgAlignSeg");
-const sgNoteSel=el("sgNoteSel"), sgHarmSel=el("sgHarmSel");
+const sgNoteSel=el("sgNoteSel"), sgHarmSel=el("sgHarmSel"), sgTriadOnlyChk=el("sgTriadOnlyChk");
 const sgScrimRange=el("sgScrimRange"), sgScrimOut=el("sgScrimOut"),
       sgDimRange=el("sgDimRange"), sgDimOut=el("sgDimOut");
 const sgCmapSel=el("sgCmapSel"), sgTrackSel=el("sgTrackSel"), sgDashSel=el("sgDashSel");
@@ -5361,8 +5391,7 @@ function sgramModelFor(i,scale){
   // notePartials() keys each partial by its index in the array it is handed, and
   // that key is what picks the track's hue — so hand it a SIX-slot array (nulls
   // skipped), never the one selected note, or every string would draw in red.
-  const sgOpen=tuningMidi(state.tuning,state.customOffset);
-  const sgMidis=state.sgFrets.map((fr,si)=>(fr==null||sgOpen[si]==null)?null:sgOpen[si]+fr);
+  const sgMidis=sgSoundingMidis();
   if(sgMidis.some(m=>m!=null)){
     comb=notePartials(sgMidis,state.sgHarm,state.a4,state.sgHarmOdd);
     combNote=_sgChordName(state.sgFrets);
@@ -5390,7 +5419,7 @@ function sgramModelFor(i,scale){
       +(off?" · level-match "+fmtDb(off,1):"")
       +(state.sgAlign!=="off"&&bothSgLoaded()
         ?(state.sgAlign==="onset"?" · t = 0 at first onset":" · shared time axis"):"")
-      +(comb?" · "+combNote+" · "+sgHarmLabel():"")
+      +(comb?" · "+combNote+(state.sgTriadOnly?" · triad only":"")+" · "+sgHarmLabel():"")
       +(comb&&state.sgFocus==null?" · hold a track to follow it":"")
       +(clusters&&clusters.length?" · click a mark where strings meet":"") };
 }
@@ -5707,6 +5736,15 @@ function attachSgramCrosshair(wrap,canvas,xline,readout,pane,hitsFn){
   });
   wrap.addEventListener("mouseleave",hide);
 }
+// One door onto the notes the overlay actually draws: the tuning, the picked
+// frets, and — when Triad only is on — the strict root/third/fifth of that set.
+// The model, the hit test and the ?pop=clu hook all read it, so none of them can
+// be looking at a note the pane never drew.
+function sgSoundingMidis(){
+  const open=tuningMidi(state.tuning,state.customOffset);
+  const midis=state.sgFrets.map((fr,si)=>(fr==null||open[si]==null)?null:open[si]+fr);
+  return state.sgTriadOnly?triadOnly(midis):midis;
+}
 // R5.6c: which track is under the cursor. It asks notePartials() the same question
 // sgramModelFor() asks — one source for the pixels and for the target — and maps
 // through the pane's own zoom window, so a zoomed pane's targets follow what it drew.
@@ -5716,8 +5754,7 @@ function _sgTrackAt(i,x,y,w,h){
   const pH=h-SGPLOT.mT-SGPLOT.mB;
   const view=sgramView(i);
   const zw=sgramZoomWin(i===0?"sga":"sgb",view.T0,view.T1);
-  const open=tuningMidi(state.tuning,state.customOffset);
-  const midis=state.sgFrets.map((fr,si)=>(fr==null||open[si]==null)?null:open[si]+fr);
+  const midis=sgSoundingMidis();
   const parts=notePartials(midis,state.sgHarm,state.a4,state.sgHarmOdd);
   const span=Math.log(zw.F1/zw.F0);
   let best=null, bestD=8;   // 8 px — the track is 2.5 px inside a 5 px halo
@@ -7636,7 +7673,11 @@ function sgHarmLabel(){
 // while the overlay is Off is what says so without a sentence of help text.
 function syncSgHarmSel(){
   const on=state.sgFrets.some(f=>f!=null);
-  if(!on||state.sgFrets[state.sgFocus]==null) state.sgFocus=null;
+  // The focus follows what is *drawn*, not what is fretted: under Triad only a held
+  // string can stop sounding without the shape changing, and a focus on a comb that
+  // is no longer there would dim every other one forever.
+  const drawn=sgSoundingMidis();
+  if(!on||drawn[state.sgFocus]==null) state.sgFocus=null;
   if(sgHarmSel) sgHarmSel.disabled=!on;
   // R5.6: the two legibility tunables only mean something under an overlay, and a
   // focus held on a string that is no longer overlaid would dim everything forever.
@@ -7651,6 +7692,9 @@ function syncSgHarmSel(){
   const tri=on&&state.sgTrack==="triad";
   sgTriadInputs.forEach(inp=>{ if(inp) inp.disabled=!tri; });
   if(sgHueChk) sgHueChk.disabled=!on;
+  // Same rule again: a triad is a property of a chord, so the filter only means
+  // something once something is overlaid.
+  if(sgTriadOnlyChk) sgTriadOnlyChk.disabled=!on;
 }
 function fillSgLookSels(){
   if(sgCmapSel) sgCmapSel.innerHTML=CMAP_NAMES
@@ -7664,6 +7708,7 @@ function fillSgLookSels(){
   if(!state.sgTriad) state.sgTriad=SG_TRIAD_DEFAULT.slice();
   sgTriadInputs.forEach((inp,k)=>{ if(inp) inp.value=state.sgTriad[k]; });
   if(sgHueChk) sgHueChk.checked=!!state.sgHue;
+  if(sgTriadOnlyChk) sgTriadOnlyChk.checked=!!state.sgTriadOnly;
 }
 function stringContentHtml(si){
   const midi=tuningMidi(state.tuning,state.customOffset)[si];
@@ -8984,6 +9029,11 @@ function boot(){
   if(sgHueChk) sgHueChk.addEventListener("change",()=>{
     state.sgHue=sgHueChk.checked; requestDraw();
   });
+  if(sgTriadOnlyChk) sgTriadOnlyChk.addEventListener("change",()=>{
+    state.sgTriadOnly=sgTriadOnlyChk.checked;
+    syncSgHarmSel();   // a held comb may have just stopped sounding
+    requestDraw();
+  });
   lmToggle.addEventListener("change",()=>{
     state.lm=lmToggle.checked; compareTouched.lm=true;
     stopPlayback(); // the applied gain would no longer match what's printed
@@ -9384,8 +9434,7 @@ function boot(){
       } else if(km){
         // R5.3: the Nth collision cluster of the current overlay, indexing the
         // sorted partialClusters() result — the canvas itself is unreachable from node.
-        const open=tuningMidi(state.tuning,state.customOffset);
-        const midis=state.sgFrets.map((fr,si)=>(fr==null||open[si]==null)?null:open[si]+fr);
+        const midis=sgSoundingMidis();
         const cl=midis.some(m=>m!=null)
           ? partialClusters(notePartials(midis,state.sgHarm,state.a4,state.sgHarmOdd),TEMPERED_CENTS)[parseInt(km[1],10)] : null;
         if(cl) openClusterPopover(cl,{left:c-40,right:c+40,top:80,bottom:100});
@@ -9444,6 +9493,9 @@ function boot(){
     if(sgDashSel) sgDashSel.value=state.sgDash; requestDraw(); }
   const sghu=location.search.match(/[?&]sghue=([01])(?:&|$)/i);                    // test hook
   if(sghu){ state.sgHue=sghu[1]==="1"; if(sgHueChk) sgHueChk.checked=state.sgHue; requestDraw(); }
+  const sgto=location.search.match(/[?&]sgtriadonly=([01])(?:&|$)/i);              // test hook
+  if(sgto){ state.sgTriadOnly=sgto[1]==="1";
+    if(sgTriadOnlyChk) sgTriadOnlyChk.checked=state.sgTriadOnly; syncSgHarmSel(); requestDraw(); }
   const sgtr=location.search.match(/[?&]sgtriad=([0-9a-f]{6}),([0-9a-f]{6}),([0-9a-f]{6})(?:&|$)/i); // test hook
   if(sgtr){ state.sgTriad=[1,2,3].map(k=>"#"+sgtr[k].toLowerCase());
     sgTriadInputs.forEach((inp,k)=>{ if(inp) inp.value=state.sgTriad[k]; }); requestDraw(); }

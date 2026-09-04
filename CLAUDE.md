@@ -832,7 +832,9 @@ build educational copy from it, never re-derive from scratch.
   open string; out of range selects nothing — and **nothing is the default**, R5.7), `?sgchord=<name>` (one of the eight stocked open chords — `E|Em|A|Am|C|D|Dm|G`;
   an unstocked name overlays nothing, because the hook mutes all six strings before it
   resolves) and `?sgharm=<n>` (harmonics 1–N, clamped 1–16; `?sgharm=odd<n>` — e.g. `odd5` —
-  draws only the **odd** harmonics 1, 3, 5 … up to N) — **gate hooks only**,
+  draws only the **odd** harmonics 1, 3, 5 … up to N) 
+  `?sgtriadonly=<0|1>` (draw only the chord's root, third and fifth — it *does* have a
+  checkbox in the Overlay group, the hook exists so the gate can set it) — **gate hooks only**,
   unpersisted; each sgram pane canvas carries `data-sgcomb="<count>"`, the number of partial
   tracks in that pane's overlay (sounding strings × the harmonics the limit admits), absent
   when the overlay is off,
@@ -1091,6 +1093,15 @@ build educational copy from it, never re-derive from scratch.
   R5.7's measured pick. Min pairwise ΔE is still 97.0, but parula *ends* in bright yellow, so
   the third's track sits ΔE 2.8 from the hottest cells: a known cost, recorded in the gate's
   own comment rather than hidden behind a floor the palette no longer meets.
+  **Triad only** (`state.sgTriadOnly`, a checkbox in the Overlay group) is the same idea one
+  level up — a *filter over the notes*: `triadOnly()` in block 0 nulls every slot that is not
+  the root, the third or the fifth of the sounding set (intervals 0, 3/4, 7 above the lowest
+  note; a doubled degree keeps its lowest string), returning a **same-length** array so every
+  surviving partial keeps its string index and its hue. It is a stricter sibling of
+  `triadDegrees()`, never a reuse — that one colors every string and reassigns leftovers.
+  **`sgSoundingMidis()` is the one door** onto the notes the overlay draws: the model, the hit
+  test, the `?pop=clu` hook and `syncSgHarmSel()`'s focus clear all read it, so the pixels and
+  the click targets cannot disagree.
   **Nothing is overlaid by default** — the note selector starts at `None` — and the harmonic
   labels sit **outside the plot** in the right margin, which `SGPLOT.mR` widens (98 → 150)
   whenever a comb exists. `sgCmap`/`sgTrack`/`sgDash`/`sgHue`/`sgTriad` are
